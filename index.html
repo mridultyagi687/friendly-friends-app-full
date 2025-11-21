@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Friendly Friends AI - Connect, Share, Create, and Explore Together. A modern cloud-based application platform with AI-powered features, Cloud PCs, and more.">
+    <meta name="keywords" content="AI, social media, cloud PC, video sharing, blog, messaging, friendly friends ai, cloud computing">
+    <meta name="author" content="Friendly Friends AI">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Friendly Friends AI">
+    <meta property="og:description" content="Connect, Share, Create, and Explore Together">
+    <meta property="og:site_name" content="Friendly Friends AI">
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Friendly Friends AI">
+    <meta name="twitter:description" content="Connect, Share, Create, and Explore Together">
+    
+    <!-- Robots -->
+    <meta name="robots" content="index, follow">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/Friendly Friends Logo.png">
+    
+    <title>Friendly Friends AI - Welcome</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 20px;
+        }
+        
+        .container {
+            text-align: center;
+            padding: 3rem 2rem;
+            max-width: 900px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .logo {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.3rem;
+            margin-bottom: 2rem;
+            opacity: 0.95;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        
+        .feature {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 1.5rem;
+            border-radius: 12px;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .feature:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-5px);
+        }
+        
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+        
+        .btn {
+            color: white;
+            text-decoration: none;
+            padding: 1rem 2rem;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-primary {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        #countdown {
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .subtitle {
+                font-size: 1rem;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+            
+            .links {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🚀</div>
+        <h1>Friendly Friends AI</h1>
+        <p class="subtitle">Connect, Share, Create, and Explore Together</p>
+        
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">💻</div>
+                <h3>Cloud PCs</h3>
+                <p>Virtual desktop environment</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🤖</div>
+                <h3>AI Apps</h3>
+                <p>Build apps with AI</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🛒</div>
+                <h3>App Store</h3>
+                <p>Community apps</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📁</div>
+                <h3>File Manager</h3>
+                <p>Manage your files</p>
+            </div>
+        </div>
+        
+        <div class="links">
+            <a href="#" onclick="redirectToApp(); return false;" class="btn btn-primary">Launch Application</a>
+            <a href="#" onclick="window.location.href = getAppUrl(); return false;" class="btn">Open App</a>
+        </div>
+        
+        <div id="countdown"></div>
+    </div>
+
+    <script>
+        // Get the app URL based on current environment
+        function getAppUrl() {
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const origin = window.location.origin;
+            const pathname = window.location.pathname;
+            
+            // Check if we're on GitHub Pages
+            const isGitHubPages = hostname.includes('github.io');
+            
+            // Check if we're in local development
+            const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
+            const isFileProtocol = protocol === 'file:';
+            
+            if (isFileProtocol) {
+                // File protocol - can't redirect, show message
+                alert('Please open this file through a web server. For local development, run: cd frontend && npm run dev');
+                return '#';
+            }
+            
+            if (isLocalDev) {
+                // Local development - use same origin (assume React app is proxied or at root)
+                // Try /frontend first, then root
+                return '/frontend';
+            } else if (isGitHubPages) {
+                // GitHub Pages - React app should be at root
+                // Extract repo name if we're in a subdirectory
+                const pathParts = pathname.split('/').filter(p => p && p !== 'index.html');
+                const repoName = pathParts[0];
+                
+                if (repoName && pathname.includes(repoName) && !pathname.endsWith('/')) {
+                    return `/${repoName}/`;
+                }
+                return '/';
+            } else {
+                // Production deployment - React app should be at same origin root
+                return '/';
+            }
+        }
+        
+        // Detect deployment environment and redirect accordingly
+        function redirectToApp() {
+            const appUrl = getAppUrl();
+            if (appUrl !== '#') {
+                window.location.href = appUrl;
+            }
+        }
+
+        // Auto-redirect after countdown
+        let redirectTimer;
+        let countdown = 5;
+        const countdownElement = document.getElementById('countdown');
+        
+        function startAutoRedirect() {
+            const updateCountdown = () => {
+                if (countdown > 0 && countdownElement) {
+                    countdownElement.textContent = `Redirecting to application in ${countdown} seconds... (click anywhere to cancel)`;
+                    countdown--;
+                    redirectTimer = setTimeout(updateCountdown, 1000);
+                } else if (countdown === 0) {
+                    redirectToApp();
+                }
+            };
+            
+            redirectTimer = setTimeout(updateCountdown, 0);
+        }
+
+        // Cancel auto-redirect on user interaction
+        document.addEventListener('click', function() {
+            if (redirectTimer) {
+                clearTimeout(redirectTimer);
+            }
+            countdown = 0;
+            if (countdownElement) {
+                countdownElement.textContent = '';
+            }
+        });
+
+        // Start auto-redirect on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Only auto-redirect if we're on the landing page
+            const pathname = window.location.pathname;
+            if (pathname === '/' || pathname === '/index.html' || pathname.endsWith('index.html')) {
+                startAutoRedirect();
+            }
+        });
+    </script>
+</body>
+</html>
+
