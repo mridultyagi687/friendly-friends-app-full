@@ -7,11 +7,14 @@ primary_region = "iad"
   dockerfile = "backend/Dockerfile"
 
 [env]
-  PORT = "5002"
+  PORT = "8080"
   FLASK_ENV = "production"
+  APP_ENV = "production"
+  SESSION_COOKIE_SECURE = "true"
+  FRONTEND_URL = "https://mridultyagi687.github.io/friendly-friends-app-full"
 
 [http_service]
-  internal_port = 5002
+  internal_port = 8080
   force_https = true
   auto_stop_machines = "off"
   auto_start_machines = true

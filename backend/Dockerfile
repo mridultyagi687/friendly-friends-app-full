@@ -3,7 +3,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PORT=5002
+    PORT=8080
 
 WORKDIR /app
 
@@ -12,15 +12,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy backend
+# Copy backend requirements
 COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip && pip install -r /app/requirements.txt
+RUN pip install --upgrade pip && pip install -r /app/requirements.txt && pip install gunicorn
 
+# Copy backend code
 COPY . /app
 
 # Healthcheck endpoint assumed at /api/health
-EXPOSE 5002
+EXPOSE 8080
 
-CMD ["python", "app.py"]
+# Use gunicorn for production
+CMD gunicorn -w 2 -b 0.0.0.0:${PORT} app:app
 
 
