@@ -1,23 +1,24 @@
- import { render, screen, fireEvent } from '@testing-library/react'
- import React from 'react'
- import VideoGallery from './VideoGallery'
- 
- // Minimal mock for AuthContext used in the component
- jest.mock('../../contexts/AuthContext', () => ({
-   useAuth: () => ({ user: { id: 1, username: 'admin', is_admin: true } })
- }))
- 
- // Mock API service
- jest.mock('../../services/api', () => ({
-   get: jest.fn(async (url) => {
-     if (url === '/api/videos') {
-       return { data: [{ id: 9, filename: 'demo.mp4', owner_username: 'admin' }] }
-     }
-     return { data: [] }
-   }),
-   post: jest.fn(),
-   delete: jest.fn()
- }))
+import { render, screen, fireEvent } from '@testing-library/react'
+import React from 'react'
+import { describe, it, expect, vi } from 'vitest'
+import VideoGallery from './VideoGallery'
+
+// Minimal mock for AuthContext used in the component
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 1, username: 'admin', is_admin: true } })
+}))
+
+// Mock API service
+vi.mock('../../services/api', () => ({
+  get: vi.fn(async (url) => {
+    if (url === '/api/videos') {
+      return { data: [{ id: 9, filename: 'demo.mp4', owner_username: 'admin' }] }
+    }
+    return { data: [] }
+  }),
+  post: vi.fn(),
+  delete: vi.fn()
+}))
  
  describe('VideoGallery', () => {
    it('renders and shows a video item', async () => {
