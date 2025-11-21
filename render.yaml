@@ -12,8 +12,24 @@ services:
         value: 3.11
       - key: FLASK_ENV
         value: production
+      - key: APP_ENV
+        value: production
       - key: FLASK_SECRET_KEY
         generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: FRONTEND_URL
+        value: https://mridultyagi687.github.io/friendly-friends-app-full
       - key: OPENAI_API_KEY
         sync: false  # Set this manually in Render dashboard
+      - key: DATABASE_URL
+        fromDatabase:
+          name: friendly-friends-db
+          property: connectionString
+
+databases:
+  - name: friendly-friends-db
+    plan: free
+    databaseName: friendly_friends
+    user: friendly_friends_user
 

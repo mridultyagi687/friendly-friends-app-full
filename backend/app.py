@@ -114,9 +114,24 @@ else:
         session_cookie_secure = False
         session_cookie_samesite = 'Lax'
 
+# Database configuration - support both PostgreSQL (cloud) and SQLite (local)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    # Use PostgreSQL for cloud deployment (Render, Railway, etc.)
+    # DATABASE_URL format: postgresql://user:password@host:port/dbname
+    database_uri = DATABASE_URL
+    # Ensure it uses psycopg2 driver
+    if database_uri.startswith("postgres://"):
+        database_uri = database_uri.replace("postgres://", "postgresql://", 1)
+    if not database_uri.startswith("postgresql://"):
+        database_uri = f"postgresql://{database_uri}"
+else:
+    # Fallback to SQLite for local development
+    database_uri = f"sqlite:///{DATABASE_PATH}"
+
 app.config.update(
     SECRET_KEY=os.environ.get("FLASK_SECRET_KEY", "dev-secret"),
-    SQLALCHEMY_DATABASE_URI=f"sqlite:///{DATABASE_PATH}",
+    SQLALCHEMY_DATABASE_URI=database_uri,
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     JSON_SORT_KEYS=False,
     SESSION_COOKIE_NAME=os.environ.get("SESSION_COOKIE_NAME", "ff_session"),
