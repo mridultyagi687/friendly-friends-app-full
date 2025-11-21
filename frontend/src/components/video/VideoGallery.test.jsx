@@ -11,8 +11,13 @@ vi.mock('../../contexts/AuthContext', () => ({
   })
 }))
 
-// Mock API service - fix response structure to match component expectations
-const mockGet = vi.fn()
+// Mock API service - use vi.hoisted() to properly handle variable hoisting
+const { mockGet } = vi.hoisted(() => {
+  return {
+    mockGet: vi.fn()
+  }
+})
+
 vi.mock('../../services/api', () => ({
   default: {
     get: mockGet,
