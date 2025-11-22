@@ -4448,6 +4448,38 @@ def apply_cors_headers(response):
 
 
 ###############################################################################
+# Database initialization (runs on app startup for Gunicorn/production)      #
+###############################################################################
+
+def init_database():
+    """Initialize database tables and create admin user if needed."""
+    try:
+        logger.info("Initializing database tables...")
+        db.create_all()
+        logger.info("Database tables created/verified")
+        
+        # Ensure admin user exists
+        admin = db.session.query(User).filter_by(username='admin').first()
+        if not admin:
+            logger.info("Creating default admin user...")
+            admin = User(
+                username='admin',
+                email='admin@example.com',
+                password_hash=hash_password('admin123'),
+                is_admin=True
+            )
+            db.session.add(admin)
+            db.session.commit()
+            logger.info("Default admin user created (username: admin, password: admin123)")
+    except Exception as e:
+        logger.exception(f"Error initializing database on startup: {e}")
+
+# Initialize database when app starts (for Gunicorn/production)
+with app.app_context():
+    init_database()
+
+
+###############################################################################
 # CLI / bootstrap                                                              #
 ###############################################################################
 
