@@ -45,9 +45,10 @@ export const ThemeProvider = ({ children }) => {
       glassBackground: 'rgba(255, 255, 255, 0.1)',
       sidebarBackground: 'linear-gradient(180deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
       // Only input/textarea backgrounds change with theme
-      inputBackground: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
-      inputText: isDarkMode ? '#ffffff' : '#000000',
-      inputPlaceholder: isDarkMode ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
+      // Ensure opposite colors for proper contrast
+      inputBackground: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : '#ffffff',
+      inputText: isDarkMode ? '#ffffff' : '#000000', // White text on dark bg, black text on white bg
+      inputPlaceholder: isDarkMode ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)',
     }
   };
 

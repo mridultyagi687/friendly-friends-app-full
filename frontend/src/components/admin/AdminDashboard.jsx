@@ -391,7 +391,7 @@ const styles = {
     borderRadius: '10px',
     transition: 'all 0.3s ease',
     backgroundColor: theme.colors.inputBackground,
-    color: theme.colors.inputText,
+    color: theme.colors.inputText, // Opposite color of background
   }),
   passwordInputContainer: {
     position: 'relative',
@@ -405,7 +405,7 @@ const styles = {
     borderRadius: '10px',
     transition: 'all 0.3s ease',
     backgroundColor: theme.colors.inputBackground,
-    color: theme.colors.inputText,
+    color: theme.colors.inputText, // Opposite color of background
     width: '100%',
     boxSizing: 'border-box',
   }),

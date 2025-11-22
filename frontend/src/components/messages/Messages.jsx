@@ -1003,6 +1003,7 @@ const styles = {
     borderRadius: '12px',
     fontSize: '1rem',
     backgroundColor: 'white',
+    color: '#000000', // Black text on white background (opposite)
   },
   fileLabel: {
     padding: '0.875rem 1rem',

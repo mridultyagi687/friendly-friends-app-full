@@ -285,6 +285,7 @@ const styles = {
     borderRadius: '12px',
     transition: 'all 0.3s ease',
     backgroundColor: 'white',
+    color: '#000000', // Black text on white background (opposite)
   },
   addButton: {
     padding: '0.875rem 1.75rem',
