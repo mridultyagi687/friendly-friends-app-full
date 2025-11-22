@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Friendly Friends AI</title>
+  <script>
+    // GitHub Pages SPA routing fix
+    // All routes should redirect to index.html, React Router will handle routing
+    (function() {
+      const path = window.location.pathname;
+      const basePath = '/friendly-friends-app-full/';
+      const hash = window.location.hash;
+      const search = window.location.search;
+      
+      // Always redirect to index.html - React Router will handle the routing
+      if (path !== basePath + 'index.html') {
+        window.location.replace(basePath + 'index.html' + search + hash);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%); color: white;">
+    <div style="text-align: center; padding: 2rem;">
+      <h1>Loading...</h1>
+      <p>Redirecting to application...</p>
+    </div>
+  </div>
+</body>
+</html>

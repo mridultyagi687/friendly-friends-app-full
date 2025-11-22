@@ -10,21 +10,30 @@ function BrowserCheck({ children }) {
       const userAgent = navigator.userAgent.toLowerCase();
       
       // Chrome detection: 
-      // 1. Must have window.chrome object (most reliable)
+      // 1. Must have window.chrome object (most reliable for desktop)
       // 2. User agent contains 'chrome' but not 'edg' (Edge) or 'opr' (Opera)
-      // 3. Safari user agent doesn't contain 'chrome'
-      const hasChromeObject = typeof window !== 'undefined' && window.chrome && window.chrome.runtime;
+      // 3. For mobile Chrome, check for 'crios' (Chrome iOS) or Chrome Android
+      const hasChromeObject = typeof window !== 'undefined' && window.chrome && (window.chrome.runtime || window.chrome.webstore);
       const hasChromeInUA = userAgent.includes('chrome');
       const isEdge = userAgent.includes('edg');
       const isOpera = userAgent.includes('opr');
       const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
+      const isChromeIOS = userAgent.includes('crios'); // Chrome on iOS
+      const isChromeAndroid = userAgent.includes('chrome') && userAgent.includes('android') && !isEdge && !isOpera;
+      const isMobileChrome = userAgent.includes('chrome') && (userAgent.includes('mobile') || userAgent.includes('android')) && !isEdge && !isOpera;
       
       // Chrome is detected if:
-      // - Has chrome object AND user agent has chrome (not Edge/Opera)
+      // - Desktop: Has chrome object AND user agent has chrome (not Edge/Opera)
+      // - Mobile iOS: Has 'crios' in user agent
+      // - Mobile Android: Has 'chrome' and 'android' but not Edge/Opera
+      // - Mobile Chrome: Has 'chrome' and 'mobile' but not Edge/Opera
       // OR
       // - User agent has chrome but not Edge/Opera/Safari
       const isChromeBrowser = 
         (hasChromeObject && hasChromeInUA && !isEdge && !isOpera) ||
+        isChromeIOS ||
+        isChromeAndroid ||
+        isMobileChrome ||
         (hasChromeInUA && !isEdge && !isOpera && !isSafari);
       
       setIsChrome(isChromeBrowser);
@@ -64,12 +73,6 @@ function BrowserCheck({ children }) {
             >
               Download Chrome
             </a>
-            <button 
-              onClick={() => window.location.reload()} 
-              style={styles.retryButton}
-            >
-              Retry Anyway
-            </button>
           </div>
           <p style={styles.note}>
             Note: Other browsers may not support all features of this application.
@@ -157,17 +160,6 @@ const styles = {
     boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
     transition: 'all 0.3s ease',
     display: 'inline-block',
-  },
-  retryButton: {
-    padding: '1rem 2rem',
-    background: 'rgba(102, 126, 234, 0.1)',
-    color: '#667eea',
-    border: '2px solid #667eea',
-    borderRadius: '12px',
-    fontSize: '1rem',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
   },
   note: {
     fontSize: '0.9rem',
