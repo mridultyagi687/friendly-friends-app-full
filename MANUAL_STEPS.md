@@ -203,17 +203,72 @@ Follow these steps in order to complete the deployment setup.
 
 - When your backend starts for the first time
 - Flask app automatically creates all database tables
-- **Neon creates a NEW empty database** - your tables will be empty
+- **Neon creates a NEW empty database** - your tables will be empty initially
 - No manual steps needed
-
-**Important**: Your local database data will NOT be copied automatically. If you want to migrate your existing local data to Neon, see `DATABASE_MIGRATION.md` for instructions.
 
 **To verify it worked**:
 1. Make a request to your backend (visit frontend and login)
 2. Go to Neon dashboard → **SQL Editor**
 3. Run: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';`
 4. You should see all your tables (users, videos, blogs, etc.)
-5. Tables will be empty unless you migrate data (see `DATABASE_MIGRATION.md`)
+
+---
+
+## ✅ Step 8: Clone Your Local Database to Neon (Optional - If You Want Existing Data)
+
+**This step copies your existing local database data to Neon!**
+
+If you want to keep your existing users, videos, blogs, and other data, follow these steps:
+
+### Step 8a: Export Your Local Database
+
+1. **Find your local database file**:
+   - Common locations:
+     - `backend/instance/friendly_friends.db`
+     - Or in your Google Drive folder
+   - Or run this to find it:
+     ```bash
+     find ~/Documents/Friendly\ Friends\ App -name "*.db" -type f
+     ```
+
+2. **Export to JSON** (on your Mac):
+   ```bash
+   cd "~/Documents/Friendly Friends App/backend"
+   python migrate_database.py export
+   ```
+   
+   Or specify the database path:
+   ```bash
+   python migrate_database.py export --database-path "/path/to/friendly_friends.db"
+   ```
+
+   This creates `database_export.json` with all your data.
+
+### Step 8b: Import to Neon
+
+1. **Get your Neon connection string** (from Step 3)
+
+2. **Import to Neon**:
+   ```bash
+   cd "~/Documents/Friendly Friends App/backend"
+   python migrate_database.py import --database-url "your-neon-connection-string-here"
+   ```
+
+   Or set environment variable first:
+   ```bash
+   export DATABASE_URL="your-neon-connection-string-here"
+   python migrate_database.py import
+   ```
+
+3. **Verify import**:
+   - Go to Neon dashboard → **SQL Editor**
+   - Run: `SELECT COUNT(*) FROM users;`
+   - Should show your user count
+   - Check other tables: `SELECT COUNT(*) FROM videos;`, etc.
+
+**That's it!** Your local database is now cloned to Neon! 🎉
+
+**Note**: If you don't have existing data or want to start fresh, you can skip this step.
 
 ---
 
