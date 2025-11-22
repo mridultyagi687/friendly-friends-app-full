@@ -14,21 +14,21 @@ Follow these steps in order to complete the deployment setup.
 
 ---
 
-## ✅ Step 2: Connect Fly.io (Backend Hosting) (10 minutes)
+## ✅ Step 2: Connect Render to GitHub (5 minutes)
 
-**What is Fly.io?** Fly.io hosts your **backend server** (the Python/Flask app) - **TRULY UNLIMITED FREE TIER!**
-  - **3 Free VMs** = Always running, no spin-down!
-  - **No time limits** = Run 24/7 forever!
-  - **No request limits** = Unlimited API calls!
-  - **Always available** = No cold starts!
-  - This IS truly unlimited for most apps!
+**What is Render?** Render hosts your **backend server** (the Python/Flask app) - **EFFECTIVELY UNLIMITED, NO CREDIT CARD!**
+  - **750 hours/month** = More than a full month (744 hours)!
+  - **No credit card required** = Sign up and deploy immediately!
+  - **Resets every month** = Can run continuously forever!
+  - **Auto-wake** = Wakes in ~30 seconds if inactive
+  - This IS effectively unlimited for most apps!
 
 **What is Neon?** Neon hosts your **database** (PostgreSQL where all your data is stored) - **TRULY UNLIMITED!**
 
 **Why both?**
-- Fly.io = Runs your backend code (3 free VMs = truly unlimited!)
+- Render = Runs your backend code (750 hrs/mo = effectively unlimited, no credit card!)
 - Neon = Stores your database data (truly unlimited storage & connections)
-- They work together! Your backend (Fly.io) connects to your database (Neon).
+- They work together! Your backend (Render) connects to your database (Neon).
 
 1. **Sign up at Railway**: https://railway.app
    - Click **"Start a New Project"** or **"Login"**
@@ -60,7 +60,7 @@ Follow these steps in order to complete the deployment setup.
 
 **What is Neon?** Neon hosts your **PostgreSQL database** with truly unlimited storage!
 
-**Important**: Neon is ONLY for the database. Railway (from Step 2) runs your backend server.
+**Important**: Neon is ONLY for the database. Render (from Step 2) runs your backend server.
 
 1. **Sign up at Neon**: https://neon.tech
    - Click **"Start Free"** or **"Sign Up"**
@@ -92,45 +92,59 @@ Follow these steps in order to complete the deployment setup.
 
 ---
 
-## ✅ Step 4: Configure Fly.io Environment Variables (10 minutes)
+## ✅ Step 4: Configure Render Environment Variables (10 minutes)
 
 **⚠️ CRITICAL: This MUST be done for your app to work!**
 
-**This connects your Fly.io backend to your Neon database!**
+**This connects your Render backend to your Neon database!**
 
-1. **Set Database Connection** (MOST CRITICAL - REQUIRED!):
-   ```bash
-   flyctl secrets set DATABASE_URL="your-neon-connection-string-here"
-   ```
+1. **Go to Render Dashboard**:
+   - Navigate to your service: https://dashboard.render.com
+   - Click on your service: `friendly-friends-backend`
+
+2. **Open Environment Tab**:
+   - Click on **"Environment"** tab
+   - Scroll down to **"Environment Variables"** section
+
+3. **Add Database Connection** (MOST CRITICAL - REQUIRED!):
+   - Click **"+ Add Environment Variable"**
+   - **Key**: `DATABASE_URL`
+   - **Value**: Paste your Neon connection string from Step 2
+   - **⚠️ WARNING**: Without this, your app will crash on startup!
+   - Click **"Save Changes"**
+
+4. **Add Application Settings**:
+   Click **"+ Add Environment Variable"** for each of these:
+
+   - **Key**: `FLASK_ENV`  
+     **Value**: `production`
    
-   Replace `your-neon-connection-string-here` with your Neon connection string from Step 2.
-
-2. **Set Other Environment Variables**:
-   ```bash
-   flyctl secrets set FLASK_ENV=production
-   flyctl secrets set APP_ENV=production
-   flyctl secrets set SESSION_COOKIE_SECURE=true
-   flyctl secrets set FRONTEND_URL=https://mridultyagi687.github.io/friendly-friends-app-full
-   ```
-
-3. **Generate and Set Secret Key**:
-   ```bash
-   # Generate a secret key
-   openssl rand -hex 32
+   - **Key**: `APP_ENV`  
+     **Value**: `production`
    
-   # Set it (replace with the generated key)
-   flyctl secrets set FLASK_SECRET_KEY="your-generated-key-here"
-   ```
+   - **Key**: `SESSION_COOKIE_SECURE`  
+     **Value**: `true`
+   
+   - **Key**: `FRONTEND_URL`  
+     **Value**: `https://mridultyagi687.github.io/friendly-friends-app-full`
 
-4. **Set OpenAI Key** (if using AI features):
-   ```bash
-   flyctl secrets set OPENAI_API_KEY="your-openai-key-here"
-   ```
+5. **Generate Secret Key**:
+   - **Key**: `FLASK_SECRET_KEY`
+   - **Value**: Generate one using:
+     ```bash
+     openssl rand -hex 32
+     ```
+   - OR use any random string generator online
+   - Click **"Save Changes"**
 
-5. **Verify Secrets**:
-   ```bash
-   flyctl secrets list
-   ```
+6. **Add OpenAI Key** (if using AI features):
+   - **Key**: `OPENAI_API_KEY`
+   - **Value**: Your OpenAI API key (if you have one)
+   - Click **"Save Changes"**
+
+7. **Render Auto-Redeploys**:
+   - Render will automatically redeploy when you add environment variables
+   - Wait for deployment to complete
 
 **Important**: The app MUST have DATABASE_URL set to connect to your Neon database!
 
@@ -176,7 +190,7 @@ Follow these steps in order to complete the deployment setup.
 2. **Add New Secret**:
    - Click **"New repository secret"**
    - **Name**: `VITE_API_URL`
-   - **Value**: Your Fly.io URL from Step 2 (e.g., `https://friendly-friends-backend.fly.dev`)
+   - **Value**: Your Render URL from Step 2 (e.g., `https://friendly-friends-backend.onrender.com`)
    - Make sure to include `https://` but NO trailing slash `/`
    - Click **"Add secret"**
 
@@ -190,12 +204,11 @@ Follow these steps in order to complete the deployment setup.
 
 ## ✅ Step 6: Verify Everything Works (5 minutes)
 
-1. **Check Fly.io Deployment**:
-   ```bash
-   flyctl status
-   flyctl logs
-   ```
-   - Make sure app shows as "running"
+1. **Check Render Deployment**:
+   - Go to Render dashboard
+   - Check **"Events"** or **"Logs"** tab
+   - Make sure latest deployment shows **"Live"** or **"Active"**
+   - Check logs for any errors
 
 2. **Check Frontend Deployment**:
    - Go to: https://github.com/mridultyagi687/friendly-friends-app-full/actions
@@ -207,8 +220,9 @@ Follow these steps in order to complete the deployment setup.
    - Page should load
 
 4. **Test Your Backend**:
-   - Visit: `https://friendly-friends-backend.fly.dev/api/health` (or `/api/me`)
+   - Visit: `https://friendly-friends-backend.onrender.com/api/health` (or `/api/me`)
    - Should return JSON response
+   - **Note**: First request might take ~30 seconds if app was sleeping (this is normal for free tier)
 
 5. **Test Database Connection**:
    - Go to Neon dashboard
