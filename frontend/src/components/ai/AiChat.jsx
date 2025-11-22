@@ -2,18 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../../services/api';
 import { useTheme } from '../../contexts/ThemeContext';
 
-const styles = {
+const getStyles = (isMobile) => ({
   container: {
     maxWidth: '1100px',
     margin: '0 auto',
-    padding: '2rem 1.5rem 4rem',
+    padding: isMobile ? '1rem 0.75rem 2rem' : '2rem 1.5rem 4rem',
     display: 'flex',
     flexDirection: 'column',
     minHeight: '100vh',
-    // Mobile responsive
-    '@media (max-width: 768px)': {
-      padding: '1rem 0.75rem 2rem',
-    },
   },
   header: {
     marginBottom: '1.75rem',
@@ -40,7 +36,7 @@ const styles = {
     flex: '1 1 260px',
     minWidth: isMobile ? '100%' : '240px',
     maxWidth: isMobile ? '100%' : '320px',
-    maxHeight: isMobile ? '40vh' : 'none',
+    maxHeight: isMobile ? '40vh' : undefined,
     background: 'linear-gradient(180deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
     borderRadius: '16px',
     border: '1px solid rgba(102, 126, 234, 0.2)',
@@ -55,7 +51,7 @@ const styles = {
     flex: '3 1 520px',
     minWidth: isMobile ? '100%' : '280px',
     minHeight: isMobile ? '60vh' : 'auto',
-    maxHeight: isMobile ? '60vh' : 'none',
+    maxHeight: isMobile ? '60vh' : undefined,
     background: 'linear-gradient(180deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
     borderRadius: '16px',
     border: '1px solid rgba(102, 126, 234, 0.2)',
