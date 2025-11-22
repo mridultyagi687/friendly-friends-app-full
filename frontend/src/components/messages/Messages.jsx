@@ -16,6 +16,7 @@ function Messages() {
   const [success, setSuccess] = useState(null);
   const [viewingImage, setViewingImage] = useState(null);
   const [hoveredImage, setHoveredImage] = useState(null);
+  const [searchQuery, setSearchQuery] = useState(''); // Search query for filtering users
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
   const [notificationPermission, setNotificationPermission] = useState('default');
@@ -71,7 +72,9 @@ function Messages() {
       setLoadingUsers(true);
     }
     try {
-      const res = await api.get('/api/members');
+      // Use search query if provided, otherwise fetch first page
+      const params = searchQuery ? { search: searchQuery, per_page: 100 } : { per_page: 100 };
+      const res = await api.get('/api/members', { params });
       const members = res.data?.members || [];
       // Filter out current user
       const otherUsers = members.filter(m => m.id !== user?.id);
@@ -88,6 +91,18 @@ function Messages() {
       setLoadingUsers(false);
     }
   };
+
+  // Debounce search to avoid too many API calls
+  useEffect(() => {
+    if (!user) return;
+    
+    const timeoutId = setTimeout(() => {
+      setLoadingUsers(true);
+      fetchAllUsers();
+    }, 300); // Wait 300ms after user stops typing
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, user]);
 
   const handleEnableNotifications = async () => {
     if (!('Notification' in window)) {
@@ -321,6 +336,13 @@ function Messages() {
       <div style={styles.layout}>
         <div style={styles.sidebar}>
           <h2 style={styles.sidebarTitle}>All Users</h2>
+          <input
+            type="text"
+            placeholder="🔍 Search users..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={styles.searchInput}
+          />
           {loadingUsers ? (
             <div style={styles.emptyState}>
               <span style={styles.emptyIcon}>⏳</span>
@@ -677,6 +699,17 @@ const styles = {
     fontWeight: '600',
     marginBottom: '1rem',
     color: '#333',
+  },
+  searchInput: {
+    width: '100%',
+    padding: '0.75rem',
+    border: '2px solid rgba(102, 126, 234, 0.3)',
+    borderRadius: '8px',
+    fontSize: '0.95rem',
+    marginBottom: '1rem',
+    backgroundColor: 'white',
+    color: '#000000',
+    boxSizing: 'border-box',
   },
   partnerList: {
     flex: 1,

@@ -1254,8 +1254,40 @@ def me():
 @app.get("/api/members")
 @login_required
 def list_members():
-    members = db.session.query(User).order_by(User.created_at.desc()).all()
-    return jsonify({"members": [m.to_dict() for m in members]})
+    # Get pagination parameters
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)  # Default 50, max 100
+    per_page = min(per_page, 100)  # Cap at 100 per page
+    
+    # Get search query
+    search = request.args.get('search', '').strip()
+    
+    # Build query
+    query = db.session.query(User)
+    
+    # Apply search filter if provided
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            (User.username.ilike(search_pattern)) |
+            (User.email.ilike(search_pattern))
+        )
+    
+    # Get total count (before pagination)
+    total = query.count()
+    
+    # Apply pagination and ordering
+    members = query.order_by(User.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    
+    return jsonify({
+        "members": [m.to_dict() for m in members],
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "pages": (total + per_page - 1) // per_page  # Ceiling division
+        }
+    })
 
 
 @app.post("/api/members")
