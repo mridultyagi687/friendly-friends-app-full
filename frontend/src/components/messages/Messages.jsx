@@ -351,7 +351,7 @@ function Messages() {
           ) : allUsers.length === 0 ? (
             <div style={styles.emptyState}>
               <span style={styles.emptyIcon}>👥</span>
-              <p>No other users found.</p>
+              <p>{searchQuery ? 'No users found matching your search.' : 'No other users found.'}</p>
             </div>
           ) : (
             <div style={styles.partnerList}>
