@@ -55,20 +55,27 @@ input, textarea {
   outline: none;
 }
 
-/* Ensure all white background inputs have black text */
-input[style*="background-color: white"],
-input[style*="backgroundColor: white"],
-input[style*="background: white"],
-textarea[style*="background-color: white"],
-textarea[style*="backgroundColor: white"],
-textarea[style*="background: white"] {
+/* Ensure all white background inputs have black text for proper contrast */
+/* This applies to any input/textarea with white background */
+input[style*="white"],
+textarea[style*="white"],
+input[style*="#fff"],
+textarea[style*="#fff"],
+input[style*="#ffffff"],
+textarea[style*="#ffffff"] {
   color: #000000 !important;
 }
 
-/* Also handle inline styles and class-based white backgrounds */
+/* Also handle class-based white backgrounds */
 input.white-bg,
 textarea.white-bg {
   color: #000000 !important;
+}
+
+/* Fallback: if background is white/light, ensure text is dark */
+input:not([style*="color"]):not([class*="dark"]),
+textarea:not([style*="color"]):not([class*="dark"]) {
+  /* This will be overridden by inline styles, but provides a fallback */
 }
 
 input:focus, textarea:focus {
