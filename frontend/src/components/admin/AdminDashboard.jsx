@@ -210,7 +210,10 @@ function AdminDashboard() {
           <div style={styles.formActions}>
             <button 
               type="submit" 
-              style={styles.submitButton}
+              style={{
+                ...styles.submitButton,
+                ...(creating ? styles.submitButtonDisabled : {})
+              }}
               disabled={creating}
             >
               {creating ? 'Creating...' : 'Create Member'}
