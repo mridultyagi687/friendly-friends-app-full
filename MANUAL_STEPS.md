@@ -16,12 +16,15 @@ Follow these steps in order to complete the deployment setup.
 
 ## ✅ Step 2: Connect Render to GitHub (5 minutes)
 
-**What is Render?** Render hosts your **backend server** (the Python/Flask app that handles API requests) - FREE with generous limits!
+**What is Render?** Render hosts your **backend server** (the Python/Flask app that handles API requests) - **EFFECTIVELY UNLIMITED!**
+  - 750 hours/month = MORE than a full month (744 hours)!
+  - Resets every month = Can run continuously forever!
+  - This IS basically unlimited!
 
-**What is Neon?** Neon hosts your **database** (PostgreSQL where all your data is stored) - TRULY UNLIMITED!
+**What is Neon?** Neon hosts your **database** (PostgreSQL where all your data is stored) - **TRULY UNLIMITED!**
 
 **Why both?**
-- Render = Runs your backend code (free tier, generous limits)
+- Render = Runs your backend code (effectively unlimited - 750 hrs/mo > 744 hrs/month!)
 - Neon = Stores your database data (truly unlimited storage & connections)
 - They work together! Your backend (Render) connects to your database (Neon).
 

@@ -44,10 +44,13 @@ You need BOTH because they do different things!
 
 Since all backend hosts have limits, here's the best combination:
 
-### Option 1: Render + Neon (Recommended)
-- **Backend**: Render (750 hours/month = almost unlimited)
-- **Database**: Neon (truly unlimited)
-- **Why**: Render gives most hours, Neon gives unlimited storage
+### Option 1: Render + Neon (Recommended - EFFECTIVELY UNLIMITED!)
+- **Backend**: Render (750 hours/month = **MORE than a full month!**)
+  - 31 days × 24 hours = 744 hours in a month
+  - Render gives **750 hours/month** = You get MORE than a full month!
+  - **Resets every month** = Effectively unlimited for continuous use!
+- **Database**: Neon (truly unlimited storage & connections)
+- **Why**: Render gives more hours than a month has, resets monthly = basically unlimited!
 
 ### Option 2: Railway + Neon
 - **Backend**: Railway ($5 credit/month, can run 24/7 on low traffic)
@@ -70,9 +73,10 @@ Since all backend hosts have limits, here's the best combination:
 
 **Best you can get for free:**
 - ✅ **Neon Database**: Truly unlimited (storage & connections)
-- ⚠️ **Backend Host**: Limited but generous (Render = 750 hrs/month)
-
-**750 hours/month = Almost always available** (only 6 hours short of full month!)
+- ✅ **Render Backend**: **EFFECTIVELY UNLIMITED!**
+  - 750 hours/month = MORE than a full month (744 hours)!
+  - Resets every month = Continuous unlimited use!
+  - This IS basically unlimited for practical purposes!
 
 ---
 
@@ -80,25 +84,28 @@ Since all backend hosts have limits, here's the best combination:
 
 Use **Render + Neon** because:
 
-1. **Render** = 750 hours/month (most generous free tier)
-   - Almost unlimited for most apps
-   - Only spins down after 15 min inactivity
-   - Wakes instantly (~30 seconds)
+1. **Render** = 750 hours/month = **EFFECTIVELY UNLIMITED!** ✅
+   - 750 hours > 744 hours (full month) = You get MORE than a month!
+   - Resets every month = Can run continuously forever!
+   - Only spins down after 15 min inactivity (wakes instantly)
+   - This IS basically unlimited for all practical purposes!
 
-2. **Neon** = Truly unlimited database
+2. **Neon** = Truly unlimited database ✅
    - No storage limits
    - No connection limits
    - Unlimited projects
 
-**Together = Closest to unlimited you can get for free!**
+**Together = EFFECTIVELY UNLIMITED (free tier)!** 🎉
 
 ---
 
 ## Summary
 
-- **Neon**: Database only ✅ Unlimited
-- **Backend Host**: Still needed ⚠️ Limited (but generous)
-- **Best Combo**: Render (750 hrs/mo) + Neon (unlimited) = Almost unlimited!
+- **Neon**: Database only ✅ Truly unlimited
+- **Render**: Backend hosting ✅ **EFFECTIVELY UNLIMITED!**
+  - 750 hours/month > 744 hours (full month) = More than you need!
+  - Resets monthly = Continuous unlimited use!
+- **Best Combo**: Render (effectively unlimited) + Neon (truly unlimited) = **UNLIMITED!** 🎉
 
-Would you like me to update the manual steps to use Render + Neon?
+**Render + Neon = The closest thing to truly unlimited on free tier!**
 
