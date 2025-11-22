@@ -8,20 +8,26 @@ function BrowserCheck({ children }) {
     // Check if browser is Chrome
     const checkBrowser = () => {
       const userAgent = navigator.userAgent.toLowerCase();
-      // Chrome detection: must contain 'chrome' but not 'edg' (Edge) or 'opr' (Opera)
+      
+      // Chrome detection: 
+      // 1. Must have window.chrome object (most reliable)
+      // 2. User agent contains 'chrome' but not 'edg' (Edge) or 'opr' (Opera)
+      // 3. Safari user agent doesn't contain 'chrome'
+      const hasChromeObject = typeof window !== 'undefined' && window.chrome && window.chrome.runtime;
+      const hasChromeInUA = userAgent.includes('chrome');
+      const isEdge = userAgent.includes('edg');
+      const isOpera = userAgent.includes('opr');
+      const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
+      
+      // Chrome is detected if:
+      // - Has chrome object AND user agent has chrome (not Edge/Opera)
+      // OR
+      // - User agent has chrome but not Edge/Opera/Safari
       const isChromeBrowser = 
-        userAgent.includes('chrome') && 
-        !userAgent.includes('edg') && 
-        !userAgent.includes('opr') &&
-        !userAgent.includes('safari') || 
-        (userAgent.includes('chrome') && userAgent.includes('safari') && !userAgent.includes('edg') && !userAgent.includes('opr'));
+        (hasChromeObject && hasChromeInUA && !isEdge && !isOpera) ||
+        (hasChromeInUA && !isEdge && !isOpera && !isSafari);
       
-      // More accurate Chrome detection
-      const isActuallyChrome = 
-        (window.chrome && window.chrome.runtime) ||
-        (userAgent.includes('chrome') && !userAgent.includes('edg') && !userAgent.includes('opr'));
-      
-      setIsChrome(isActuallyChrome || isChromeBrowser);
+      setIsChrome(isChromeBrowser);
       setIsChecking(false);
     };
 
