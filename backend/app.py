@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import List, Optional
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 import requests
 from flask import (
@@ -125,6 +126,26 @@ if DATABASE_URL:
         database_uri = database_uri.replace("postgres://", "postgresql://", 1)
     if not database_uri.startswith("postgresql://"):
         database_uri = f"postgresql://{database_uri}"
+    
+    # Add connection pooling parameters for Neon/PostgreSQL
+    # Parse existing query parameters
+    parsed = urlparse(database_uri)
+    query_params = parse_qs(parsed.query)
+    
+    # Ensure SSL mode is set (but don't override if already set)
+    if 'sslmode' not in query_params:
+        query_params['sslmode'] = ['require']
+    
+    # Connection keepalive parameters for stable connections
+    query_params.setdefault('connect_timeout', ['10'])
+    query_params.setdefault('keepalives', ['1'])
+    query_params.setdefault('keepalives_idle', ['30'])
+    query_params.setdefault('keepalives_interval', ['10'])
+    query_params.setdefault('keepalives_count', ['5'])
+    
+    # Rebuild URI with updated parameters
+    new_query = urlencode(query_params, doseq=True)
+    database_uri = urlunparse(parsed._replace(query=new_query))
 else:
     # Fallback to SQLite for local development
     database_uri = f"sqlite:///{DATABASE_PATH}"
@@ -132,6 +153,16 @@ else:
 app.config.update(
     SECRET_KEY=os.environ.get("FLASK_SECRET_KEY", "dev-secret"),
     SQLALCHEMY_DATABASE_URI=database_uri,
+    SQLALCHEMY_ENGINE_OPTIONS={
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_pre_ping": True,  # Verify connections before using
+        "pool_recycle": 3600,  # Recycle connections after 1 hour
+        "connect_args": {
+            "connect_timeout": 10,
+            "sslmode": "require",
+        } if DATABASE_URL else {}
+    },
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     JSON_SORT_KEYS=False,
     SESSION_COOKIE_NAME=os.environ.get("SESSION_COOKIE_NAME", "ff_session"),
