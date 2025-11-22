@@ -3286,16 +3286,29 @@ def create_cloud_pc():
         except Exception as e:
             # Fallback to normal ORM insert if storage_gb doesn't exist or other error
             logger.exception(f"Error creating Cloud PC with raw SQL, falling back to ORM: {e}")
-            cloud_pc = CloudPC(
-                owner_id=user.id,
-                name=name,
-                os_version=os_version,
-                status="created",
-                storage_used_mb=0
-            )
-            db.session.add(cloud_pc)
-            db.session.commit()
-            db.session.refresh(cloud_pc)
+            db.session.rollback()
+            try:
+                cloud_pc = CloudPC(
+                    owner_id=user.id,
+                    name=name,
+                    os_version=os_version,
+                    status="created",
+                    storage_used_mb=0
+                )
+                db.session.add(cloud_pc)
+                db.session.commit()
+                db.session.refresh(cloud_pc)
+            except Exception as orm_error:
+                logger.exception(f"Error creating Cloud PC with ORM fallback: {orm_error}")
+                db.session.rollback()
+                error_msg = str(orm_error)
+                # Provide more helpful error message
+                if "storage_gb" in error_msg.lower() or "not null" in error_msg.lower():
+                    return jsonify({"error": "Database schema error. Please ensure all required columns exist."}), 500
+                return jsonify({"error": f"Failed to create cloud PC: {error_msg}"}), 500
+        
+        if not cloud_pc:
+            return jsonify({"error": "Cloud PC was created but could not be retrieved"}), 500
         
         logger.info(f"User {user.id} created cloud PC '{name}' with OS {os_version}")
         
@@ -3306,7 +3319,8 @@ def create_cloud_pc():
     except Exception as e:
         logger.exception(f"Error creating cloud PC: {e}")
         db.session.rollback()
-        return jsonify({"error": "Failed to create cloud PC"}), 500
+        error_msg = str(e)
+        return jsonify({"error": f"Failed to create cloud PC: {error_msg}"}), 500
 
 
 @app.get("/api/cloud-pcs/<int:pc_id>")
