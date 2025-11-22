@@ -30,7 +30,7 @@ Follow these steps in order to complete the deployment setup.
 - Neon = Stores your database data (truly unlimited storage & connections)
 - They work together! Your backend (Render) connects to your database (Neon).
 
-1. **Sign up at Railway**: https://railway.app
+1. **Sign up at Render**: https://render.com
    - Click **"Start a New Project"** or **"Login"**
    - Click **"Login with GitHub"**
    - Authorize Railway to access your GitHub account (OAuth)
