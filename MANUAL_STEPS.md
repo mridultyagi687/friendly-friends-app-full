@@ -47,6 +47,8 @@ Follow these steps in order to complete the deployment setup.
    - **Runtime**: Python 3
    - **Build Command**: `cd backend && pip install -r requirements.txt && pip install gunicorn`
    - **Start Command**: `cd backend && gunicorn -w 2 -b 0.0.0.0:$PORT app:app`
+     - **IMPORTANT**: Copy this EXACTLY - no backticks, no extra quotes!
+     - Just paste: `cd backend && gunicorn -w 2 -b 0.0.0.0:$PORT app:app`
    - **Plan**: Free
    - Click **"Create Web Service"**
 
