@@ -9,6 +9,7 @@ function AdminDashboard() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false); // Loading state for creating member
   const [showNewMemberForm, setShowNewMemberForm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordButtonHovered, setPasswordButtonHovered] = useState(false);
@@ -75,9 +76,10 @@ function AdminDashboard() {
 
   const handleCreateMember = async (e) => {
     e.preventDefault();
+    setCreating(true);
+    setSuccess(null);
+    setError(null);
     try {
-      setSuccess(null);
-      setError(null);
       const response = await api.post('/api/members', newMember);
       const created = response.data?.user;
       if (created) {
@@ -100,6 +102,8 @@ function AdminDashboard() {
         setError('Failed to create member: ' + message);
       }
       setSuccess(null);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -204,8 +208,12 @@ function AdminDashboard() {
           </div>
           </div>
           <div style={styles.formActions}>
-            <button type="submit" style={styles.submitButton}>
-              Create Member
+            <button 
+              type="submit" 
+              style={styles.submitButton}
+              disabled={creating}
+            >
+              {creating ? 'Creating...' : 'Create Member'}
             </button>
           </div>
         </form>
@@ -458,6 +466,11 @@ const styles = {
     fontWeight: '600',
     boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
     transition: 'all 0.3s ease',
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+    cursor: 'not-allowed',
+    background: 'linear-gradient(135deg, #94a3b8 0%, #757575 100%)',
   },
   tableContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
