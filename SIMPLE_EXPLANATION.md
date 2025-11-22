@@ -36,13 +36,15 @@ You need BOTH:
 ## Best "Unlimited" Setup (Free Tier)
 
 ✅ **GitHub Pages** = Frontend (unlimited bandwidth)  
-⚠️ **Render** = Backend (750 hours/month = almost unlimited)  
+✅ **Render** = Backend (**EFFECTIVELY UNLIMITED!** - 750 hours/month > 744 hours/month!)  
 ✅ **Neon** = Database (truly unlimited storage)
 
 **Why this combo?**
-- Render has the most generous free tier (750 hours/month)
-- That's 744 hours in a month - you get 750!
-- Only 6 hours short of 24/7 = almost unlimited
+- Render gives **750 hours/month** 
+- A full month has **744 hours** (31 days × 24 hours)
+- **750 > 744** = You get MORE than a full month!
+- **Resets every month** = Can run continuously forever!
+- **This IS basically unlimited for all practical purposes!** ✅
 
 ---
 
@@ -72,13 +74,19 @@ If you need 100% unlimited backend, you have these options:
 ## My Recommendation
 
 **Use Render + Neon** because:
-- **Render**: 750 hours/month = Almost unlimited (31 days × 24 hrs = 744 hrs, you get 750!)
-- **Neon**: Truly unlimited database
-- **Together**: Closest to unlimited you can get for free!
+- **Render**: **750 hours/month = EFFECTIVELY UNLIMITED!**
+  - 750 hours > 744 hours (full month) = MORE than you need!
+  - Resets every month = Can run continuously forever!
+  - This IS basically unlimited! ✅
+- **Neon**: Truly unlimited database ✅
+- **Together**: **EFFECTIVELY UNLIMITED (free tier)!** 🎉
 
-The 750 hours/month means your app is available almost 24/7 - only spins down after 15 minutes of inactivity and wakes instantly.
+The 750 hours/month means your app can run 24/7 continuously - it resets every month so you never run out! Only spins down after 15 minutes of inactivity and wakes instantly.
 
 ---
 
-**Bottom Line**: Neon is unlimited for database, but you still need Render (or similar) to run your backend code. Render + Neon = Best free combo!
+**Bottom Line**: 
+- **Neon**: Truly unlimited database ✅
+- **Render**: Effectively unlimited backend (750 hrs/mo > 744 hrs/month, resets monthly!) ✅
+- **Render + Neon = UNLIMITED (free tier)!** 🎉
 
