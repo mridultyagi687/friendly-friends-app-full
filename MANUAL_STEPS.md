@@ -14,55 +14,44 @@ Follow these steps in order to complete the deployment setup.
 
 ---
 
-## ✅ Step 2: Connect Render to GitHub (5 minutes)
+## ✅ Step 2: Connect Railway to GitHub (5 minutes)
 
-**What is Render?** Render hosts your **backend server** (the Python/Flask app that handles API requests) - **EFFECTIVELY UNLIMITED!**
-  - 750 hours/month = MORE than a full month (744 hours)!
-  - Resets every month = Can run continuously forever!
-  - This IS basically unlimited!
+**What is Railway?** Railway hosts your **backend server** (the Python/Flask app that handles API requests) - **EFFECTIVELY UNLIMITED!**
+  - $5 free credit/month = Can run 24/7 continuously on low-traffic apps!
+  - **No spin-down** = Always running, always available!
+  - Direct GitHub integration = No secrets needed!
+  - This IS basically unlimited for most apps!
 
 **What is Neon?** Neon hosts your **database** (PostgreSQL where all your data is stored) - **TRULY UNLIMITED!**
 
 **Why both?**
-- Render = Runs your backend code (effectively unlimited - 750 hrs/mo > 744 hrs/month!)
+- Railway = Runs your backend code (effectively unlimited - $5/month credit = continuous running!)
 - Neon = Stores your database data (truly unlimited storage & connections)
-- They work together! Your backend (Render) connects to your database (Neon).
+- They work together! Your backend (Railway) connects to your database (Neon).
 
-1. **Sign up at Render**: https://render.com
-   - Click **"Get Started for Free"** or **"Sign Up"**
-   - Click **"Continue with GitHub"**
-   - Authorize Render to access your GitHub account
+1. **Sign up at Railway**: https://railway.app
+   - Click **"Start a New Project"** or **"Login"**
+   - Click **"Login with GitHub"**
+   - Authorize Railway to access your GitHub account (OAuth)
 
-2. **Create New Web Service**:
-   - Click **"New +"** → **"Web Service"**
-   - Click **"Connect account"** or **"Connect GitHub"** if not already connected
+2. **Create New Project**:
+   - Click **"New Project"** (or **"Start a New Project"**)
+   - Select **"Deploy from GitHub repo"**
    - Find your repository: `friendly-friends-app-full`
-   - Click **"Connect"**
+   - Click **"Deploy Now"**
 
-3. **Configure Service**:
-   - **Name**: `friendly-friends-backend` (or any name you want)
-   - **Region**: Choose closest to you
-   - **Branch**: `main`
-   - **Root Directory**: Leave empty (or set to `.` if needed)
-   - **Runtime**: Python 3
-   - **Build Command**: `cd backend && pip install -r requirements.txt && pip install gunicorn`
-   - **Start Command**: `cd backend && gunicorn -w 2 -b 0.0.0.0:$PORT app:app`
-     - **IMPORTANT**: Copy this EXACTLY - no backticks, no extra quotes!
-     - Just paste: `cd backend && gunicorn -w 2 -b 0.0.0.0:$PORT app:app`
-   - **Plan**: Free
-   - Click **"Create Web Service"**
+3. **Railway Auto-Detects Configuration**:
+   - Railway will automatically detect `railway.json` in your repo
+   - It will automatically configure build and start commands
+   - Railway uses NIXPACKS to detect Python app
+   - This takes 2-5 minutes
 
-4. **Wait for Deployment**:
-   - Render will automatically detect `render.yaml` if present
-   - It will start building your backend
-   - This takes 3-5 minutes
-
-5. **Get Your Render URL**:
-   - Once deployed, Render will show you a URL like: `https://friendly-friends-backend.onrender.com`
+4. **Get Your Railway URL**:
+   - Once deployed, Railway will show you a URL like: `https://your-app-name.up.railway.app`
    - Copy this URL - you'll need it in Step 5
-   - Or go to **Settings** → **Custom Domains** to see your URL
+   - Or go to **Settings** → **Networking** → **Generate Domain** to see your URL
 
-**Result**: Your backend server will be live at: `https://friendly-friends-backend.onrender.com`
+**Result**: Your backend server will be live at: `https://your-app-name.up.railway.app`
 
 ---
 
@@ -102,29 +91,28 @@ Follow these steps in order to complete the deployment setup.
 
 ---
 
-## ✅ Step 4: Configure Render Environment Variables (10 minutes)
+## ✅ Step 4: Configure Railway Environment Variables (10 minutes)
 
-**⚠️ CRITICAL: This MUST be done before deployment or your app will crash!**
+**⚠️ CRITICAL: This MUST be done for your app to work!**
 
-**This connects your Render backend to your Neon database!**
+**This connects your Railway backend to your Neon database!**
 
-1. **Go to Render Dashboard**:
-   - Navigate to your project: https://dashboard.render.com
-   - Click on your service (should be `friendly-friends-backend` or similar)
+1. **Go to Railway Dashboard**:
+   - Navigate to your project: https://railway.app/dashboard
+   - Click on your service (should be `friendly-friends-app-full` or similar)
 
-2. **Open Environment Variables**:
-   - Click on **"Environment"** tab
-   - Scroll down to **"Environment Variables"** section
+2. **Open Variables Tab**:
+   - Click on **"Variables"** tab (or **"Environment"** → **"Variables"**)
    - This is where you'll add all environment variables
 
-3. **Add Database Connection** (MOST CRITICAL - REQUIRED or app will crash!):
-   - Click **"+ Add Environment Variable"** or **"Add Variable"**
+3. **Add Database Connection** (MOST CRITICAL - REQUIRED!):
+   - Click **"+ New Variable"** or **"Add Variable"**
    - **Key**: `DATABASE_URL`
    - **Value**: Paste your Neon connection string from Step 3
-   - **⚠️ WARNING**: Without this, your app will exit with status 2 and fail to start!
-   - Click **"Save Changes"**
+   - **⚠️ WARNING**: Without this, your app won't be able to connect to the database!
+   - Click **"Add"** or **"Save"**
 
-**Important**: The app MUST have DATABASE_URL set before it can start successfully!
+**Important**: The app MUST have DATABASE_URL set to connect to your Neon database!
 
 4. **Add Application Settings**:
    Click **"+ New Variable"** for each of these:
