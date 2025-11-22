@@ -67,15 +67,51 @@ function Login() {
         .login-container {
           animation: gradientShift 15s ease infinite;
         }
+        @media (max-width: 768px) {
+          .login-box-mobile {
+            padding: 1.5rem !important;
+            margin: 1rem !important;
+            max-width: calc(100% - 2rem) !important;
+            border-radius: 15px !important;
+          }
+          .logo-mobile {
+            width: 140px !important;
+          }
+          .mode-title-mobile {
+            font-size: 1rem !important;
+            margin-bottom: 1rem !important;
+          }
+          .mode-selector-mobile {
+            flex-direction: column !important;
+            gap: 0.5rem !important;
+          }
+          .mode-button-mobile {
+            font-size: 0.85rem !important;
+            padding: 0.6rem !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .login-box-mobile {
+            padding: 1rem !important;
+            margin: 0.5rem !important;
+            max-width: calc(100% - 1rem) !important;
+          }
+          .logo-mobile {
+            width: 120px !important;
+          }
+          .mode-title-mobile {
+            font-size: 0.9rem !important;
+          }
+        }
       `}</style>
-      <div style={styles.loginBox}>
-        <img src={logo} alt="Friendly Friends AI logo" style={styles.logo} />
+      <div style={styles.loginBox} className="login-box-mobile">
+        <img src={logo} alt="Friendly Friends AI logo" style={styles.logo} className="logo-mobile" />
         <p style={styles.subtitle}>
           {mode === 'member' ? 'Research, Share, Connect, Enjoy' : 'Enjoy, Research'}
         </p>
         
         {/* Mode Selection */}
-        <div style={styles.modeSelector}>
+        <div style={styles.modeSelector} className="mode-selector-mobile">
           <button
             type="button"
             onClick={() => {
@@ -87,6 +123,7 @@ function Login() {
               ...styles.modeButton,
               ...(mode === 'member' ? styles.modeButtonActive : {})
             }}
+            className="mode-button-mobile"
           >
             👥 Member Login
           </button>
@@ -101,6 +138,7 @@ function Login() {
               ...styles.modeButton,
               ...(mode === 'viewer' ? styles.modeButtonActive : {})
             }}
+            className="mode-button-mobile"
           >
             📖 Research Viewer
           </button>
@@ -108,7 +146,7 @@ function Login() {
 
         {mode === 'member' ? (
           <>
-            <h2 style={styles.modeTitle}>Friendly Friends AI Member? - Login</h2>
+            <h2 style={styles.modeTitle} className="mode-title-mobile">Friendly Friends AI Member? - Login</h2>
             <form onSubmit={handleMemberLogin} style={styles.form}>
               <input
                 type="text"
@@ -139,7 +177,7 @@ function Login() {
           </>
         ) : (
           <>
-            <h2 style={styles.modeTitle}>
+            <h2 style={styles.modeTitle} className="mode-title-mobile">
               Friendly Friends AI Research Viewer? - {isRegistering ? 'Register' : 'Login'}
             </h2>
             <form onSubmit={handleViewerAction} style={styles.form}>
@@ -215,6 +253,7 @@ const styles = {
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
     backgroundSize: '400% 400%',
     animation: 'gradientShift 15s ease infinite',
+    padding: '1rem', // Add padding for mobile
   },
   loginBox: {
     padding: '2rem',
@@ -226,6 +265,7 @@ const styles = {
     width: '100%',
     maxWidth: '500px',
     border: '2px solid rgba(102, 126, 234, 0.4)',
+    margin: '0 auto', // Center on mobile
   },
   logo: {
     width: '180px',
@@ -283,6 +323,7 @@ const styles = {
     width: '100%',
     boxSizing: 'border-box',
     background: 'rgba(255, 255, 255, 0.8)',
+    color: '#000000', // Black text color for username and password
     transition: 'all 0.3s ease',
   },
   inputFocus: {
