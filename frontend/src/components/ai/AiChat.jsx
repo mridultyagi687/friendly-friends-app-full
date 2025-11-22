@@ -334,7 +334,7 @@ const getStyles = (isMobile) => ({
     marginTop: '0.2rem',
     color: '#475569',
   },
-};
+});
 
 const initialAssistantMessage = {
   role: 'assistant',
