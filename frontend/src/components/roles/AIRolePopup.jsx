@@ -83,6 +83,7 @@ const styles = {
     borderRadius: '10px',
     transition: 'all 0.3s ease',
     backgroundColor: 'white',
+    color: '#000000', // Black text on white background
   },
   textarea: {
     padding: '0.875rem 1rem',
@@ -94,6 +95,7 @@ const styles = {
     fontFamily: 'inherit',
     transition: 'all 0.3s ease',
     backgroundColor: 'white',
+    color: '#000000', // Black text on white background
   },
   aiButton: {
     padding: '0.75rem 1.5rem',

@@ -464,6 +464,7 @@ const styles = {
     borderRadius: '12px', 
     fontSize: '1rem', 
     backgroundColor: 'white',
+    color: '#000000', // Black text on white background
     transition: 'all 0.3s ease',
   },
   textarea: { 
@@ -474,6 +475,7 @@ const styles = {
     fontSize: '1rem', 
     fontFamily: 'inherit',
     backgroundColor: 'white',
+    color: '#000000', // Black text on white background
     resize: 'vertical',
     transition: 'all 0.3s ease',
   },

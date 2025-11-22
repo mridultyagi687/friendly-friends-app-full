@@ -397,6 +397,7 @@ const styles = {
     borderRadius: '12px',
     transition: 'all 0.3s ease',
     backgroundColor: 'white',
+    color: '#000000', // Black text on white background
   },
   textarea: {
     padding: '0.875rem 1rem',
@@ -407,6 +408,7 @@ const styles = {
     resize: 'vertical',
     minHeight: '120px',
     backgroundColor: 'white',
+    color: '#000000', // Black text on white background
   },
   checkboxGroup: {
     marginTop: '0.5rem',

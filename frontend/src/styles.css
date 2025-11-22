@@ -55,6 +55,22 @@ input, textarea {
   outline: none;
 }
 
+/* Ensure all white background inputs have black text */
+input[style*="background-color: white"],
+input[style*="backgroundColor: white"],
+input[style*="background: white"],
+textarea[style*="background-color: white"],
+textarea[style*="backgroundColor: white"],
+textarea[style*="background: white"] {
+  color: #000000 !important;
+}
+
+/* Also handle inline styles and class-based white backgrounds */
+input.white-bg,
+textarea.white-bg {
+  color: #000000 !important;
+}
+
 input:focus, textarea:focus {
   border-color: #667eea !important;
   outline: 2px solid rgba(102, 126, 234, 0.3) !important;

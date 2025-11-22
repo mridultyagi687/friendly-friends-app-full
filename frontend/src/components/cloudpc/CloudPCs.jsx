@@ -291,6 +291,8 @@ const styles = {
     border: '2px solid #e2e8f0',
     borderRadius: '8px',
     fontSize: '1rem',
+    backgroundColor: 'white',
+    color: '#000000', // Black text on white background
     transition: 'all 0.2s'
   },
   submitButton: {
