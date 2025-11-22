@@ -3240,28 +3240,52 @@ def create_cloud_pc():
         
         # Insert with explicit storage_gb for backward compatibility with old schema
         # Use raw SQL to handle old schema that requires storage_gb (NOT NULL)
+        # Use database-agnostic timestamp function
         try:
-            result = db.session.execute(
-                db.text("""
-                    INSERT INTO cloud_pcs (owner_id, name, os_version, status, storage_used_mb, storage_gb, created_at, updated_at)
-                    VALUES (:owner_id, :name, :os_version, :status, :storage_used_mb, 0, datetime('now'), datetime('now'))
-                """),
-                {
-                    "owner_id": user.id,
-                    "name": name,
-                    "os_version": os_version,
-                    "status": "created",
-                    "storage_used_mb": 0
-                }
-            )
-            pc_id = result.lastrowid
+            # Check if we're using PostgreSQL or SQLite
+            is_postgres = DATABASE_URL and 'postgresql' in DATABASE_URL.lower()
+            timestamp_func = 'CURRENT_TIMESTAMP' if is_postgres else "datetime('now')"
+            
+            if is_postgres:
+                # PostgreSQL: Use RETURNING to get the ID
+                result = db.session.execute(
+                    db.text("""
+                        INSERT INTO cloud_pcs (owner_id, name, os_version, status, storage_used_mb, storage_gb, created_at, updated_at)
+                        VALUES (:owner_id, :name, :os_version, :status, :storage_used_mb, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        RETURNING id
+                    """),
+                    {
+                        "owner_id": user.id,
+                        "name": name,
+                        "os_version": os_version,
+                        "status": "created",
+                        "storage_used_mb": 0
+                    }
+                )
+                pc_id = result.scalar()
+            else:
+                # SQLite: Use datetime('now')
+                result = db.session.execute(
+                    db.text("""
+                        INSERT INTO cloud_pcs (owner_id, name, os_version, status, storage_used_mb, storage_gb, created_at, updated_at)
+                        VALUES (:owner_id, :name, :os_version, :status, :storage_used_mb, 0, datetime('now'), datetime('now'))
+                    """),
+                    {
+                        "owner_id": user.id,
+                        "name": name,
+                        "os_version": os_version,
+                        "status": "created",
+                        "storage_used_mb": 0
+                    }
+                )
+                pc_id = result.lastrowid
             db.session.commit()
             
             # Fetch the created CloudPC
             cloud_pc = db.session.query(CloudPC).filter_by(id=pc_id).first()
         except Exception as e:
             # Fallback to normal ORM insert if storage_gb doesn't exist or other error
-            logger.debug(f"Fallback to ORM insert: {e}")
+            logger.exception(f"Error creating Cloud PC with raw SQL, falling back to ORM: {e}")
             cloud_pc = CloudPC(
                 owner_id=user.id,
                 name=name,
