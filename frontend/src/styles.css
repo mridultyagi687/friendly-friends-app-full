@@ -102,6 +102,46 @@ input::placeholder, textarea::placeholder {
   color: rgba(255, 255, 255, 0.4) !important;
 }
 
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+
+  /* Ensure text is readable on mobile */
+  input, textarea {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    color: #000000 !important;
+  }
+
+  /* White background inputs should have black text */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  textarea {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Dark theme inputs on mobile */
+  body.dark-theme input,
+  body.dark-theme textarea {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 13px;
+  }
+
+  input, textarea {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    padding: 0.75rem !important;
+  }
+}
+
 /* Loading spinner */
 .loading {
   display: flex;

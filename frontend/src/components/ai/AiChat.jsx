@@ -10,6 +10,10 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     minHeight: '100vh',
+    // Mobile responsive
+    '@media (max-width: 768px)': {
+      padding: '1rem 0.75rem 2rem',
+    },
   },
   header: {
     marginBottom: '1.75rem',
@@ -29,12 +33,14 @@ const styles = {
     flex: 1,
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '1.5rem',
+    flexDirection: isMobile ? 'column' : 'row',
+    gap: isMobile ? '1rem' : '1.5rem',
   },
   sidebar: {
     flex: '1 1 260px',
-    minWidth: '240px',
-    maxWidth: '320px',
+    minWidth: isMobile ? '100%' : '240px',
+    maxWidth: isMobile ? '100%' : '320px',
+    maxHeight: isMobile ? '40vh' : 'none',
     background: 'linear-gradient(180deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
     borderRadius: '16px',
     border: '1px solid rgba(102, 126, 234, 0.2)',
@@ -43,10 +49,13 @@ const styles = {
     flexDirection: 'column',
     overflow: 'hidden',
     backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
   },
   chatArea: {
     flex: '3 1 520px',
-    minWidth: '280px',
+    minWidth: isMobile ? '100%' : '280px',
+    minHeight: isMobile ? '60vh' : 'auto',
+    maxHeight: isMobile ? '60vh' : 'none',
     background: 'linear-gradient(180deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%)',
     borderRadius: '16px',
     border: '1px solid rgba(102, 126, 234, 0.2)',
@@ -55,6 +64,7 @@ const styles = {
     flexDirection: 'column',
     overflow: 'hidden',
     backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
   },
   chatListHeader: {
     padding: '1.25rem',
@@ -170,10 +180,15 @@ const styles = {
   },
   transcript: {
     flex: 1,
-    padding: '1.5rem',
+    padding: isMobile ? '1rem' : '1.5rem',
     overflowY: 'auto',
+    overflowX: 'hidden',
     background: 'linear-gradient(180deg, rgba(248, 250, 252, 0.5) 0%, rgba(240, 245, 255, 0.5) 100%)',
     position: 'relative',
+    minHeight: 0, // Important for flex scrolling
+    maxHeight: '100%',
+    // Ensure scrollable on mobile
+    WebkitOverflowScrolling: 'touch',
   },
   loadingOverlay: {
     position: 'absolute',
@@ -204,11 +219,11 @@ const styles = {
     border: '1px solid rgba(102, 126, 234, 0.2)',
   },
   bubbleBase: {
-    padding: '0.85rem 1rem',
+    padding: isMobile ? '0.75rem 0.9rem' : '0.85rem 1rem',
     borderRadius: '14px',
-    maxWidth: '75%',
+    maxWidth: isMobile ? '90%' : '75%',
     lineHeight: 1.5,
-    fontSize: '0.95rem',
+    fontSize: isMobile ? '0.9rem' : '0.95rem',
     boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
@@ -218,17 +233,17 @@ const styles = {
     padding: '1rem',
     background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 245, 255, 0.95) 100%)',
   },
-  textarea: (theme) => ({
+  textarea: (theme, isMobile) => ({
     width: '100%',
-    minHeight: '80px',
+    minHeight: isMobile ? '70px' : '80px',
     resize: 'vertical',
     padding: '0.75rem 1rem',
-    fontSize: '1rem',
+    fontSize: isMobile ? '16px' : '1rem', // 16px prevents zoom on iOS
     borderRadius: '10px',
     border: '1px solid rgba(102, 126, 234, 0.3)',
     outline: 'none',
     backgroundColor: theme.colors.inputBackground,
-    color: theme.colors.inputText,
+    color: theme.colors.inputText || '#000000', // Ensure text is visible
   }),
   actions: {
     marginTop: '0.75rem',
@@ -343,6 +358,16 @@ function AiChat() {
   const [error, setError] = useState(null);
   const [latestSearchResults, setLatestSearchResults] = useState(null);
   const transcriptEndRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Handle window resize for mobile detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const displayMessages = useMemo(() => {
     if (messages && messages.length > 0) {
@@ -643,8 +668,8 @@ function AiChat() {
         </p>
       </header>
 
-      <div style={styles.body}>
-        <aside style={styles.sidebar}>
+      <div style={dynamicStyles.body}>
+        <aside style={dynamicStyles.sidebar}>
           <div style={styles.chatListHeader}>
             <h2 style={styles.chatListTitle}>Conversations</h2>
             <button
@@ -713,7 +738,7 @@ function AiChat() {
           </div>
         </aside>
 
-        <section style={styles.chatArea}>
+        <section style={dynamicStyles.chatArea}>
           <div style={styles.chatHeader}>
             <h3 style={styles.chatTitle}>{selectedChat?.title || 'Start a conversation'}</h3>
             <p style={styles.chatSubtitle}>
@@ -723,13 +748,13 @@ function AiChat() {
             </p>
           </div>
 
-          <div style={styles.transcript}>
+          <div style={dynamicStyles.transcript}>
             {searchResultContent}
             {messagesLoading && <div style={styles.loadingOverlay}>Loading messages…</div>}
             {displayMessages.map((message, index) => {
               const isUser = message.role === 'user';
               const bubbleStyle = {
-                ...styles.bubbleBase,
+                ...dynamicStyles.bubbleBase,
                 ...(isUser ? styles.userBubble : styles.assistantBubble),
               };
               const wrapperStyle = {
@@ -749,7 +774,7 @@ function AiChat() {
 
           <div style={styles.composer}>
             <textarea
-              style={styles.textarea(theme)}
+              style={styles.textarea(theme, isMobile)}
               placeholder="Ask Friendly Friends AI anything..."
               value={input}
               onChange={(event) => setInput(event.target.value)}

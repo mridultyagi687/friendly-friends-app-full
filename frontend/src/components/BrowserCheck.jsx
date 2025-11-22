@@ -66,7 +66,7 @@ function BrowserCheck({ children }) {
           </p>
           <div style={styles.actions}>
             <a 
-              href="https://www.google.com/chrome/" 
+              href="https://dl.google.com/chrome/mac/universal/stable/GGRO/googlechrome.dmg" 
               target="_blank" 
               rel="noopener noreferrer"
               style={styles.downloadButton}
