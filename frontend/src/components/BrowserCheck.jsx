@@ -17,24 +17,51 @@ function BrowserCheck({ children }) {
       const hasChromeInUA = userAgent.includes('chrome');
       const isEdge = userAgent.includes('edg');
       const isOpera = userAgent.includes('opr');
-      const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
-      const isChromeIOS = userAgent.includes('crios'); // Chrome on iOS
-      const isChromeAndroid = userAgent.includes('chrome') && userAgent.includes('android') && !isEdge && !isOpera;
-      const isMobileChrome = userAgent.includes('chrome') && (userAgent.includes('mobile') || userAgent.includes('android')) && !isEdge && !isOpera;
+      
+      // Chrome iOS detection (CriOS)
+      const isChromeIOS = userAgent.includes('crios');
+      
+      // Chrome Android detection
+      const isChromeAndroid = userAgent.includes('chrome') && 
+                              userAgent.includes('android') && 
+                              !isEdge && 
+                              !isOpera &&
+                              !userAgent.includes('samsungbrowser'); // Exclude Samsung Internet
+      
+      // Mobile Chrome detection (Chrome on mobile devices)
+      const isMobileChrome = userAgent.includes('chrome') && 
+                            (userAgent.includes('mobile') || userAgent.includes('android')) && 
+                            !isEdge && 
+                            !isOpera &&
+                            !userAgent.includes('samsungbrowser');
+      
+      // Desktop Chrome detection
+      const isDesktopChrome = hasChromeObject && 
+                              hasChromeInUA && 
+                              !isEdge && 
+                              !isOpera;
+      
+      // Pure Safari detection (Safari without Chrome)
+      // Safari UA contains 'safari' but NOT 'chrome' or 'crios'
+      const isPureSafari = userAgent.includes('safari') && 
+                          !userAgent.includes('chrome') && 
+                          !userAgent.includes('crios') &&
+                          !isEdge &&
+                          !isOpera;
       
       // Chrome is detected if:
       // - Desktop: Has chrome object AND user agent has chrome (not Edge/Opera)
-      // - Mobile iOS: Has 'crios' in user agent
-      // - Mobile Android: Has 'chrome' and 'android' but not Edge/Opera
-      // - Mobile Chrome: Has 'chrome' and 'mobile' but not Edge/Opera
+      // - Mobile iOS: Has 'crios' in user agent (Chrome iOS)
+      // - Mobile Android: Has 'chrome' and 'android' but not Edge/Opera/Samsung
+      // - Mobile Chrome: Has 'chrome' and 'mobile' but not Edge/Opera/Samsung
       // OR
-      // - User agent has chrome but not Edge/Opera/Safari
+      // - User agent has chrome but not Edge/Opera and not pure Safari
       const isChromeBrowser = 
-        (hasChromeObject && hasChromeInUA && !isEdge && !isOpera) ||
+        isDesktopChrome ||
         isChromeIOS ||
         isChromeAndroid ||
         isMobileChrome ||
-        (hasChromeInUA && !isEdge && !isOpera && !isSafari);
+        (hasChromeInUA && !isEdge && !isOpera && !isPureSafari);
       
       setIsChrome(isChromeBrowser);
       setIsChecking(false);
