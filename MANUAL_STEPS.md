@@ -208,13 +208,17 @@ Follow these steps in order to complete the deployment setup.
 
 - When your backend starts for the first time
 - Flask app automatically creates all database tables
+- **Neon creates a NEW empty database** - your tables will be empty
 - No manual steps needed
+
+**Important**: Your local database data will NOT be copied automatically. If you want to migrate your existing local data to Neon, see `DATABASE_MIGRATION.md` for instructions.
 
 **To verify it worked**:
 1. Make a request to your backend (visit frontend and login)
 2. Go to Neon dashboard → **SQL Editor**
-3. Run: `\dt` or `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';`
+3. Run: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';`
 4. You should see all your tables (users, videos, blogs, etc.)
+5. Tables will be empty unless you migrate data (see `DATABASE_MIGRATION.md`)
 
 ---
 
