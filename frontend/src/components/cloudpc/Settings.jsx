@@ -43,33 +43,36 @@ const FONTS = [
 ];
 
 function Settings({ pcId }) {
+  // Use pcId-specific keys for localStorage to keep settings per Cloud PC
+  const getStorageKey = (key) => pcId ? `cloudpc_${pcId}_${key}` : `cloudpc_${key}`;
+  
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('cloudpc_theme') || 'auto';
+    const saved = localStorage.getItem(getStorageKey('theme')) || 'auto';
     return saved;
   });
   
   const [font, setFont] = useState(() => {
-    const saved = localStorage.getItem('cloudpc_font') || FONTS[0].value;
+    const saved = localStorage.getItem(getStorageKey('font')) || FONTS[0].value;
     return saved;
   });
   
   const [fontSize, setFontSize] = useState(() => {
-    const saved = localStorage.getItem('cloudpc_fontSize') || '16';
+    const saved = localStorage.getItem(getStorageKey('fontSize')) || '16';
     return saved;
   });
   
   const [animations, setAnimations] = useState(() => {
-    const saved = localStorage.getItem('cloudpc_animations');
+    const saved = localStorage.getItem(getStorageKey('animations'));
     return saved !== null ? saved === 'true' : true;
   });
   
   const [taskbarPosition, setTaskbarPosition] = useState(() => {
-    const saved = localStorage.getItem('cloudpc_taskbarPosition') || 'bottom';
+    const saved = localStorage.getItem(getStorageKey('taskbarPosition')) || 'bottom';
     return saved;
   });
 
   const [wallpaper, setWallpaper] = useState(() => {
-    return localStorage.getItem('cloudpc_wallpaper') || '';
+    return localStorage.getItem(getStorageKey('wallpaper')) || '';
   });
 
   const [showWallpaperBrowser, setShowWallpaperBrowser] = useState(false);
@@ -140,7 +143,7 @@ function Settings({ pcId }) {
       root.style.setProperty('--cloudpc-taskbar-text', selectedTheme.text);
     }
     
-    localStorage.setItem('cloudpc_theme', themeName);
+    localStorage.setItem(getStorageKey('theme'), themeName);
   };
 
   const handleThemeChange = (newTheme) => {
@@ -151,25 +154,25 @@ function Settings({ pcId }) {
 
   const handleFontChange = (newFont) => {
     setFont(newFont);
-    localStorage.setItem('cloudpc_font', newFont);
+    localStorage.setItem(getStorageKey('font'), newFont);
     window.dispatchEvent(new CustomEvent('cloudpc-settings-changed'));
   };
 
   const handleFontSizeChange = (newSize) => {
     setFontSize(newSize);
-    localStorage.setItem('cloudpc_fontSize', newSize);
+    localStorage.setItem(getStorageKey('fontSize'), newSize);
     window.dispatchEvent(new CustomEvent('cloudpc-settings-changed'));
   };
 
   const handleAnimationsChange = (enabled) => {
     setAnimations(enabled);
-    localStorage.setItem('cloudpc_animations', enabled.toString());
+    localStorage.setItem(getStorageKey('animations'), enabled.toString());
     window.dispatchEvent(new CustomEvent('cloudpc-settings-changed'));
   };
 
   const handleTaskbarPositionChange = (position) => {
     setTaskbarPosition(position);
-    localStorage.setItem('cloudpc_taskbarPosition', position);
+    localStorage.setItem(getStorageKey('taskbarPosition'), position);
     window.dispatchEvent(new CustomEvent('cloudpc-settings-changed'));
   };
 
@@ -210,7 +213,7 @@ function Settings({ pcId }) {
         if (data.is_binary && data.mime_type && data.mime_type.startsWith('image/')) {
           const imageUrl = `data:${data.mime_type};base64,${data.content}`;
           setWallpaper(imageUrl);
-          localStorage.setItem('cloudpc_wallpaper', imageUrl);
+          localStorage.setItem(getStorageKey('wallpaper'), imageUrl);
           // Apply wallpaper immediately
           const viewer = document.querySelector('.cloud-pc-viewer');
           if (viewer) {
@@ -237,7 +240,7 @@ function Settings({ pcId }) {
       reader.onload = (event) => {
         const imageUrl = event.target.result;
         setWallpaper(imageUrl);
-        localStorage.setItem('cloudpc_wallpaper', imageUrl);
+        localStorage.setItem(getStorageKey('wallpaper'), imageUrl);
         // Apply wallpaper immediately
         const viewer = document.querySelector('.cloud-pc-viewer');
         if (viewer) {
@@ -257,7 +260,7 @@ function Settings({ pcId }) {
 
   const removeWallpaper = () => {
     setWallpaper('');
-    localStorage.removeItem('cloudpc_wallpaper');
+    localStorage.removeItem(getStorageKey('wallpaper'));
     const viewer = document.querySelector('.cloud-pc-viewer');
     if (viewer) {
       const defaultWallpaper = 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)';
@@ -289,12 +292,12 @@ function Settings({ pcId }) {
     setAnimations(true);
     setTaskbarPosition('bottom');
     setWallpaper('');
-    localStorage.removeItem('cloudpc_theme');
-    localStorage.removeItem('cloudpc_font');
-    localStorage.removeItem('cloudpc_fontSize');
-    localStorage.removeItem('cloudpc_animations');
-    localStorage.removeItem('cloudpc_taskbarPosition');
-    localStorage.removeItem('cloudpc_wallpaper');
+    localStorage.removeItem(getStorageKey('theme'));
+    localStorage.removeItem(getStorageKey('font'));
+    localStorage.removeItem(getStorageKey('fontSize'));
+    localStorage.removeItem(getStorageKey('animations'));
+    localStorage.removeItem(getStorageKey('taskbarPosition'));
+    localStorage.removeItem(getStorageKey('wallpaper'));
     const viewer = document.querySelector('.cloud-pc-viewer');
     if (viewer) {
       viewer.style.setProperty('--cloudpc-wallpaper', 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)');

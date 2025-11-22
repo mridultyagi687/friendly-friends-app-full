@@ -29,6 +29,7 @@
 
 .password-container {
   background: rgba(255, 255, 255, 0.95);
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   padding: 3rem;
   border-radius: 20px;
@@ -109,6 +110,7 @@
   position: fixed;
   height: 48px;
   background: var(--cloudpc-taskbar-bg, var(--cloudpc-bg, rgba(30, 30, 30, 0.95)));
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border: 1px solid var(--cloudpc-border, rgba(255, 255, 255, 0.1));
   display: flex;
@@ -407,6 +409,7 @@
   left: 12px;
   width: 250px;
   background: var(--cloudpc-surface, rgba(30, 30, 30, 0.98));
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
@@ -449,6 +452,7 @@
 .app-window {
   position: absolute;
   background: var(--cloudpc-bg, linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(30, 30, 60, 0.95) 100%));
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   color: var(--cloudpc-text, #ffffff);
   border-radius: 12px;

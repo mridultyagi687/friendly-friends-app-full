@@ -13,6 +13,19 @@ body {
   background-attachment: fixed;
   color: #ffffff;
   transition: color 0.3s ease;
+  /* Safari compatibility fixes */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Safari backdrop-filter support */
+@supports (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px)) {
+  /* Safari and modern browsers support backdrop-filter */
+}
+
+/* Fallback for browsers without backdrop-filter support */
+.no-backdrop-filter {
+  background: rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Theme only affects input fields */

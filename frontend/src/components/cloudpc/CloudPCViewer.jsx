@@ -59,26 +59,29 @@ function CloudPCViewer() {
   }, [pcId]);
 
   const loadSettings = () => {
+    // Use pcId-specific keys for localStorage to keep settings per Cloud PC
+    const getStorageKey = (key) => pcId ? `cloudpc_${pcId}_${key}` : `cloudpc_${key}`;
+    
     // Load theme
-    const theme = localStorage.getItem('cloudpc_theme') || 'auto';
+    const theme = localStorage.getItem(getStorageKey('theme')) || 'auto';
     applyTheme(theme);
     
     // Load font
-    const font = localStorage.getItem('cloudpc_font') || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    const font = localStorage.getItem(getStorageKey('font')) || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     document.documentElement.style.setProperty('--cloudpc-font', font);
     
     // Load font size
-    const fontSize = localStorage.getItem('cloudpc_fontSize') || '16';
+    const fontSize = localStorage.getItem(getStorageKey('fontSize')) || '16';
     document.documentElement.style.setProperty('--cloudpc-font-size', `${fontSize}px`);
     
     // Load animations
-    const animations = localStorage.getItem('cloudpc_animations');
+    const animations = localStorage.getItem(getStorageKey('animations'));
     const animationsEnabled = animations !== null ? animations === 'true' : true;
     document.documentElement.style.setProperty('--cloudpc-animations', animationsEnabled ? '1' : '0');
     
     // Load taskbar position and wallpaper
-    const taskbarPosition = localStorage.getItem('cloudpc_taskbarPosition') || 'bottom';
-    const wallpaper = localStorage.getItem('cloudpc_wallpaper');
+    const taskbarPosition = localStorage.getItem(getStorageKey('taskbarPosition')) || 'bottom';
+    const wallpaper = localStorage.getItem(getStorageKey('wallpaper'));
     
     // Use viewerRef if available, otherwise query selector
     const viewer = viewerRef.current || document.querySelector('.cloud-pc-viewer');
