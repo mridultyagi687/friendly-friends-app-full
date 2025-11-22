@@ -102,24 +102,29 @@ Follow these steps in order to complete the deployment setup.
 
 ---
 
-## ✅ Step 4: Configure Railway Environment Variables (10 minutes)
+## ✅ Step 4: Configure Render Environment Variables (10 minutes)
 
-**This connects your Railway backend to your Neon database!**
+**⚠️ CRITICAL: This MUST be done before deployment or your app will crash!**
 
-1. **Go to Railway Dashboard**:
-   - Navigate to your project: https://railway.app/dashboard
-   - Click on your service (should be `friendly-friends-app-full` or similar)
+**This connects your Render backend to your Neon database!**
 
-2. **Open Variables Tab**:
-   - Click on **"Variables"** tab (or **"Environment"** → **"Variables"**)
+1. **Go to Render Dashboard**:
+   - Navigate to your project: https://dashboard.render.com
+   - Click on your service (should be `friendly-friends-backend` or similar)
+
+2. **Open Environment Variables**:
+   - Click on **"Environment"** tab
+   - Scroll down to **"Environment Variables"** section
    - This is where you'll add all environment variables
 
-3. **Add Database Connection** (MOST IMPORTANT - This connects Railway to Neon!):
-   - Click **"+ New Variable"** or **"Add Variable"**
+3. **Add Database Connection** (MOST CRITICAL - REQUIRED or app will crash!):
+   - Click **"+ Add Environment Variable"** or **"Add Variable"**
    - **Key**: `DATABASE_URL`
    - **Value**: Paste your Neon connection string from Step 3
-   - This tells your Railway backend where to find your Neon database
-   - Click **"Add"** or **"Save"**
+   - **⚠️ WARNING**: Without this, your app will exit with status 2 and fail to start!
+   - Click **"Save Changes"**
+
+**Important**: The app MUST have DATABASE_URL set before it can start successfully!
 
 4. **Add Application Settings**:
    Click **"+ New Variable"** for each of these:
