@@ -14,34 +14,58 @@ Follow these steps in order to complete the deployment setup.
 
 ---
 
-## ✅ Step 2: Connect Railway to GitHub (5 minutes)
+## ✅ Step 2: Connect Render to GitHub (5 minutes)
 
-1. **Sign up at Railway**: https://railway.app
-   - Click **"Login"** or **"Start a New Project"**
-   - Click **"Login with GitHub"**
-   - Authorize Railway to access your GitHub account
+**What is Render?** Render hosts your **backend server** (the Python/Flask app that handles API requests) - FREE with generous limits!
 
-2. **Create New Project**:
-   - Click **"New Project"** (or **"Start a New Project"**)
-   - Select **"Deploy from GitHub repo"**
+**What is Neon?** Neon hosts your **database** (PostgreSQL where all your data is stored) - TRULY UNLIMITED!
+
+**Why both?**
+- Render = Runs your backend code (free tier, generous limits)
+- Neon = Stores your database data (truly unlimited storage & connections)
+- They work together! Your backend (Render) connects to your database (Neon).
+
+1. **Sign up at Render**: https://render.com
+   - Click **"Get Started for Free"** or **"Sign Up"**
+   - Click **"Continue with GitHub"**
+   - Authorize Render to access your GitHub account
+
+2. **Create New Web Service**:
+   - Click **"New +"** → **"Web Service"**
+   - Click **"Connect account"** or **"Connect GitHub"** if not already connected
    - Find your repository: `friendly-friends-app-full`
-   - Click **"Deploy Now"**
+   - Click **"Connect"**
 
-3. **Wait for Deployment**:
-   - Railway will automatically detect `railway.json`
+3. **Configure Service**:
+   - **Name**: `friendly-friends-backend` (or any name you want)
+   - **Region**: Choose closest to you
+   - **Branch**: `main`
+   - **Root Directory**: Leave empty (or set to `.` if needed)
+   - **Runtime**: Python 3
+   - **Build Command**: `cd backend && pip install -r requirements.txt && pip install gunicorn`
+   - **Start Command**: `cd backend && gunicorn -w 2 -b 0.0.0.0:$PORT app:app`
+   - **Plan**: Free
+   - Click **"Create Web Service"**
+
+4. **Wait for Deployment**:
+   - Render will automatically detect `render.yaml` if present
    - It will start building your backend
-   - This takes 2-5 minutes
+   - This takes 3-5 minutes
 
-4. **Get Your Railway URL**:
-   - Once deployed, Railway will show you a URL like: `https://your-app-name.up.railway.app`
+5. **Get Your Render URL**:
+   - Once deployed, Render will show you a URL like: `https://friendly-friends-backend.onrender.com`
    - Copy this URL - you'll need it in Step 5
-   - Or go to **Settings** → **Networking** to see your URL
+   - Or go to **Settings** → **Custom Domains** to see your URL
 
-**Result**: Your backend will be live at: `https://your-app-name.up.railway.app`
+**Result**: Your backend server will be live at: `https://friendly-friends-backend.onrender.com`
 
 ---
 
 ## ✅ Step 3: Create Neon Database (5 minutes)
+
+**What is Neon?** Neon hosts your **PostgreSQL database** with truly unlimited storage!
+
+**Important**: Neon is ONLY for the database. Railway (from Step 2) runs your backend server.
 
 1. **Sign up at Neon**: https://neon.tech
    - Click **"Start Free"** or **"Sign Up"**
@@ -69,11 +93,13 @@ Follow these steps in order to complete the deployment setup.
    - Keep it safe - you'll need it in Step 4
    - It contains your database password!
 
-**Result**: You now have an unlimited PostgreSQL database at Neon
+**Result**: You now have an unlimited PostgreSQL database at Neon (separate from Railway)
 
 ---
 
 ## ✅ Step 4: Configure Railway Environment Variables (10 minutes)
+
+**This connects your Railway backend to your Neon database!**
 
 1. **Go to Railway Dashboard**:
    - Navigate to your project: https://railway.app/dashboard
@@ -83,10 +109,11 @@ Follow these steps in order to complete the deployment setup.
    - Click on **"Variables"** tab (or **"Environment"** → **"Variables"**)
    - This is where you'll add all environment variables
 
-3. **Add Database Connection** (MOST IMPORTANT):
+3. **Add Database Connection** (MOST IMPORTANT - This connects Railway to Neon!):
    - Click **"+ New Variable"** or **"Add Variable"**
    - **Key**: `DATABASE_URL`
    - **Value**: Paste your Neon connection string from Step 3
+   - This tells your Railway backend where to find your Neon database
    - Click **"Add"** or **"Save"**
 
 4. **Add Application Settings**:
