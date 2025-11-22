@@ -22,6 +22,7 @@ import ResearchList from './components/research/ResearchList';
 import ResearchViewer from './components/research/ResearchViewer';
 import CreateResearch from './components/research/CreateResearch';
 import Reminders from './components/reminders/Reminders';
+import BrowserCheck from './components/BrowserCheck';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CallProvider } from './contexts/CallContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -453,12 +454,14 @@ const styles = {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <CallProvider>
-          <AppRoutes />
-        </CallProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <BrowserCheck>
+      <ThemeProvider>
+        <AuthProvider>
+          <CallProvider>
+            <AppRoutes />
+          </CallProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </BrowserCheck>
   );
 }
