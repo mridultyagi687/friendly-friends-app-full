@@ -11,6 +11,7 @@ function Messages() {
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(true); // Track loading state for users
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [viewingImage, setViewingImage] = useState(null);
@@ -28,10 +29,14 @@ function Messages() {
   useEffect(() => {
     if (!user) {
       setAllUsers([]);
+      setLoadingUsers(false);
       return;
     }
+    setLoadingUsers(true); // Set loading when starting to fetch
     fetchAllUsers();
-    const interval = setInterval(fetchAllUsers, 30000); // Refresh every 30 seconds
+    const interval = setInterval(() => {
+      fetchAllUsers(); // Don't show loading for refresh
+    }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, [user]);
 
@@ -61,7 +66,10 @@ function Messages() {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [viewingImage]);
 
-  const fetchAllUsers = async () => {
+  const fetchAllUsers = async (showLoading = false) => {
+    if (showLoading) {
+      setLoadingUsers(true);
+    }
     try {
       const res = await api.get('/api/members');
       const members = res.data?.members || [];
@@ -76,6 +84,8 @@ function Messages() {
       } else {
         setError('Failed to load users');
       }
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
@@ -311,7 +321,12 @@ function Messages() {
       <div style={styles.layout}>
         <div style={styles.sidebar}>
           <h2 style={styles.sidebarTitle}>All Users</h2>
-          {allUsers.length === 0 ? (
+          {loadingUsers ? (
+            <div style={styles.emptyState}>
+              <span style={styles.emptyIcon}>⏳</span>
+              <p>Loading members...</p>
+            </div>
+          ) : allUsers.length === 0 ? (
             <div style={styles.emptyState}>
               <span style={styles.emptyIcon}>👥</span>
               <p>No other users found.</p>
