@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import logo from '../../assets/friendly-friends-logo.png';
+import { isSafari } from '../../utils/safariCompat';
 
 function Login() {
   const { login, register, error } = useAuth();
@@ -258,6 +259,7 @@ const styles = {
   loginBox: {
     padding: '2rem',
     background: 'rgba(255, 255, 255, 0.95)',
+    ...(isSafari() ? { WebkitBackdropFilter: 'blur(10px)' } : {}),
     backdropFilter: 'blur(10px)',
     borderRadius: '20px',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
