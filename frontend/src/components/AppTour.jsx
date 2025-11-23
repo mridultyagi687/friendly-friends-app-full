@@ -1,20 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useMobile } from '../utils/useMobile';
 
 function AppTour() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const isMobile = useMobile();
   const [currentStep, setCurrentStep] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // Listen for manual tour start event (for mobile)
+  useEffect(() => {
+    const handleStartTour = () => {
+      if (user) {
+        setShowTour(true);
+        setIsRunning(true);
+        setCurrentStep(0);
+      }
+    };
+    window.addEventListener('startTour', handleStartTour);
+    return () => window.removeEventListener('startTour', handleStartTour);
+  }, [user]);
 
   // Check if user has completed the tour
   useEffect(() => {
     if (!user) {
       setShowTour(false);
       setIsRunning(false);
+      return;
+    }
+
+    // Disable auto-start tour on mobile - it causes navigation issues
+    if (isMobile) {
+      const tourCompleted = localStorage.getItem(`tour_completed_${user.id}`);
+      const shouldStartTour = localStorage.getItem(`start_tour_${user.id}`) === 'true';
+      
+      if (shouldStartTour) {
+        localStorage.removeItem(`start_tour_${user.id}`);
+        // On mobile, only start if explicitly requested
+        setShowTour(true);
+        setIsRunning(true);
+        setCurrentStep(0);
+      }
+      // Don't auto-start on mobile
       return;
     }
 
@@ -27,14 +59,14 @@ function AppTour() {
       setIsRunning(true);
       setCurrentStep(0);
     } else if (!tourCompleted && user) {
-      // Show tour after a short delay for new users
+      // Show tour after a short delay for new users (desktop only)
       const timer = setTimeout(() => {
         setShowTour(true);
         setIsRunning(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [user]);
+  }, [user, isMobile]);
 
   // Tour steps configuration
   const tourSteps = [
@@ -145,10 +177,36 @@ function AppTour() {
       return;
     }
 
-    // Navigate to the step's route if needed
-    if (location.pathname !== step.route) {
+    // On mobile, don't auto-navigate - just show the tooltip for current page
+    // This prevents the tab switching issue
+    if (isMobile) {
+      // Wait for DOM update, then highlight the target on current page
+      const timer = setTimeout(() => {
+        const element = document.querySelector(step.target);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTargetFound(true);
+        } else {
+          // If target not found on current page, skip to next step
+          setTimeout(() => {
+            if (currentStep < allSteps.length - 1) {
+              setCurrentStep(currentStep + 1);
+            } else {
+              finishTour();
+            }
+          }, 500);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+
+    // Desktop: Navigate to the step's route if needed
+    if (location.pathname !== step.route && !isNavigating) {
+      setIsNavigating(true);
       navigate(step.route);
       setTargetFound(false);
+      // Reset navigating flag after navigation completes
+      setTimeout(() => setIsNavigating(false), 1000);
     }
 
     // Wait for navigation and DOM update, then highlight the target
@@ -167,10 +225,10 @@ function AppTour() {
           }
         }, 500);
       }
-    }, 800);
+    }, isNavigating ? 1200 : 800);
 
     return () => clearTimeout(timer);
-  }, [currentStep, isRunning, showTour, location.pathname, navigate, allSteps]);
+  }, [currentStep, isRunning, showTour, location.pathname, navigate, allSteps, isMobile, isNavigating]);
 
   const nextStep = () => {
     if (currentStep < allSteps.length - 1) {
@@ -217,7 +275,68 @@ function AppTour() {
   // Wait a bit for DOM to update after navigation
   const targetElement = document.querySelector(step.target);
   if (!targetElement) {
-    // If target not found, return null (will be handled by useEffect)
+    // If target not found, show a message or skip
+    // On mobile, this is common since we don't navigate
+    if (isMobile) {
+      // On mobile, if target not found, just show the tooltip centered
+      // This prevents the blue screen issue
+      return (
+        <>
+          {/* Overlay - lighter on mobile to prevent blue screen */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 9998,
+              pointerEvents: 'none',
+            }}
+          />
+          {/* Tooltip centered on mobile when target not found */}
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 'calc(100vw - 40px)',
+              maxWidth: '400px',
+              zIndex: 10000,
+              pointerEvents: 'auto',
+            }}
+          >
+            <div style={styles.tooltip}>
+              <div style={styles.tooltipHeader}>
+                <h3 style={styles.tooltipTitle}>{step.title}</h3>
+                <button onClick={skipTour} style={styles.closeButton} title="Skip tour">
+                  ✕
+                </button>
+              </div>
+              <p style={styles.tooltipContent}>{step.content}</p>
+              <div style={styles.tooltipFooter}>
+                <div style={styles.progress}>
+                  Step {currentStep + 1} of {allSteps.length}
+                </div>
+                <div style={styles.buttons}>
+                  {currentStep > 0 && (
+                    <button onClick={prevStep} style={styles.prevButton}>
+                      ← Previous
+                    </button>
+                  )}
+                  <button onClick={nextStep} style={styles.nextButton}>
+                    {currentStep === allSteps.length - 1 ? 'Finish' : 'Next →'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+    // Desktop: return null (will be handled by useEffect)
     return null;
   }
 
@@ -354,7 +473,7 @@ function AppTour() {
 
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay - lighter on mobile to prevent blue screen appearance */}
       <div
         style={{
           position: 'fixed',
@@ -362,7 +481,7 @@ function AppTour() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          backgroundColor: isMobile ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.7)',
           zIndex: 9998,
           pointerEvents: 'none',
         }}
@@ -434,7 +553,15 @@ export function useAppTour() {
   const startTour = () => {
     if (user) {
       localStorage.setItem(`start_tour_${user.id}`, 'true');
-      window.location.reload();
+      // On mobile, don't reload - just trigger the tour
+      // This prevents navigation issues
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        // Trigger tour without reload on mobile
+        window.dispatchEvent(new Event('startTour'));
+      } else {
+        window.location.reload();
+      }
     }
   };
 
