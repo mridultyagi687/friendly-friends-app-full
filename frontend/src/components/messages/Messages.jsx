@@ -87,10 +87,23 @@ function Messages() {
       setError(null);
     } catch (e) {
       console.error('Failed to load users:', e);
-      if (e.response?.status === 401) {
+      // Only show login error if user is actually not logged in
+      if (e.response?.status === 401 && !user) {
         setError('Please log in to view users.');
-      } else {
+      } else if (e.response?.status === 401 && user) {
+        // User is logged in but got 401 - don't show error, just log it
+        console.warn('Got 401 but user is logged in, might be session issue');
+        setError(null);
+      } else if (e.response?.status !== 401) {
         setError('Failed to load users');
+      } else {
+        setError(null);
+      }
+      // Don't clear users on 401 if user is logged in
+      if (e.response?.status === 401 && user) {
+        // Keep existing users
+      } else {
+        setAllUsers([]);
       }
     } finally {
       setLoadingUsers(false);
