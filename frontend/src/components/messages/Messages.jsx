@@ -187,21 +187,8 @@ function Messages() {
     } catch (e) {
       console.error('Failed to load conversation:', e);
       setLoadingThread(false);
-      
-      // Only set error if we don't have any messages (don't overwrite successful loads)
-      if (thread.length === 0) {
-        if (e.response?.status === 404) {
-          setError('User not found');
-        } else if (e.response?.status === 401) {
-          // Don't show error for 401, might be transient session issue
-          console.warn('Got 401 loading conversation, might be session issue');
-        } else {
-          setError('Failed to load conversation');
-        }
-      } else {
-        // If we have messages, don't show error (conversation already loaded)
-        setError(null);
-      }
+      // Don't show any errors for conversation loading - just log them
+      setError(null);
     }
   };
 
@@ -365,7 +352,7 @@ function Messages() {
         </button>
       </div>
       
-      {error && !error.includes('conversation') && (
+      {error && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}
@@ -488,11 +475,6 @@ function Messages() {
                   <div style={styles.emptyState}>
                     <span style={styles.emptyIcon}>⏳</span>
                     <p>Loading conversation...</p>
-                  </div>
-                ) : thread.length === 0 && error && error.includes('conversation') ? (
-                  <div style={styles.emptyState}>
-                    <span style={styles.emptyIcon}>⚠️</span>
-                    <p>{error}</p>
                   </div>
                 ) : (
                   thread.map((msg) => {
