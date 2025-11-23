@@ -53,20 +53,29 @@ function Login() {
       const success = await register(formData.username, formData.email, formData.password, 'Research Viewer');
       if (success) {
         // Wait for cookie to be set and session to be established
+        // This is especially important on iOS where cookie setting can be delayed
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-        const waitTime = isIOS ? 800 : 300;
+        const waitTime = isIOS ? 1000 : 300; // Longer wait on iOS
         
+        // Wait for cookie to be set
         await new Promise(resolve => setTimeout(resolve, waitTime));
-        await checkAuth();
-        await new Promise(resolve => setTimeout(resolve, 200));
         
-        // Double-check user is set
-        if (!user) {
+        // Verify session is established by checking auth multiple times on iOS
+        if (isIOS) {
+          // On iOS, verify multiple times to ensure cookie is accepted
+          for (let i = 0; i < 3; i++) {
+            await checkAuth();
+            await new Promise(resolve => setTimeout(resolve, 400));
+          }
+          // Extra wait after verification
           await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
           await checkAuth();
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
         
-        navigate('/blog'); // Redirect to blog after registration
+        // Use replace to avoid adding to history and prevent back button issues
+        navigate('/blog', { replace: true }); // Redirect to blog after registration
       }
     } else {
       // Login as viewer
