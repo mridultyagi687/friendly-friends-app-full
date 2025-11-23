@@ -108,12 +108,14 @@ input::placeholder, textarea::placeholder {
     font-size: 14px;
   }
 
-  /* AGGRESSIVE: Force black text on ALL inputs and textareas on mobile */
+  /* AGGRESSIVE: Force black text on ALL inputs and textareas on mobile/iOS */
   input,
   textarea,
   select {
     font-size: 16px !important; /* Prevents zoom on iOS */
     color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important; /* iOS Safari fix */
+    text-fill-color: #000000 !important;
   }
 
   /* Force white background and black text on all input types */
@@ -132,14 +134,16 @@ input::placeholder, textarea::placeholder {
     background-color: #ffffff !important;
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important; /* iOS Safari fix */
+    text-fill-color: #000000 !important;
   }
 
-  /* Override ANY inline style that sets color to white/transparent */
+  /* Override ANY inline style that sets color */
   input[style*="color"],
   textarea[style*="color"],
   select[style*="color"] {
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
+    text-fill-color: #000000 !important;
   }
 
   /* Override: white backgrounds always get black text */
@@ -152,6 +156,7 @@ input::placeholder, textarea::placeholder {
     background-color: #ffffff !important;
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
+    text-fill-color: #000000 !important;
   }
 
   /* Dark theme inputs on mobile - only if background is explicitly rgba/rgb (not white) */

@@ -81,13 +81,8 @@ function Members() {
     <div style={styles.container}>
       <h1 style={styles.title}>Community Members</h1>
       {loading && <div style={styles.status}>Loading members...</div>}
-      {error && user && (
-        <div style={styles.error}>
-          <span style={styles.errorIcon}>⚠️</span>
-          {error}
-        </div>
-      )}
-      {error && !user && !authLoading && (
+      {/* Only show error if it's not a "login to view" message when user is logged in */}
+      {error && !(error.includes('log in') && user) && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}

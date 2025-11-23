@@ -138,13 +138,8 @@ function AdminDashboard() {
           </button>
       </div>
       
-      {error && user && user.is_admin && (
-        <div style={styles.error}>
-          <span style={styles.errorIcon}>⚠️</span>
-          {error}
-        </div>
-      )}
-      {error && (!user || !user.is_admin) && !authLoading && (
+      {/* Only show error if it's not a "login" message when user is logged in as admin */}
+      {error && !(error.includes('log in') && user && user.is_admin) && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}

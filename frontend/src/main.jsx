@@ -27,30 +27,55 @@ if (typeof window !== 'undefined') {
     console.warn('localStorage not available:', e);
   }
   
-  // Mobile font color fix - force black text on all inputs
+  // iOS/Mobile font color fix - AGGRESSIVE force black text on all inputs
   const forceInputColors = () => {
-    if (window.innerWidth <= 768) {
+    const isMobile = window.innerWidth <= 768;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    if (isMobile || isIOS) {
       const inputs = document.querySelectorAll('input, textarea, select');
       inputs.forEach((input) => {
+        // Force black text on ALL inputs on mobile/iOS
+        input.style.setProperty('color', '#000000', 'important');
+        input.style.setProperty('-webkit-text-fill-color', '#000000', 'important');
+        input.style.setProperty('text-fill-color', '#000000', 'important');
+        
+        // Force white background if it's not explicitly dark
         const bg = window.getComputedStyle(input).backgroundColor;
-        const isWhite = bg.includes('rgb(255') || bg.includes('#fff') || bg.includes('white');
-        if (isWhite || !bg.includes('rgba')) {
-          input.style.color = '#000000';
-          input.style.webkitTextFillColor = '#000000';
+        const isDark = bg.includes('rgba(0') || bg.includes('rgb(0') || 
+                      bg.includes('rgba(255, 255, 255, 0.1') || 
+                      bg.includes('rgba(255, 255, 255, 0.05');
+        if (!isDark) {
+          input.style.setProperty('background-color', '#ffffff', 'important');
         }
       });
     }
   };
   
-  // Run on load and after a delay to catch dynamically added inputs
+  // Run immediately and multiple times to catch all inputs
   forceInputColors();
+  setTimeout(forceInputColors, 100);
   setTimeout(forceInputColors, 500);
+  setTimeout(forceInputColors, 1000);
   setTimeout(forceInputColors, 2000);
   
-  // Also run when inputs are focused (common time for color issues)
+  // Run on any DOM changes (for dynamically added inputs)
+  const observer = new MutationObserver(() => {
+    forceInputColors();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  
+  // Also run when inputs are focused/clicked
   document.addEventListener('focusin', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-      setTimeout(forceInputColors, 100);
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      forceInputColors();
+      setTimeout(forceInputColors, 50);
+    }
+  }, true);
+  
+  document.addEventListener('click', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      setTimeout(forceInputColors, 50);
     }
   }, true);
 }
