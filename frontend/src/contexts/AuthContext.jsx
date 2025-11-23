@@ -130,6 +130,12 @@ export function AuthProvider({ children }) {
       if (res.data && res.data.ok) {
         setUser(res.data.user);
         setError(null); // Clear any previous errors
+        
+        // Store session token in localStorage for persistent login
+        if (res.data.session_token) {
+          localStorage.setItem('session_token', res.data.session_token);
+        }
+        
         return true;
       }
       setError(new Error(res.data?.error || 'Registration failed'));
