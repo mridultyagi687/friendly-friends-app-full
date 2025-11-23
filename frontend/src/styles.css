@@ -108,8 +108,8 @@ input::placeholder, textarea::placeholder {
     font-size: 14px;
   }
 
-  /* Ensure text is readable on mobile */
-  input, textarea {
+  /* Ensure text is readable on mobile - force black text on all inputs */
+  input, textarea, select {
     font-size: 16px !important; /* Prevents zoom on iOS */
     color: #000000 !important;
   }
@@ -118,16 +118,34 @@ input::placeholder, textarea::placeholder {
   input[type="text"],
   input[type="password"],
   input[type="email"],
-  textarea {
+  input[type="number"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select {
     background-color: #ffffff !important;
     color: #000000 !important;
   }
 
-  /* Dark theme inputs on mobile */
-  body.dark-theme input,
-  body.dark-theme textarea {
+  /* Dark theme inputs on mobile - only if background is rgba/rgb (not white) */
+  body.dark-theme input[style*="background"][style*="rgba"],
+  body.dark-theme textarea[style*="background"][style*="rgba"],
+  body.dark-theme input[style*="background"][style*="rgb"]:not([style*="rgb(255"]),
+  body.dark-theme textarea[style*="background"][style*="rgb"]:not([style*="rgb(255"]) {
     background: rgba(255, 255, 255, 0.1) !important;
     color: #ffffff !important;
+  }
+
+  /* Override: white backgrounds always get black text */
+  input[style*="white"],
+  input[style*="#fff"],
+  input[style*="#ffffff"],
+  textarea[style*="white"],
+  textarea[style*="#fff"],
+  textarea[style*="#ffffff"] {
+    background-color: #ffffff !important;
+    color: #000000 !important;
   }
 }
 
