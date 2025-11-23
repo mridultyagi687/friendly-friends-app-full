@@ -3,7 +3,7 @@ import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 function Messages() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [allUsers, setAllUsers] = useState([]);
   const [selectedUsername, setSelectedUsername] = useState(null);
   const [thread, setThread] = useState([]);
@@ -28,6 +28,11 @@ function Messages() {
   }, []);
 
   useEffect(() => {
+    // Wait for auth to finish loading before checking user
+    if (authLoading) {
+      return;
+    }
+    
     if (!user) {
       setAllUsers([]);
       setLoadingUsers(false);
@@ -39,7 +44,7 @@ function Messages() {
       fetchAllUsers(); // Don't show loading for refresh
     }, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (!selectedUsername) {
