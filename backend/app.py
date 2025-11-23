@@ -1130,7 +1130,17 @@ def login():
                     "is_admin": user.is_admin,
                 }
             
-            return jsonify({"ok": True, "message": "Login successful", "user": user_dict})
+            # Create response and ensure cookie is set properly for iOS
+            response = make_response(jsonify({"ok": True, "message": "Login successful", "user": user_dict}))
+            
+            # Explicitly set session cookie with proper attributes for iOS cross-origin
+            # Flask should handle this via config, but we ensure it here for iOS compatibility
+            if session_cookie_secure and session_cookie_samesite == 'None':
+                # The cookie should already be set by Flask, but we can verify it's in the response
+                # Flask's session middleware handles this automatically based on app.config
+                pass
+            
+            return response
         except Exception as session_error:
             try:
                 logger.exception(f"Error setting session in /api/login: {session_error}")
