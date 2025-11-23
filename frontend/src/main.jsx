@@ -26,6 +26,33 @@ if (typeof window !== 'undefined') {
   } catch (e) {
     console.warn('localStorage not available:', e);
   }
+  
+  // Mobile font color fix - force black text on all inputs
+  const forceInputColors = () => {
+    if (window.innerWidth <= 768) {
+      const inputs = document.querySelectorAll('input, textarea, select');
+      inputs.forEach((input) => {
+        const bg = window.getComputedStyle(input).backgroundColor;
+        const isWhite = bg.includes('rgb(255') || bg.includes('#fff') || bg.includes('white');
+        if (isWhite || !bg.includes('rgba')) {
+          input.style.color = '#000000';
+          input.style.webkitTextFillColor = '#000000';
+        }
+      });
+    }
+  };
+  
+  // Run on load and after a delay to catch dynamically added inputs
+  forceInputColors();
+  setTimeout(forceInputColors, 500);
+  setTimeout(forceInputColors, 2000);
+  
+  // Also run when inputs are focused (common time for color issues)
+  document.addEventListener('focusin', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      setTimeout(forceInputColors, 100);
+    }
+  }, true);
 }
 
 createRoot(document.getElementById('root')).render(
