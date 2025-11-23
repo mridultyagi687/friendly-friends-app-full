@@ -48,31 +48,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     checkAuth();
     
-    // On iOS (including Chrome on iOS), retry auth check multiple times
-    // Chrome on iOS uses WebKit and has the same cookie restrictions as Safari
-    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-    if (isIOS) {
-      // Retry auth check multiple times to handle iOS cookie delays
-      // Chrome on iOS still uses WebKit, so it has the same restrictions
-      const retries = [1000, 2000, 3000, 5000]; // Retry at 1s, 2s, 3s, 5s
-      const timeouts = retries.map(delay => 
-        setTimeout(() => {
-          checkAuth();
-        }, delay)
-      );
-      
-      return () => timeouts.forEach(clearTimeout);
-    }
+    // Single retry after 1 second for all platforms (in case of network delay)
+    // With proper cookie configuration, this should work by default
+    const retryTimeout = setTimeout(() => {
+      checkAuth();
+    }, 1000);
     
-    // On Android, single retry
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    if (isAndroid) {
-      const retryTimeout = setTimeout(() => {
-        checkAuth();
-      }, 1000);
-      
-      return () => clearTimeout(retryTimeout);
-    }
+    return () => clearTimeout(retryTimeout);
   }, [checkAuth]);
 
   // Global presence heartbeat while logged in (every 30s)
@@ -106,28 +88,15 @@ export function AuthProvider({ children }) {
         setUser(res.data.user);
         setError(null); // Clear any previous errors
         
-        // On iOS (including Chrome on iOS), retry auth check multiple times
-        // Chrome on iOS uses WebKit and has the same cookie restrictions as Safari
-        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-        if (isIOS) {
-          // Retry auth check immediately, then after delays
-          // Chrome on iOS still uses WebKit, so it needs the same retry mechanism
-          const retryAuth = async (delay) => {
-            await new Promise(resolve => setTimeout(resolve, delay));
-            try {
-              await checkAuth();
-            } catch (e) {
-              // Ignore errors - just trying to establish session
-            }
-          };
-          
-          // Retry immediately, then at 500ms, 1s, 2s, and 3s
-          retryAuth(0);
-          retryAuth(500);
-          retryAuth(1000);
-          retryAuth(2000);
-          retryAuth(3000);
-        }
+        // Single retry after login to ensure session is established
+        // With proper cookie configuration, this should work by default
+        setTimeout(async () => {
+          try {
+            await checkAuth();
+          } catch (e) {
+            // Ignore errors - just trying to establish session
+          }
+        }, 500);
         
         return true;
       }
