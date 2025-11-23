@@ -45,8 +45,12 @@ function AdminDashboard() {
       setSuccess(null);
     } catch (err) {
       console.error('Failed to fetch members:', err);
-      if (err.response?.status === 401) {
+      // Only show login error if user is actually not logged in or not admin
+      if (err.response?.status === 401 && (!user || !user.is_admin)) {
         setError('Please log in as an admin to manage members.');
+      } else if (err.response?.status === 401) {
+        // User is logged in but got 401 - might be session expired
+        setError('Session expired. Please refresh the page.');
       } else {
         setError('Failed to fetch members: ' + (err.response?.data?.error || err.message));
       }
@@ -134,7 +138,13 @@ function AdminDashboard() {
           </button>
       </div>
       
-      {error && (
+      {error && user && user.is_admin && (
+        <div style={styles.error}>
+          <span style={styles.errorIcon}>⚠️</span>
+          {error}
+        </div>
+      )}
+      {error && (!user || !user.is_admin) && !authLoading && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}

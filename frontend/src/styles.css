@@ -108,13 +108,15 @@ input::placeholder, textarea::placeholder {
     font-size: 14px;
   }
 
-  /* Ensure text is readable on mobile - force black text on all inputs */
-  input, textarea, select {
+  /* AGGRESSIVE: Force black text on ALL inputs and textareas on mobile */
+  input,
+  textarea,
+  select {
     font-size: 16px !important; /* Prevents zoom on iOS */
     color: #000000 !important;
   }
 
-  /* White background inputs should have black text */
+  /* Force white background and black text on all input types */
   input[type="text"],
   input[type="password"],
   input[type="email"],
@@ -122,19 +124,22 @@ input::placeholder, textarea::placeholder {
   input[type="search"],
   input[type="tel"],
   input[type="url"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
   textarea,
   select {
     background-color: #ffffff !important;
     color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important; /* iOS Safari fix */
   }
 
-  /* Dark theme inputs on mobile - only if background is rgba/rgb (not white) */
-  body.dark-theme input[style*="background"][style*="rgba"],
-  body.dark-theme textarea[style*="background"][style*="rgba"],
-  body.dark-theme input[style*="background"][style*="rgb"]:not([style*="rgb(255"]),
-  body.dark-theme textarea[style*="background"][style*="rgb"]:not([style*="rgb(255"]) {
-    background: rgba(255, 255, 255, 0.1) !important;
-    color: #ffffff !important;
+  /* Override ANY inline style that sets color to white/transparent */
+  input[style*="color"],
+  textarea[style*="color"],
+  select[style*="color"] {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
   }
 
   /* Override: white backgrounds always get black text */
@@ -146,6 +151,25 @@ input::placeholder, textarea::placeholder {
   textarea[style*="#ffffff"] {
     background-color: #ffffff !important;
     color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+  }
+
+  /* Dark theme inputs on mobile - only if background is explicitly rgba/rgb (not white) */
+  body.dark-theme input[style*="background"][style*="rgba(255"][style*="0.1"],
+  body.dark-theme textarea[style*="background"][style*="rgba(255"][style*="0.1"] {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+
+  /* But if background is white or #fff, still use black text */
+  body.dark-theme input[style*="white"],
+  body.dark-theme input[style*="#fff"],
+  body.dark-theme textarea[style*="white"],
+  body.dark-theme textarea[style*="#fff"] {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
   }
 }
 

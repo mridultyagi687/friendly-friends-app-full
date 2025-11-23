@@ -324,8 +324,9 @@ const styles = {
     fontSize: '1rem',
     width: '100%',
     boxSizing: 'border-box',
-    background: 'rgba(255, 255, 255, 0.8)',
+    background: '#ffffff', // Force white background
     color: '#000000', // Black text color for username and password
+    WebkitTextFillColor: '#000000', // iOS Safari fix
     transition: 'all 0.3s ease',
   },
   inputFocus: {

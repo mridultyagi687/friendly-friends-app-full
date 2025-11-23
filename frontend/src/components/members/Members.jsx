@@ -27,8 +27,12 @@ function Members() {
         setMembers(res.data?.members || []);
       } catch (e) {
         console.error('Failed to load members:', e);
-        if (e.response?.status === 401) {
+        // Only show login error if user is actually not logged in
+        if (e.response?.status === 401 && !user) {
           setError('Please log in to view members.');
+        } else if (e.response?.status === 401) {
+          // User is logged in but got 401 - might be session expired, try to refresh
+          setError('Session expired. Please refresh the page.');
         } else {
           setError('Failed to load members');
         }
@@ -67,7 +71,13 @@ function Members() {
     <div style={styles.container}>
       <h1 style={styles.title}>Community Members</h1>
       {loading && <div style={styles.status}>Loading members...</div>}
-      {error && (
+      {error && user && (
+        <div style={styles.error}>
+          <span style={styles.errorIcon}>⚠️</span>
+          {error}
+        </div>
+      )}
+      {error && !user && !authLoading && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}
