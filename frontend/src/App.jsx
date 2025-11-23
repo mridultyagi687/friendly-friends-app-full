@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import NavBar from './components/NavBar';
+import MobileNavBar from './components/MobileNavBar';
+import { useMobile } from './utils/useMobile';
 import Login from './components/auth/Login';
 import TodoList from './components/todo/TodoList';
 import Paint from './components/paint/Paint';
@@ -77,6 +79,7 @@ function ProtectedRoute({ children, allowedRoles, denyRoles = [], requireAdmin =
 function AppRoutes() {
   const { user, loading } = useAuth();
   const theme = useTheme();
+  const isMobile = useMobile();
   const [bugNotifications, setBugNotifications] = useState([]);
 
   useEffect(() => {
@@ -129,8 +132,14 @@ function AppRoutes() {
   return (
     <Router basename={basename} future={{ v7_relativeSplatPath: true }}>
       <div className="app">
-        {user && <NavBar />}
-        <div style={{ marginLeft: user ? '250px' : '0', minHeight: '100vh' }}>
+        {user && (isMobile ? <MobileNavBar /> : <NavBar />)}
+        <div style={{ 
+          marginLeft: user && !isMobile ? '250px' : '0', 
+          marginTop: user && isMobile ? '60px' : '0',
+          marginBottom: user && isMobile ? '70px' : '0',
+          minHeight: '100vh',
+          padding: isMobile ? '0.5rem' : '0',
+        }}>
           <Routes>
             <Route
               path="/"
