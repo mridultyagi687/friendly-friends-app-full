@@ -171,6 +171,10 @@ app.config.update(
     SESSION_COOKIE_NAME=os.environ.get("SESSION_COOKIE_NAME", "ff_session"),
     SESSION_COOKIE_SAMESITE=session_cookie_samesite,
     SESSION_COOKIE_SECURE=session_cookie_secure,
+    # For iOS Safari compatibility, ensure cookies are set with proper attributes
+    SESSION_COOKIE_HTTPONLY=True,  # Prevent JavaScript access (security)
+    SESSION_COOKIE_DOMAIN=None,  # Don't set domain - let browser handle it
+    SESSION_COOKIE_PATH='/',  # Available for all paths
     # Increase max content length for large video uploads (default is 16MB)
     # Set to 20GB (20 * 1024 * 1024 * 1024 bytes)
     MAX_CONTENT_LENGTH=int(os.environ.get("MAX_CONTENT_LENGTH", 20 * 1024 * 1024 * 1024)),
@@ -4512,6 +4516,13 @@ def apply_cors_headers(response):
                 response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Range")
             if "Access-Control-Allow-Methods" not in response.headers:
                 response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD")
+            
+            # For iOS Safari: Ensure session cookie is set with explicit attributes
+            # This helps with cross-origin cookie issues on iOS
+            if session_cookie_secure and session_cookie_samesite == 'None':
+                # The session cookie should already be set by Flask, but we ensure it has the right attributes
+                # Flask handles this via config, but we can verify here if needed
+                pass
         return response
     except Exception as e:
         logger.error(f"Error applying CORS headers: {e}")

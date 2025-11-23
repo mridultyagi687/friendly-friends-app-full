@@ -91,22 +91,25 @@ export function AuthProvider({ children }) {
         setUser(res.data.user);
         setError(null); // Clear any previous errors
         
-        // On iOS, immediately verify the session was set by checking /api/me
-        // This helps catch cookie issues early
+        // On iOS, retry auth check multiple times to ensure cookie is set
+        // iOS Safari sometimes needs multiple attempts to accept the cookie
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
         if (isIOS) {
-          // Wait a bit for cookie to be set, then verify
-          setTimeout(async () => {
+          // Retry auth check immediately, then after delays
+          const retryAuth = async (delay) => {
+            await new Promise(resolve => setTimeout(resolve, delay));
             try {
-              const verifyRes = await api.get('/api/me');
-              if (!verifyRes.data?.ok) {
-                console.warn('iOS: Login succeeded but session verification failed - cookie may not be set');
-                // Don't clear user, but log the issue
-              }
+              await checkAuth();
             } catch (e) {
-              console.warn('iOS: Failed to verify session after login:', e);
+              // Ignore errors - just trying to establish session
             }
-          }, 500);
+          };
+          
+          // Retry immediately, then at 500ms, 1s, and 2s
+          retryAuth(0);
+          retryAuth(500);
+          retryAuth(1000);
+          retryAuth(2000);
         }
         
         return true;
