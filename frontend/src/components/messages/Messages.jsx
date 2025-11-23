@@ -56,8 +56,16 @@ function Messages() {
       setLoadingThread(false);
       return;
     }
-    // Clear previous errors when switching conversations
-    setError(null);
+    // Aggressively clear any conversation-related errors when switching conversations
+    setError((prevError) => {
+      if (prevError) {
+        const errorLower = prevError.toLowerCase();
+        if (errorLower.includes('conversation') || errorLower.includes('load conversation') || errorLower.includes('failed to load')) {
+          return null;
+        }
+      }
+      return prevError;
+    });
     fetchThread();
     const interval = setInterval(fetchThread, 3000);
     return () => clearInterval(interval);
@@ -67,9 +75,12 @@ function Messages() {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-    // Clear any conversation errors when thread has messages
-    if (thread.length > 0 && error && (error.toLowerCase().includes('conversation') || error.toLowerCase().includes('load conversation'))) {
-      setError(null);
+    // Clear any conversation/loading errors when thread has messages
+    if (thread.length > 0 && error) {
+      const errorLower = error.toLowerCase();
+      if (errorLower.includes('conversation') || errorLower.includes('load conversation') || errorLower.includes('failed to load')) {
+        setError(null);
+      }
     }
   }, [thread, error]);
 
@@ -356,7 +367,7 @@ function Messages() {
         </button>
       </div>
       
-      {error && !error.toLowerCase().includes('conversation') && !error.toLowerCase().includes('load conversation') && (
+      {error && !error.toLowerCase().includes('conversation') && !error.toLowerCase().includes('load conversation') && !error.toLowerCase().includes('failed to load') && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}

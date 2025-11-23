@@ -101,8 +101,14 @@ function Members() {
               gridTemplateColumns: isMobile ? '1fr' : '2fr 2fr 1fr',
             }}>
               <div style={styles.headerCell}>Username</div>
-              {!isMobile && <div style={styles.headerCell}>Email</div>}
-              {!isMobile && <div style={styles.headerCell}>Role</div>}
+              <div style={{
+                ...styles.headerCell,
+                display: isMobile ? 'none' : 'block',
+              }}>Email</div>
+              <div style={{
+                ...styles.headerCell,
+                display: isMobile ? 'none' : 'block',
+              }}>Role</div>
             </div>
             {members.map((m) => (
               <div key={m.id} style={{
@@ -112,14 +118,18 @@ function Members() {
                 <div style={styles.cell}>
                   <span style={styles.username}>{m.username}</span>
                 </div>
-                {!isMobile && <div style={styles.cell}>{m.email}</div>}
-                {!isMobile && (
-                  <div style={styles.cell}>
-                    <span style={m.is_admin ? styles.adminBadge : styles.memberBadge}>
-                      {m.is_admin ? '👑 Admin' : '👤 Member'}
-                    </span>
-                  </div>
-                )}
+                <div style={{
+                  ...styles.cell,
+                  display: isMobile ? 'none' : 'flex',
+                }}>{m.email}</div>
+                <div style={{
+                  ...styles.cell,
+                  display: isMobile ? 'none' : 'flex',
+                }}>
+                  <span style={m.is_admin ? styles.adminBadge : styles.memberBadge}>
+                    {m.is_admin ? '👑 Admin' : '👤 Member'}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
