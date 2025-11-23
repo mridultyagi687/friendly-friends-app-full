@@ -16,6 +16,7 @@ function Messages() {
   const [loadingUsers, setLoadingUsers] = useState(true); // Track loading state for users
   const [loadingThread, setLoadingThread] = useState(false); // Track loading state for conversation
   const [error, setError] = useState(null);
+  const conversationErrorRef = useRef(null); // Track conversation errors separately, never display them
   const [success, setSuccess] = useState(null);
   const [viewingImage, setViewingImage] = useState(null);
   const [hoveredImage, setHoveredImage] = useState(null);
@@ -202,8 +203,15 @@ function Messages() {
     } catch (e) {
       console.error('Failed to load conversation:', e);
       setLoadingThread(false);
-      // Don't show any errors for conversation loading - just log them
-      setError(null);
+      // Store error in ref but NEVER set it in state - conversation errors should never be displayed
+      conversationErrorRef.current = e.message || 'Failed to load conversation';
+      // Explicitly ensure error state is null
+      setError((prev) => {
+        if (prev && (prev.toLowerCase().includes('conversation') || prev.toLowerCase().includes('failed to load'))) {
+          return null;
+        }
+        return prev;
+      });
     }
   };
 
@@ -367,7 +375,7 @@ function Messages() {
         </button>
       </div>
       
-      {error && !error.toLowerCase().includes('conversation') && !error.toLowerCase().includes('load conversation') && !error.toLowerCase().includes('failed to load') && (
+      {error && !error.toLowerCase().includes('conversation') && !error.toLowerCase().includes('load conversation') && !error.toLowerCase().includes('failed to load') && !error.toLowerCase().includes('conversation') && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}

@@ -360,3 +360,11 @@ button[title*="Fullscreen"]:hover {
     font-size: 16px !important;
   }
 }
+
+/* Hide email and role columns in Members table on mobile */
+@media (max-width: 1024px) {
+  .members-email-column,
+  .members-role-column {
+    display: none !important;
+  }
+}
