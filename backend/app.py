@@ -4527,12 +4527,10 @@ def apply_cors_headers(response):
             if "Access-Control-Allow-Methods" not in response.headers:
                 response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD")
             
-            # For iOS Safari: Ensure session cookie is set with explicit attributes
-            # This helps with cross-origin cookie issues on iOS
-            if session_cookie_secure and session_cookie_samesite == 'None':
-                # The session cookie should already be set by Flask, but we ensure it has the right attributes
-                # Flask handles this via config, but we can verify here if needed
-                pass
+            # For iOS: Ensure Vary header is set to prevent caching issues
+            # This helps iOS Safari/Chrome properly handle CORS preflight and cookies
+            if "Vary" not in response.headers:
+                response.headers.add("Vary", "Origin")
         return response
     except Exception as e:
         logger.error(f"Error applying CORS headers: {e}")
