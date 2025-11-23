@@ -48,10 +48,23 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     checkAuth();
     
-    // On mobile, retry auth check if it fails (might be cookie issue)
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      // Retry auth check after 1 second if first check fails
+    // On iOS, retry auth check multiple times (iOS Safari cookie issues)
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      // Retry auth check multiple times to handle iOS Safari cookie delays
+      const retries = [1000, 2000, 3000, 5000]; // Retry at 1s, 2s, 3s, 5s
+      const timeouts = retries.map(delay => 
+        setTimeout(() => {
+          checkAuth();
+        }, delay)
+      );
+      
+      return () => timeouts.forEach(clearTimeout);
+    }
+    
+    // On Android, single retry
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (isAndroid) {
       const retryTimeout = setTimeout(() => {
         checkAuth();
       }, 1000);

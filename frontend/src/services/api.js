@@ -16,7 +16,16 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // For iOS Safari: increase timeout and ensure credentials are sent
+  timeout: 30000, // 30 second timeout
 });
+
+// iOS Safari workaround: Ensure credentials are always sent
+const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
+if (isIOS) {
+  // Force credentials on iOS
+  api.defaults.withCredentials = true;
+}
 
 // Add request interceptor to log requests and ensure correct URL
 api.interceptors.request.use(
