@@ -769,6 +769,36 @@ class Reminder(TimestampMixin, db.Model):
         }
 
 
+class UserSession(TimestampMixin, db.Model):
+    __tablename__ = "user_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    session_token = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    device_info = db.Column(db.String(255), nullable=True)  # User agent or device identifier
+    ip_address = db.Column(db.String(45), nullable=True)  # IPv4 or IPv6
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    last_activity = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationship to User
+    user = relationship("User", backref="sessions")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "device_info": self.device_info,
+            "ip_address": self.ip_address,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "last_activity": self.last_activity.isoformat() if self.last_activity else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+    
+    def is_expired(self):
+        """Check if session has expired"""
+        return datetime.utcnow() > self.expires_at
+
+
 ###############################################################################
 # Helper utilities                                                             #
 ###############################################################################
@@ -3372,16 +3402,16 @@ def create_cloud_pc():
             logger.exception(f"Error creating Cloud PC with raw SQL, falling back to ORM: {e}")
             db.session.rollback()
             try:
-            cloud_pc = CloudPC(
-                owner_id=user.id,
-                name=name,
-                os_version=os_version,
-                status="created",
-                storage_used_mb=0
-            )
-            db.session.add(cloud_pc)
-            db.session.commit()
-            db.session.refresh(cloud_pc)
+                cloud_pc = CloudPC(
+                    owner_id=user.id,
+                    name=name,
+                    os_version=os_version,
+                    status="created",
+                    storage_used_mb=0
+                )
+                db.session.add(cloud_pc)
+                db.session.commit()
+                db.session.refresh(cloud_pc)
             except Exception as orm_error:
                 logger.exception(f"Error creating Cloud PC with ORM fallback: {orm_error}")
                 db.session.rollback()
