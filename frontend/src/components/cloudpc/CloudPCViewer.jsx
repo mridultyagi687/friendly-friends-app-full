@@ -774,7 +774,7 @@ function CloudPCViewer() {
                 >
                   <iframe
                     key={`minecraft-${app.id}`}
-                    src="/minecraft.html"
+                    src={`${import.meta.env.BASE_URL || '/'}minecraft.html`}
                     title="Minecraft"
                     className="downloaded-app-iframe"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock"
