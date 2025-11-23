@@ -896,13 +896,36 @@ def login_required(fn):
 def admin_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        user_id = session.get("user_id")
-        if not user_id:
+        # Use login_required logic to get user_id
+        session_token = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            session_token = auth_header[7:]
+        if not session_token:
+            session_token = request.args.get("session_token")
+        
+        if not session_token:
             return jsonify({"error": "Authentication required"}), 401
-        user = db.session.get(User, user_id)
-        if not user or not user.is_admin:
-            return jsonify({"error": "Admin privileges required"}), 403
-        return fn(*args, **kwargs)
+        
+        try:
+            user_session = db.session.query(UserSession).filter_by(session_token=session_token).first()
+            if not user_session or user_session.is_expired():
+                return jsonify({"error": "Invalid or expired session"}), 401
+            
+            user_id = user_session.user_id
+            user = db.session.get(User, user_id)
+            if not user or not user.is_admin:
+                return jsonify({"error": "Admin privileges required"}), 403
+            
+            # Store in request context
+            request.user_session = user_session
+            request.user_id = user_id
+            session["user_id"] = user_id  # For backward compatibility
+            
+            return fn(*args, **kwargs)
+        except Exception as e:
+            logger.exception(f"Error in admin_required: {e}")
+            return jsonify({"error": "Authentication error"}), 500
 
     return wrapper
 
