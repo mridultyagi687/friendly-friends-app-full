@@ -47,6 +47,17 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     checkAuth();
+    
+    // On mobile, retry auth check if it fails (might be cookie issue)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      // Retry auth check after 1 second if first check fails
+      const retryTimeout = setTimeout(() => {
+        checkAuth();
+      }, 1000);
+      
+      return () => clearTimeout(retryTimeout);
+    }
   }, [checkAuth]);
 
   // Global presence heartbeat while logged in (every 30s)
