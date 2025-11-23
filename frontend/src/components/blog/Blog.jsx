@@ -22,12 +22,17 @@ function Blog() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    // Wait for auth to finish loading before checking user
+    if (authLoading) {
+      return;
+    }
+    
     if (!user) {
       setLoading(false);
       return;
     }
     fetchBlogs();
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (blogId && blogs.length > 0) {
