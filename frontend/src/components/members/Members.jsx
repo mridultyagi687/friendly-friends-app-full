@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useMobile } from '../../utils/useMobile';
 
 function Members() {
   const { user, loading: authLoading } = useAuth();
+  const isMobile = useMobile();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -94,22 +96,30 @@ function Members() {
           <div style={styles.emptyState}>No members found.</div>
         ) : (
           <div style={styles.table}>
-            <div style={styles.headerRow}>
+            <div style={{
+              ...styles.headerRow,
+              gridTemplateColumns: isMobile ? '1fr' : '2fr 2fr 1fr',
+            }}>
               <div style={styles.headerCell}>Username</div>
-              <div style={styles.headerCell}>Email</div>
-              <div style={styles.headerCell}>Role</div>
+              {!isMobile && <div style={styles.headerCell}>Email</div>}
+              {!isMobile && <div style={styles.headerCell}>Role</div>}
             </div>
             {members.map((m) => (
-              <div key={m.id} style={styles.row}>
+              <div key={m.id} style={{
+                ...styles.row,
+                gridTemplateColumns: isMobile ? '1fr' : '2fr 2fr 1fr',
+              }}>
                 <div style={styles.cell}>
                   <span style={styles.username}>{m.username}</span>
                 </div>
-                <div style={styles.cell}>{m.email}</div>
-                <div style={styles.cell}>
-                  <span style={m.is_admin ? styles.adminBadge : styles.memberBadge}>
-                    {m.is_admin ? '👑 Admin' : '👤 Member'}
-                  </span>
-                </div>
+                {!isMobile && <div style={styles.cell}>{m.email}</div>}
+                {!isMobile && (
+                  <div style={styles.cell}>
+                    <span style={m.is_admin ? styles.adminBadge : styles.memberBadge}>
+                      {m.is_admin ? '👑 Admin' : '👤 Member'}
+                    </span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
