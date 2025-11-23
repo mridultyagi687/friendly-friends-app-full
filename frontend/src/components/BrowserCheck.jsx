@@ -4,6 +4,13 @@ function BrowserCheck({ children }) {
   // Check if we've already verified browser (persist across navigation)
   const storageKey = 'browser_check_completed';
   const wasChecked = typeof sessionStorage !== 'undefined' && sessionStorage.getItem(storageKey) === 'true';
+  
+  // On iOS, if already checked, immediately render children without any state
+  const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (isIOS && wasChecked) {
+    return <>{children}</>;
+  }
+  
   const [isChrome, setIsChrome] = useState(wasChecked ? true : true);
   const [isChecking, setIsChecking] = useState(wasChecked ? false : true);
   const hasCompletedRef = useRef(wasChecked);
@@ -113,7 +120,26 @@ function BrowserCheck({ children }) {
     return () => clearTimeout(timeout);
   }, []);
 
+  // On iOS, if checking takes too long, just allow through to prevent blue screen
   if (isChecking) {
+    // On iOS, show a minimal loading state or skip entirely
+    if (isIOS) {
+      // On iOS, after a very short delay, just render children to prevent blue screen
+      useEffect(() => {
+        const timeout = setTimeout(() => {
+          setIsChecking(false);
+          setIsChrome(true);
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem(storageKey, 'true');
+          }
+        }, 100); // Very short timeout on iOS
+        return () => clearTimeout(timeout);
+      }, []);
+      
+      // While waiting, render children immediately on iOS to prevent blue screen
+      return <>{children}</>;
+    }
+    
     return (
       <div style={styles.loading}>
         <div style={styles.spinner}>⏳</div>
