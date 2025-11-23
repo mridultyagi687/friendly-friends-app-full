@@ -57,12 +57,11 @@ function Messages() {
   useEffect(() => {
     if (!selectedUsername) {
       setThread([]);
-      setErrorSafe(null); // Clear errors when no conversation selected
       setLoadingThread(false);
       return;
     }
-    // Aggressively clear any conversation-related errors when switching conversations
-    setErrorSafe(null); // Clear any conversation errors when switching
+    // Completely clear all errors when a conversation is selected - conversation errors are never shown
+    setError(null);
     fetchThread();
     const interval = setInterval(fetchThread, 3000);
     return () => clearInterval(interval);
@@ -175,8 +174,8 @@ function Messages() {
       const res = await api.get(`/api/messages/${selectedUsername}`);
       const messages = res.data?.messages || [];
       setThread(messages);
-      // Always clear all errors on successful load
-      setErrorSafe(null);
+      // Always clear all errors on successful load - conversation errors are never shown
+      setError(null);
       setLoadingThread(false);
       
       if (messages.length > 0 && Notification.permission === 'granted') {
