@@ -343,6 +343,11 @@ const initialAssistantMessage = {
 };
 
 function AiChat() {
+  // Prevent blue screen - set sessionStorage immediately before any rendering
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('browser_check_completed', 'true');
+  }
+
   const theme = useTheme();
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
@@ -355,6 +360,9 @@ function AiChat() {
   const [latestSearchResults, setLatestSearchResults] = useState(null);
   const transcriptEndRef = useRef(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Define dynamicStyles using getStyles
+  const dynamicStyles = useMemo(() => getStyles(isMobile), [isMobile]);
 
   // Handle window resize for mobile detection
   useEffect(() => {
@@ -653,14 +661,6 @@ function AiChat() {
       </div>
     );
   }, [latestSearchResults]);
-
-  // Prevent blue screen on all devices - ensure component renders immediately
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      // Mark browser check as completed to prevent BrowserCheck from showing blue screen
-      sessionStorage.setItem('browser_check_completed', 'true');
-    }
-  }, []);
 
   return (
     <div style={styles.container}>
