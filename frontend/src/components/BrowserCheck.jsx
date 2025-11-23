@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 function BrowserCheck({ children }) {
-  const [isChrome, setIsChrome] = useState(true);
-  const [isChecking, setIsChecking] = useState(true);
-  const hasCompletedRef = useRef(false);
+  // Check if we've already verified browser (persist across navigation)
+  const storageKey = 'browser_check_completed';
+  const wasChecked = sessionStorage.getItem(storageKey) === 'true';
+  const [isChrome, setIsChrome] = useState(wasChecked ? true : true);
+  const [isChecking, setIsChecking] = useState(wasChecked ? false : true);
+  const hasCompletedRef = useRef(wasChecked);
 
   useEffect(() => {
     // Check if browser is Chrome with timeout
@@ -72,6 +75,8 @@ function BrowserCheck({ children }) {
         hasCompletedRef.current = true;
         setIsChrome(isChromeBrowser);
         setIsChecking(false);
+        // Store in sessionStorage to prevent re-checking on navigation
+        sessionStorage.setItem(storageKey, 'true');
       } catch (error) {
         // If there's any error, allow the app to load (fail open)
         console.warn('Browser check error:', error);
@@ -91,6 +96,8 @@ function BrowserCheck({ children }) {
         hasCompletedRef.current = true;
         setIsChrome(true);
         setIsChecking(false);
+        // Store in sessionStorage to prevent re-checking on navigation
+        sessionStorage.setItem(storageKey, 'true');
       }
     }, 1000);
 
