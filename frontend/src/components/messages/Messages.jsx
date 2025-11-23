@@ -14,7 +14,6 @@ function Messages() {
   const [filePreview, setFilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true); // Track loading state for users
-  const [loadingThread, setLoadingThread] = useState(false); // Track loading state for conversation
   const [error, setError] = useState(null);
   
   // Simple error setter - no filtering, no detection
@@ -57,7 +56,6 @@ function Messages() {
   useEffect(() => {
     if (!selectedUsername) {
       setThread([]);
-      setLoadingThread(false);
       return;
     }
     // Completely clear all errors when a conversation is selected - conversation errors are never shown
@@ -206,19 +204,12 @@ function Messages() {
   const fetchThread = async () => {
     if (!selectedUsername) return;
     
-    // Only show loading on initial load, not on refresh
-    const isInitialLoad = thread.length === 0;
-    if (isInitialLoad) {
-      setLoadingThread(true);
-    }
-    
     try {
       const res = await api.get(`/api/messages/${selectedUsername}`);
       const messages = res.data?.messages || [];
       setThread(messages);
       // Always clear all errors on successful load - conversation errors are never shown
       setError(null);
-      setLoadingThread(false);
       
       if (messages.length > 0 && Notification.permission === 'granted') {
         const lastMessage = messages[messages.length - 1];
@@ -231,11 +222,8 @@ function Messages() {
         }
       }
     } catch (e) {
-      // Completely silent - no error handling, no error state, no display, just stop loading
-      console.error('Conversation load failed (silent):', e);
-      setLoadingThread(false);
+      // Completely silent - no error handling, no error state, no display, just silently fail
       // Do NOT set any error - conversation loading errors are completely ignored
-      // Do NOT store in ref - we don't care about these errors
       // Do NOT touch error state at all - just silently fail
     }
   };
