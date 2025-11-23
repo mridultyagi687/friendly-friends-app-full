@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import NavBar from './components/NavBar';
 import MobileNavBar from './components/MobileNavBar';
@@ -42,10 +42,28 @@ function FeatureGuard({ children, feature, fallback = '/videos' }) {
 
 function ProtectedRoute({ children, allowedRoles, denyRoles = [], requireAdmin = false }) {
   const { user, loading } = useAuth();
+  const [iosWait, setIosWait] = useState(false);
+  const waitTimerRef = useRef(null);
+  
   // On iOS, give extra time for auth to complete (cookie might be delayed)
   const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
-  if (loading || (isIOS && !user && loading === false)) {
-    // On iOS, if loading just finished but no user, wait a bit more
+  
+  useEffect(() => {
+    if (isIOS && !loading && !user) {
+      // On iOS, if loading finished but no user, wait a bit more before redirecting
+      if (waitTimerRef.current) clearTimeout(waitTimerRef.current);
+      waitTimerRef.current = setTimeout(() => {
+        setIosWait(true);
+      }, 1500); // Give 1.5 seconds for cookie to be recognized
+      return () => {
+        if (waitTimerRef.current) clearTimeout(waitTimerRef.current);
+      };
+    } else {
+      setIosWait(true); // On non-iOS or if user exists, proceed immediately
+    }
+  }, [loading, user, isIOS]);
+  
+  if (loading || (isIOS && !user && !iosWait)) {
     return <div>Loading...</div>;
   }
   if (!user) return <Navigate to="/" replace />;
