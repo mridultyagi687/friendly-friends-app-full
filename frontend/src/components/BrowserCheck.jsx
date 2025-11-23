@@ -120,26 +120,29 @@ function BrowserCheck({ children }) {
     return () => clearTimeout(timeout);
   }, []);
 
-  // On iOS, if checking takes too long, just allow through to prevent blue screen
-  if (isChecking) {
-    // On iOS, show a minimal loading state or skip entirely
-    if (isIOS) {
-      // On iOS, after a very short delay, just render children to prevent blue screen
-      useEffect(() => {
-        const timeout = setTimeout(() => {
-          setIsChecking(false);
-          setIsChrome(true);
-          if (typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem(storageKey, 'true');
-          }
-        }, 100); // Very short timeout on iOS
-        return () => clearTimeout(timeout);
-      }, []);
-      
-      // While waiting, render children immediately on iOS to prevent blue screen
-      return <>{children}</>;
+  // On iOS, if checking, render children immediately to prevent blue screen
+  // The check will complete in the background
+  useEffect(() => {
+    if (isIOS && isChecking) {
+      // On iOS, immediately mark as complete to prevent blue screen
+      const timeout = setTimeout(() => {
+        setIsChecking(false);
+        setIsChrome(true);
+        hasCompletedRef.current = true;
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(storageKey, 'true');
+        }
+      }, 50); // Very short timeout on iOS
+      return () => clearTimeout(timeout);
     }
-    
+  }, [isIOS, isChecking, storageKey]);
+  
+  // On iOS, if checking, render children immediately to prevent blue screen
+  if (isChecking && isIOS) {
+    return <>{children}</>;
+  }
+  
+  if (isChecking) {
     return (
       <div style={styles.loading}>
         <div style={styles.spinner}>⏳</div>
