@@ -375,12 +375,22 @@ function Messages() {
         </button>
       </div>
       
-      {error && !error.toLowerCase().includes('conversation') && !error.toLowerCase().includes('load conversation') && !error.toLowerCase().includes('failed to load') && !error.toLowerCase().includes('conversation') && (
-        <div style={styles.error}>
-          <span style={styles.errorIcon}>⚠️</span>
-          {error}
-        </div>
-      )}
+      {error && (() => {
+        const errorLower = error.toLowerCase();
+        // NEVER show conversation-related errors
+        if (errorLower.includes('conversation') || 
+            errorLower.includes('load conversation') || 
+            errorLower.includes('failed to load conversation') ||
+            errorLower.includes('failed to load')) {
+          return null;
+        }
+        return (
+          <div style={styles.error}>
+            <span style={styles.errorIcon}>⚠️</span>
+            {error}
+          </div>
+        );
+      })()}
       {success && (
         <div style={styles.success}>
           <span style={styles.successIcon}>✓</span>
