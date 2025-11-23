@@ -775,9 +775,18 @@ function CloudPCViewer() {
                   <iframe
                     key={`minecraft-${app.id}`}
                     src={(() => {
-                      // Get base URL for GitHub Pages
-                      const base = import.meta.env.BASE_URL || '/';
-                      // Ensure base ends with / and remove leading / from minecraft.html
+                      // Get base URL for GitHub Pages - use window.location for runtime
+                      // BASE_URL is set at build time, but we can also construct it from current path
+                      let base = import.meta.env.BASE_URL || '/';
+                      // If BASE_URL is not set, try to detect from current path
+                      if (base === '/' && typeof window !== 'undefined') {
+                        const path = window.location.pathname;
+                        // Check if we're on GitHub Pages (path contains repo name)
+                        if (path.includes('/friendly-friends-app-full/')) {
+                          base = '/friendly-friends-app-full/';
+                        }
+                      }
+                      // Ensure base ends with /
                       const basePath = base.endsWith('/') ? base : base + '/';
                       return `${basePath}minecraft.html`;
                     })()}
