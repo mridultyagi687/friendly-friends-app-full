@@ -42,7 +42,12 @@ function FeatureGuard({ children, feature, fallback = '/videos' }) {
 
 function ProtectedRoute({ children, allowedRoles, denyRoles = [], requireAdmin = false }) {
   const { user, loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
+  // On iOS, give extra time for auth to complete (cookie might be delayed)
+  const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (loading || (isIOS && !user && loading === false)) {
+    // On iOS, if loading just finished but no user, wait a bit more
+    return <div>Loading...</div>;
+  }
   if (!user) return <Navigate to="/" replace />;
 
   // Check for denied roles (new role system)

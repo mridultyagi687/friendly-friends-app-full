@@ -19,15 +19,28 @@ function Login() {
     e.preventDefault();
     const success = await login(formData.username, formData.password);
     if (success) {
-      // On iOS, wait a bit for cookie to be set before navigating
+      // Wait for cookie to be set and session to be established before navigating
+      // This is especially important on iOS where cookie setting can be delayed
       const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-      if (isIOS) {
-        // Wait for session to be established (cookie needs time to be set on iOS)
-        await new Promise(resolve => setTimeout(resolve, 300));
-        // Verify session before navigating
+      const waitTime = isIOS ? 800 : 300; // Longer wait on iOS
+      
+      // Wait for cookie to be set
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      
+      // Verify session is established by checking auth
+      await checkAuth();
+      
+      // Wait a bit more to ensure state is updated
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Double-check user is set before navigating
+      const { user } = useAuth();
+      if (!user) {
+        // If user still not set, wait a bit more and try again
+        await new Promise(resolve => setTimeout(resolve, 500));
         await checkAuth();
-        await new Promise(resolve => setTimeout(resolve, 200));
       }
+      
       navigate('/');
     }
   };
@@ -38,28 +51,40 @@ function Login() {
       // Register as viewer with viewer role
       const success = await register(formData.username, formData.email, formData.password, 'Research Viewer');
       if (success) {
-        // On iOS, wait a bit for cookie to be set before navigating
+        // Wait for cookie to be set and session to be established
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-        if (isIOS) {
-          // Wait for session to be established (cookie needs time to be set on iOS)
-          await new Promise(resolve => setTimeout(resolve, 300));
+        const waitTime = isIOS ? 800 : 300;
+        
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await checkAuth();
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Double-check user is set
+        if (!user) {
+          await new Promise(resolve => setTimeout(resolve, 500));
           await checkAuth();
-          await new Promise(resolve => setTimeout(resolve, 200));
         }
+        
         navigate('/blog'); // Redirect to blog after registration
       }
     } else {
       // Login as viewer
       const success = await login(formData.username, formData.password);
       if (success) {
-        // On iOS, wait a bit for cookie to be set before navigating
+        // Wait for cookie to be set and session to be established
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-        if (isIOS) {
-          // Wait for session to be established (cookie needs time to be set on iOS)
-          await new Promise(resolve => setTimeout(resolve, 300));
+        const waitTime = isIOS ? 800 : 300;
+        
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await checkAuth();
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Double-check user is set
+        if (!user) {
+          await new Promise(resolve => setTimeout(resolve, 500));
           await checkAuth();
-          await new Promise(resolve => setTimeout(resolve, 200));
         }
+        
         navigate('/blog'); // Redirect to blog after login
       }
     }
