@@ -4,7 +4,7 @@ import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 function Blog() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { blogId } = useParams();
   const [blogs, setBlogs] = useState([]);
   const [selectedBlog, setSelectedBlog] = useState(null);
