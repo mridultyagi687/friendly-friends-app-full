@@ -25,18 +25,28 @@ function Members() {
       try {
         const res = await api.get('/api/members');
         setMembers(res.data?.members || []);
+        setError(null); // Clear any previous errors on success
       } catch (e) {
         console.error('Failed to load members:', e);
         // Only show login error if user is actually not logged in
+        // If user exists, don't show "login to view" error
         if (e.response?.status === 401 && !user) {
           setError('Please log in to view members.');
-        } else if (e.response?.status === 401) {
-          // User is logged in but got 401 - might be session expired, try to refresh
-          setError('Session expired. Please refresh the page.');
-        } else {
+          setMembers([]);
+        } else if (e.response?.status === 401 && user) {
+          // User is logged in but got 401 - might be session expired
+          // Don't show error, just log it and keep existing members
+          console.warn('Got 401 but user is logged in, might be session issue');
+          setError(null);
+          // Don't clear members - keep what we have
+        } else if (e.response?.status !== 401) {
+          // Only show error for non-401 errors
           setError('Failed to load members');
+          setMembers([]);
+        } else {
+          setError(null);
+          setMembers([]);
         }
-        setMembers([]);
       } finally {
         setLoading(false);
       }
