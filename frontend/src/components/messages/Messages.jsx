@@ -205,13 +205,8 @@ function Messages() {
       setLoadingThread(false);
       // Store error in ref but NEVER set it in state - conversation errors should never be displayed
       conversationErrorRef.current = e.message || 'Failed to load conversation';
-      // Explicitly ensure error state is null
-      setError((prev) => {
-        if (prev && (prev.toLowerCase().includes('conversation') || prev.toLowerCase().includes('failed to load'))) {
-          return null;
-        }
-        return prev;
-      });
+      // Force error state to null - conversation errors should NEVER be shown
+      setError(null);
     }
   };
 

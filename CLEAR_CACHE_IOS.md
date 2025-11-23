@@ -24,22 +24,44 @@
 3. Tap **Reload Without Content Blockers**
 4. Or **close Safari completely** and reopen it
 
-## Method 4: Clear Chrome Cache on iOS
+## Method 4: Clear Chrome Cache on iOS (DETAILED)
 
+### Option A: Clear All Data
 1. **Open Chrome** app
 2. Tap the **three dots** (⋮) in the bottom right
 3. Tap **Settings**
 4. Tap **Privacy**
 5. Tap **Clear Browsing Data**
-6. Select **Cached Images and Files**
+6. Select **Cached Images and Files** (and optionally "Cookies, Site Data")
 7. Tap **Clear Browsing Data**
-8. **Close Chrome completely** and reopen it
+8. **Close Chrome completely** (swipe up, swipe Chrome away)
+9. **Reopen Chrome** and visit the site
+
+### Option B: Clear Site Data (Recommended)
+1. **Open Chrome** and go to the website
+2. Tap the **lock icon** or **info icon** in the address bar
+3. Tap **Site Settings**
+4. Tap **Clear Data** or **Reset Permissions**
+5. **Close and reopen Chrome**
+
+### Option C: Hard Refresh
+1. **Open Chrome** and go to the website
+2. **Tap and hold the refresh button** (circular arrow) in the address bar
+3. Tap **Hard Reload** or **Empty Cache and Hard Reload**
+4. If that doesn't work, **close Chrome completely** and reopen it
 
 ## Method 5: Private/Incognito Mode (Test Without Cache)
 
-1. **Open Safari** or **Chrome**
+### For Chrome on iOS:
+1. **Open Chrome** app
+2. Tap the **three dots** (⋮) in the bottom right
+3. Tap **New Incognito Tab**
+4. Visit the website - this will load fresh without cache
+
+### For Safari:
+1. **Open Safari**
 2. Tap the **tabs icon** (two squares)
-3. Tap **Private** (Safari) or **New Incognito Tab** (Chrome)
+3. Tap **Private**
 4. Visit the website - this will load fresh without cache
 
 ## Method 6: Restart Your Device
