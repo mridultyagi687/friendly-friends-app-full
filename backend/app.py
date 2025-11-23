@@ -104,7 +104,9 @@ elif session_cookie_mode == "false":
 else:
     # Auto-detect: only use secure cookies if explicitly in production or behind HTTPS
     # For production (Render), always use secure cookies with SameSite=None for cross-origin
-    if os.environ.get("APP_ENV") == "production" or os.environ.get("FORCE_SECURE_COOKIES") == "1" or os.environ.get("RENDER"):
+    # Render sets RENDER_EXTERNAL_URL or RENDER_SERVICE_NAME environment variables
+    is_render = bool(os.environ.get("RENDER") or os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("RENDER_SERVICE_NAME"))
+    if os.environ.get("APP_ENV") == "production" or os.environ.get("FORCE_SECURE_COOKIES") == "1" or is_render:
         session_cookie_secure = True
         session_cookie_samesite = 'None'  # Required for cross-origin (GitHub Pages -> Render)
     elif os.environ.get("NGROK") == "true":
