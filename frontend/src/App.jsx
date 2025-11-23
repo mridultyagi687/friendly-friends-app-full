@@ -1,30 +1,52 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import NavBar from './components/NavBar';
 import MobileNavBar from './components/MobileNavBar';
 import { useMobile } from './utils/useMobile';
 import Login from './components/auth/Login';
-import TodoList from './components/todo/TodoList';
-import Paint from './components/paint/Paint';
-import Members from './components/members/Members';
-import Messages from './components/messages/Messages';
-import VideoGallery from './components/video/VideoGallery';
-import AiChat from './components/ai/AiChat';
-import AiDocs from './components/ai/AiDocs';
-import AdminDashboard from './components/admin/AdminDashboard';
-import AiTraining from './components/admin/AiTraining';
-import Blog from './components/blog/Blog';
-import Roles from './components/roles/Roles';
-import RoleAssignment from './components/roles/RoleAssignment';
-import CloudPCs from './components/cloudpc/CloudPCs';
-import CloudPCViewer from './components/cloudpc/CloudPCViewer';
-import AppTour from './components/AppTour';
-import BugReporter from './components/bugs/BugReporter';
-import ResearchList from './components/research/ResearchList';
-import ResearchViewer from './components/research/ResearchViewer';
-import CreateResearch from './components/research/CreateResearch';
-import Reminders from './components/reminders/Reminders';
 import BrowserCheck from './components/BrowserCheck';
+
+// Lazy load all route components for code splitting
+const TodoList = lazy(() => import('./components/todo/TodoList'));
+const Paint = lazy(() => import('./components/paint/Paint'));
+const Members = lazy(() => import('./components/members/Members'));
+const Messages = lazy(() => import('./components/messages/Messages'));
+const VideoGallery = lazy(() => import('./components/video/VideoGallery'));
+const AiChat = lazy(() => import('./components/ai/AiChat'));
+const AiDocs = lazy(() => import('./components/ai/AiDocs'));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+const AiTraining = lazy(() => import('./components/admin/AiTraining'));
+const Blog = lazy(() => import('./components/blog/Blog'));
+const Roles = lazy(() => import('./components/roles/Roles'));
+const RoleAssignment = lazy(() => import('./components/roles/RoleAssignment'));
+const CloudPCs = lazy(() => import('./components/cloudpc/CloudPCs'));
+const CloudPCViewer = lazy(() => import('./components/cloudpc/CloudPCViewer'));
+const AppTour = lazy(() => import('./components/AppTour'));
+const BugReporter = lazy(() => import('./components/bugs/BugReporter'));
+const ResearchList = lazy(() => import('./components/research/ResearchList'));
+const ResearchViewer = lazy(() => import('./components/research/ResearchViewer'));
+const CreateResearch = lazy(() => import('./components/research/CreateResearch'));
+const Reminders = lazy(() => import('./components/reminders/Reminders'));
+
+// Loading component for lazy routes
+const LoadingSpinner = () => (
+  <div style={{ 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
+  }}>
+    <div style={{ 
+      color: 'white', 
+      fontSize: '1.2rem',
+      textAlign: 'center'
+    }}>
+      <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
+      <div>Loading...</div>
+    </div>
+  </div>
+);
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CallProvider } from './contexts/CallContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -202,7 +224,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="blog" fallback="/videos">
-                    <Blog />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Blog />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -212,7 +236,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="blog" fallback="/videos">
-                    <Blog />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Blog />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -222,7 +248,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="todos" fallback="/videos">
-                    <TodoList />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <TodoList />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -232,7 +260,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="paint" fallback="/videos">
-                    <Paint />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Paint />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -242,7 +272,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="members" fallback="/videos">
-                    <Members />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Members />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -252,7 +284,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="messages" fallback="/videos">
-                    <Messages />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <Messages />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -262,7 +296,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="videos" fallback="/blog">
-                    <VideoGallery />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <VideoGallery />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -272,7 +308,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="ai-chat" fallback="/videos">
-                    <AiChat />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AiChat />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -282,32 +320,60 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="docs" fallback="/videos">
-                    <AiDocs />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <AiDocs />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
             />
             <Route
               path="/admin"
-              element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>}
+              element={
+                <ProtectedRoute requireAdmin>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <AdminDashboard />
+                  </Suspense>
+                </ProtectedRoute>
+              }
             />
             <Route
               path="/admin/ai-training"
-              element={<ProtectedRoute requireAdmin><AiTraining /></ProtectedRoute>}
+              element={
+                <ProtectedRoute requireAdmin>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <AiTraining />
+                  </Suspense>
+                </ProtectedRoute>
+              }
             />
             <Route
               path="/roles"
-              element={<ProtectedRoute><Roles /></ProtectedRoute>}
+              element={
+                <ProtectedRoute>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <Roles />
+                  </Suspense>
+                </ProtectedRoute>
+              }
             />
             <Route
               path="/admin/role-assignment"
-              element={<ProtectedRoute requireAdmin><RoleAssignment /></ProtectedRoute>}
+              element={
+                <ProtectedRoute requireAdmin>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <RoleAssignment />
+                  </Suspense>
+                </ProtectedRoute>
+              }
             />
             <Route
               path="/cloud-pcs"
               element={
                 <ProtectedRoute>
-                  <CloudPCs />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <CloudPCs />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -315,7 +381,9 @@ function AppRoutes() {
               path="/cloud-pcs/:pcId"
               element={
                 <ProtectedRoute>
-                  <CloudPCViewer />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <CloudPCViewer />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -324,7 +392,9 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <FeatureGuard feature="bugs" fallback="/videos">
-                    <BugReporter />
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <BugReporter />
+                    </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
               }
@@ -333,7 +403,9 @@ function AppRoutes() {
               path="/research"
               element={
                 <ProtectedRoute>
-                  <ResearchList />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ResearchList />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -341,7 +413,9 @@ function AppRoutes() {
               path="/research/create"
               element={
                 <ProtectedRoute requireAdmin>
-                  <CreateResearch />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <CreateResearch />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -349,7 +423,9 @@ function AppRoutes() {
               path="/research/:researchId"
               element={
                 <ProtectedRoute>
-                  <ResearchViewer />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ResearchViewer />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -357,13 +433,19 @@ function AppRoutes() {
               path="/reminders"
               element={
                 <ProtectedRoute>
-                  <Reminders />
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <Reminders />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
           </Routes>
         </div>
-        {user && <AppTour />}
+        {user && (
+          <Suspense fallback={null}>
+            <AppTour />
+          </Suspense>
+        )}
         {user && bugNotifications.length > 0 && (() => {
           const notificationStyles = {
             overlay: {

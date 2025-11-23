@@ -27,57 +27,65 @@ if (typeof window !== 'undefined') {
     console.warn('localStorage not available:', e);
   }
   
-  // iOS/Mobile font color fix - AGGRESSIVE force black text on all inputs
-  const forceInputColors = () => {
-    const isMobile = window.innerWidth <= 768;
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  // iOS/Mobile font color fix - Optimized to reduce performance impact
+  const isMobile = window.innerWidth <= 768;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  
+  if (isMobile || isIOS) {
+    let lastRunTime = 0;
+    const THROTTLE_MS = 100; // Throttle to max once per 100ms
     
-    if (isMobile || isIOS) {
+    const forceInputColors = () => {
+      const now = Date.now();
+      if (now - lastRunTime < THROTTLE_MS) return;
+      lastRunTime = now;
+      
       const inputs = document.querySelectorAll('input, textarea, select');
-      inputs.forEach((input) => {
-        // Force black text on ALL inputs on mobile/iOS
-        input.style.setProperty('color', '#000000', 'important');
-        input.style.setProperty('-webkit-text-fill-color', '#000000', 'important');
-        input.style.setProperty('text-fill-color', '#000000', 'important');
-        
-        // Force white background if it's not explicitly dark
-        const bg = window.getComputedStyle(input).backgroundColor;
-        const isDark = bg.includes('rgba(0') || bg.includes('rgb(0') || 
-                      bg.includes('rgba(255, 255, 255, 0.1') || 
-                      bg.includes('rgba(255, 255, 255, 0.05');
-        if (!isDark) {
-          input.style.setProperty('background-color', '#ffffff', 'important');
+      const length = inputs.length;
+      if (length === 0) return;
+      
+      // Batch DOM updates for better performance
+      for (let i = 0; i < length; i++) {
+        const input = inputs[i];
+        // Only update if not already set
+        if (!input.dataset.colorFixed) {
+          input.style.setProperty('color', '#000000', 'important');
+          input.style.setProperty('-webkit-text-fill-color', '#000000', 'important');
+          input.dataset.colorFixed = 'true';
+          
+          const bg = window.getComputedStyle(input).backgroundColor;
+          const isDark = bg.includes('rgba(0') || bg.includes('rgb(0') || 
+                        bg.includes('rgba(255, 255, 255, 0.1') || 
+                        bg.includes('rgba(255, 255, 255, 0.05');
+          if (!isDark) {
+            input.style.setProperty('background-color', '#ffffff', 'important');
+          }
         }
-      });
-    }
-  };
-  
-  // Run immediately and multiple times to catch all inputs
-  forceInputColors();
-  setTimeout(forceInputColors, 100);
-  setTimeout(forceInputColors, 500);
-  setTimeout(forceInputColors, 1000);
-  setTimeout(forceInputColors, 2000);
-  
-  // Run on any DOM changes (for dynamically added inputs)
-  const observer = new MutationObserver(() => {
-    forceInputColors();
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
-  
-  // Also run when inputs are focused/clicked
-  document.addEventListener('focusin', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      }
+    };
+    
+    // Run on initial load (deferred to not block rendering)
+    requestAnimationFrame(() => {
       forceInputColors();
-      setTimeout(forceInputColors, 50);
-    }
-  }, true);
-  
-  document.addEventListener('click', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-      setTimeout(forceInputColors, 50);
-    }
-  }, true);
+      setTimeout(forceInputColors, 200);
+    });
+    
+    // Throttled observer for DOM changes
+    const observer = new MutationObserver(() => {
+      requestAnimationFrame(forceInputColors);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    // Throttled event listeners
+    const handleInputEvent = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+        requestAnimationFrame(forceInputColors);
+      }
+    };
+    
+    document.addEventListener('focusin', handleInputEvent, true);
+    document.addEventListener('click', handleInputEvent, true);
+  }
 }
 
 createRoot(document.getElementById('root')).render(

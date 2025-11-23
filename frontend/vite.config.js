@@ -76,13 +76,40 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      // Ensure proper handling of base path in build
+      // Optimize build for production
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true, // Remove console.log in production
+          drop_debugger: true,
+        },
+      },
       rollupOptions: {
         output: {
-          // Preserve directory structure
-          manualChunks: undefined,
+          // Code splitting for better performance
+          manualChunks: (id) => {
+            // Split vendor chunks
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom')) {
+                return 'react-vendor';
+              }
+              if (id.includes('react-router')) {
+                return 'router-vendor';
+              }
+              if (id.includes('axios')) {
+                return 'axios-vendor';
+              }
+              return 'vendor';
+            }
+          },
+          // Optimize chunk size
+          chunkFileNames: 'assets/js/[name]-[hash].js',
+          entryFileNames: 'assets/js/[name]-[hash].js',
+          assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
         }
-      }
+      },
+      // Increase chunk size warning limit
+      chunkSizeWarningLimit: 1000,
     }
   }
 })
