@@ -34,19 +34,12 @@ function AppTour() {
       return;
     }
 
-    // Disable auto-start tour on mobile - it causes navigation issues
+    // Completely disable tour on mobile (iOS and Android)
     if (isMobile) {
-      const tourCompleted = localStorage.getItem(`tour_completed_${user.id}`);
-      const shouldStartTour = localStorage.getItem(`start_tour_${user.id}`) === 'true';
-      
-      if (shouldStartTour) {
-        localStorage.removeItem(`start_tour_${user.id}`);
-        // On mobile, only start if explicitly requested
-        setShowTour(true);
-        setIsRunning(true);
-        setCurrentStep(0);
-      }
-      // Don't auto-start on mobile
+      setShowTour(false);
+      setIsRunning(false);
+      // Mark tour as completed on mobile to prevent any future attempts
+      localStorage.setItem(`tour_completed_${user.id}`, 'true');
       return;
     }
 
@@ -261,6 +254,11 @@ function AppTour() {
     setIsRunning(true);
     setShowTour(true);
   };
+
+  // Completely disable tour on mobile
+  if (isMobile) {
+    return null;
+  }
 
   if (!user || !showTour || !isRunning) {
     return null;
@@ -552,21 +550,22 @@ export function useAppTour() {
   
   const startTour = () => {
     if (user) {
-      localStorage.setItem(`start_tour_${user.id}`, 'true');
-      // On mobile, don't reload - just trigger the tour
-      // This prevents navigation issues
+      // Disable tour on mobile
       const isMobile = window.innerWidth <= 768;
       if (isMobile) {
-        // Trigger tour without reload on mobile
-        window.dispatchEvent(new Event('startTour'));
-      } else {
-        window.location.reload();
+        // Tour is disabled on mobile
+        return;
       }
+      localStorage.setItem(`start_tour_${user.id}`, 'true');
+      window.location.reload();
     }
   };
 
   const hasCompletedTour = () => {
     if (!user) return true;
+    // On mobile, always return true (tour is disabled)
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) return true;
     return localStorage.getItem(`tour_completed_${user.id}`) === 'true';
   };
 

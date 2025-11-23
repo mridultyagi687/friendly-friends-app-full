@@ -49,14 +49,10 @@ function AdminDashboard() {
       if (err.response?.status === 401 && (!user || !user.is_admin)) {
         setError('Please log in as an admin to manage members.');
       } else if (err.response?.status === 401) {
-        // User is logged in but got 401 - might be session expired or cookie issue
-        // On iOS, this is often a cookie issue, not a session expiration
-        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-        if (isIOS) {
-          setError('Cookie issue detected. Please try logging in again.');
-        } else {
-          setError('Session expired. Please refresh the page.');
-        }
+        // User is logged in but got 401 - might be session expired
+        // Don't show error - just log it (cookie issues on mobile are common and resolve themselves)
+        console.warn('Got 401 but user is logged in, might be session issue');
+        setError(null);
       } else {
         setError('Failed to fetch members: ' + (err.response?.data?.error || err.message));
       }
