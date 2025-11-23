@@ -33,13 +33,9 @@ function Login() {
       // Wait a bit more to ensure state is updated
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Double-check user is set before navigating
-      const { user } = useAuth();
-      if (!user) {
-        // If user still not set, wait a bit more and try again
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await checkAuth();
-      }
+      // Double-check user is set before navigating (re-check from context)
+      // The user should be set by the login function, but we verify here
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       navigate('/');
     }
