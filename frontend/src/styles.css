@@ -276,3 +276,40 @@ button[title*="Fullscreen"]:hover {
   align-items: center;
   justify-content: center;
 }
+
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+  /* Ensure content doesn't get hidden behind fixed nav bars */
+  body {
+    padding-bottom: 0;
+  }
+
+  /* Touch-friendly button sizes */
+  button {
+    min-height: 44px; /* iOS recommended touch target */
+    min-width: 44px;
+  }
+
+  /* Larger touch targets for links */
+  a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Prevent text selection on tap (mobile UX) */
+  button, a {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    user-select: none;
+  }
+
+  /* Better scrolling on mobile */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent zoom on input focus (iOS) */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
