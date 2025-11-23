@@ -1222,8 +1222,8 @@ def logout():
                 db.session.commit()
                 try:
                     logger.info(f"Session {session_token[:8]}... deleted (logout)")
-            except:
-                pass
+                except:
+                    pass
         except Exception as db_error:
             try:
                 logger.exception(f"Database error in /api/logout: {db_error}")
