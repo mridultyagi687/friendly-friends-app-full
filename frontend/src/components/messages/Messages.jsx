@@ -701,9 +701,7 @@ const styles = {
     display: 'grid',
     gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : '300px 1fr',
     gap: window.innerWidth <= 768 ? '1rem' : '1.5rem',
-    gridTemplateColumns: '300px 1fr',
-    gap: '1.5rem',
-    height: 'calc(100vh - 200px)',
+    height: window.innerWidth <= 768 ? 'calc(100vh - 150px)' : 'calc(100vh - 200px)',
   },
   sidebar: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
