@@ -808,12 +808,74 @@ def login_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
         try:
-            user_id = session.get("user_id")
-            if not user_id:
+            # Get session token from request header or query parameter
+            session_token = None
+            
+            # Try to get from Authorization header first
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                session_token = auth_header[7:]  # Remove "Bearer " prefix
+            
+            # If not in header, try query parameter
+            if not session_token:
+                session_token = request.args.get("session_token")
+            
+            if not session_token:
                 try:
                     return jsonify({"error": "Authentication required"}), 401
                 except:
                     return make_response(json.dumps({"error": "Authentication required"}), 401, {"Content-Type": "application/json"})
+            
+            # Find session in database
+            try:
+                user_session = db.session.query(UserSession).filter_by(session_token=session_token).first()
+                
+                if not user_session:
+                    try:
+                        return jsonify({"error": "Invalid session"}), 401
+                    except:
+                        return make_response(json.dumps({"error": "Invalid session"}), 401, {"Content-Type": "application/json"})
+                
+                # Check if session is expired
+                if user_session.is_expired():
+                    # Delete expired session
+                    try:
+                        db.session.delete(user_session)
+                        db.session.commit()
+                    except:
+                        db.session.rollback()
+                    try:
+                        return jsonify({"error": "Session expired"}), 401
+                    except:
+                        return make_response(json.dumps({"error": "Session expired"}), 401, {"Content-Type": "application/json"})
+                
+                # Update last activity
+                try:
+                    user_session.last_activity = datetime.utcnow()
+                    db.session.commit()
+                except:
+                    db.session.rollback()
+                
+                # Store user_id in Flask session for backward compatibility (if needed)
+                # But we'll also pass it via request context
+                user_id = user_session.user_id
+                session["user_id"] = user_id  # For backward compatibility
+                
+                # Store user_session in request context for use in the function
+                request.user_session = user_session
+                request.user_id = user_id
+                
+            except Exception as db_error:
+                try:
+                    logger.exception(f"Database error in login_required: {db_error}")
+                    db.session.rollback()
+                except:
+                    pass
+                try:
+                    return jsonify({"error": "Authentication error"}), 500
+                except:
+                    return make_response(json.dumps({"error": "Authentication error"}), 500, {"Content-Type": "application/json"})
+            
             try:
                 return fn(*args, **kwargs)
             except Exception as fn_error:
