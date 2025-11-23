@@ -931,6 +931,34 @@ def admin_required(fn):
 
 
 def current_user() -> Optional[User]:
+    # Try to get from request context first (set by login_required)
+    if hasattr(request, 'user_id'):
+        try:
+            return db.session.query(User).filter_by(id=request.user_id).first()
+        except Exception as e:
+            logger.exception(f"Error getting current user from request context: {e}")
+            return None
+    
+    # Fallback: try to get from session token
+    session_token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        session_token = auth_header[7:]
+    if not session_token:
+        session_token = request.args.get("session_token")
+    
+    if session_token:
+        try:
+            user_session = db.session.query(UserSession).filter_by(session_token=session_token).first()
+            if user_session and not user_session.is_expired():
+                user_id = user_session.user_id
+                user = db.session.query(User).filter_by(id=user_id).first()
+                if user:
+                    return user
+        except Exception as e:
+            logger.exception(f"Error getting current user from session token: {e}")
+    
+    # Final fallback: Flask session for backward compatibility
     user_id = session.get("user_id")
     if not user_id:
         return None
