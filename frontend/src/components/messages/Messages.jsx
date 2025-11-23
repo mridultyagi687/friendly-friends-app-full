@@ -359,7 +359,8 @@ function Messages() {
         </button>
       </div>
       
-      {error && (
+      {/* Never show errors when a conversation is selected - conversation errors are completely silent */}
+      {error && !selectedUsername && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}
