@@ -83,6 +83,8 @@ function BrowserCheck({ children }) {
         hasCompletedRef.current = true;
         setIsChrome(true);
         setIsChecking(false);
+        // Store in sessionStorage to prevent re-checking on navigation
+        sessionStorage.setItem('browser_check_completed', 'true');
       }
     };
 
