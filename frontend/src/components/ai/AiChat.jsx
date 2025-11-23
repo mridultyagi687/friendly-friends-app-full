@@ -654,6 +654,16 @@ function AiChat() {
     );
   }, [latestSearchResults]);
 
+  // Prevent blue screen on mobile - ensure component renders immediately
+  if (isMobile && typeof window !== 'undefined') {
+    // On mobile, skip any potential loading states that might cause blue screen
+    const wasChecked = sessionStorage.getItem('browser_check_completed') === 'true';
+    if (!wasChecked) {
+      // Mark as checked to prevent BrowserCheck from showing blue screen
+      sessionStorage.setItem('browser_check_completed', 'true');
+    }
+  }
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>

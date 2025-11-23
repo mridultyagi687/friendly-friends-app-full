@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useMobile } from '../../utils/useMobile';
 
 function Messages() {
   const { user, loading: authLoading } = useAuth();
+  const isMobile = useMobile();
   const [allUsers, setAllUsers] = useState([]);
   const [selectedUsername, setSelectedUsername] = useState(null);
   const [thread, setThread] = useState([]);
@@ -390,7 +392,7 @@ function Messages() {
                       {member.username}
                       {member.is_admin && <span style={styles.adminBadge}> 👑</span>}
                     </div>
-                    <div style={styles.partnerEmail}>{member.email}</div>
+                    {member.email && <div style={styles.partnerEmail}>{member.email}</div>}
                   </div>
                 </div>
               ))}
@@ -697,6 +699,8 @@ const styles = {
   },
   layout: {
     display: 'grid',
+    gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : '300px 1fr',
+    gap: window.innerWidth <= 768 ? '1rem' : '1.5rem',
     gridTemplateColumns: '300px 1fr',
     gap: '1.5rem',
     height: 'calc(100vh - 200px)',
@@ -797,14 +801,15 @@ const styles = {
   messagesContainer: {
     flex: 1,
     overflowY: 'auto',
-    padding: '1.5rem',
+    padding: window.innerWidth <= 768 ? '1rem' : '1.5rem',
     display: 'flex',
     flexDirection: 'column',
     gap: '1rem',
+    minHeight: 0, // Important for flex scrolling
   },
   message: {
     display: 'flex',
-    maxWidth: '70%',
+    maxWidth: window.innerWidth <= 768 ? '85%' : '70%',
   },
   messageOwn: {
     alignSelf: 'flex-end',
@@ -980,7 +985,7 @@ const styles = {
     marginTop: '0.25rem',
   },
   composer: {
-    padding: '1.5rem',
+    padding: window.innerWidth <= 768 ? '1rem' : '1.5rem',
     borderTop: '1px solid rgba(102, 126, 234, 0.2)',
     background: 'rgba(102, 126, 234, 0.4)',
   },
