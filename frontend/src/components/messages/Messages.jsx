@@ -141,11 +141,46 @@ function Messages() {
   }, [searchQuery, user]);
 
   const handleEnableNotifications = async () => {
+    // Check if notifications are supported
     if (!('Notification' in window)) {
-      setErrorSafe('Your browser does not support notifications');
+      // On mobile, notifications might not be fully supported - show a friendly message
+      const isMobile = window.innerWidth <= 1024;
+      if (isMobile) {
+        setSuccess('Notifications are not available on mobile browsers. You can enable them in your device settings.');
+        setTimeout(() => setSuccess(null), 4000);
+      } else {
+        setErrorSafe('Your browser does not support notifications');
+      }
       return;
     }
 
+    // Check if we're on mobile - mobile browsers handle notifications differently
+    const isMobile = window.innerWidth <= 1024;
+    if (isMobile) {
+      // On mobile, try to request permission but handle gracefully if it fails
+      try {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        if (permission === 'granted') {
+          setSuccess('Notifications enabled! You will receive alerts for new messages.');
+          setTimeout(() => setSuccess(null), 3000);
+        } else if (permission === 'denied') {
+          setSuccess('Notifications are blocked. Please enable them in your browser settings.');
+          setTimeout(() => setSuccess(null), 4000);
+        } else {
+          setSuccess('Please enable notifications in your browser settings to receive alerts.');
+          setTimeout(() => setSuccess(null), 4000);
+        }
+      } catch (e) {
+        console.error('Failed to request notification permission:', e);
+        // On mobile, don't show error - just inform user
+        setSuccess('Notifications may not be fully supported on mobile. Please check your browser settings.');
+        setTimeout(() => setSuccess(null), 4000);
+      }
+      return;
+    }
+
+    // Desktop notification handling
     if (Notification.permission === 'granted') {
       setNotificationPermission('granted');
       setSuccess('Notifications are already enabled!');
