@@ -25,12 +25,16 @@ function Messages() {
       return;
     }
     const errorLower = String(errorMessage).toLowerCase();
-    // NEVER allow conversation errors to be set
+    // COMPLETELY BLOCK conversation errors - never allow them to be set
     if (errorLower.includes('conversation') || 
         errorLower.includes('load conversation') || 
         errorLower.includes('failed to load conversation') ||
-        errorLower.includes('failed to load')) {
+        errorLower.includes('failed to load') ||
+        (errorLower.includes('message') && errorLower.includes('load')) ||
+        (errorLower.includes('thread') && errorLower.includes('load'))) {
+      // Store in ref for debugging only, but NEVER set in state
       conversationErrorRef.current = errorMessage;
+      // Force error to null immediately
       setError(null);
       return;
     }
@@ -87,10 +91,16 @@ function Messages() {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-    // Clear any conversation/loading errors when thread has messages
+    // Aggressively clear any conversation errors when thread has messages
     if (thread.length > 0 && error) {
-      const errorLower = error.toLowerCase();
-      if (errorLower.includes('conversation') || errorLower.includes('load conversation') || errorLower.includes('failed to load')) {
+      const errorLower = String(error).toLowerCase();
+      if (errorLower.includes('conversation') || 
+          errorLower.includes('load conversation') || 
+          errorLower.includes('failed to load') ||
+          errorLower.includes('thread') ||
+          (errorLower.includes('message') && errorLower.includes('load'))) {
+        // Immediately clear - conversation errors should never exist
+        setError(null);
         setErrorSafe(null);
       }
     }
@@ -212,11 +222,14 @@ function Messages() {
         }
       }
     } catch (e) {
-      console.error('Failed to load conversation:', e);
+      // Completely ignore conversation loading errors - never set, never display, never log to user
+      console.error('Failed to load conversation (silent):', e);
       setLoadingThread(false);
-      // Store error in ref but NEVER set it in state - conversation errors should never be displayed
+      // Store in ref for debugging only, but NEVER set in error state
       conversationErrorRef.current = e.message || 'Failed to load conversation';
-      // Force error state to null - conversation errors should NEVER be shown
+      // Force error state to null immediately - conversation errors are completely hidden
+      setError(null);
+      // Also clear via setErrorSafe as backup
       setErrorSafe(null);
     }
   };
@@ -382,12 +395,17 @@ function Messages() {
       </div>
       
       {error && (() => {
-        const errorLower = error.toLowerCase();
-        // NEVER show conversation-related errors
+        const errorLower = String(error).toLowerCase();
+        // COMPLETELY BLOCK conversation-related errors - they should never exist
         if (errorLower.includes('conversation') || 
             errorLower.includes('load conversation') || 
             errorLower.includes('failed to load conversation') ||
-            errorLower.includes('failed to load')) {
+            errorLower.includes('failed to load') ||
+            errorLower.includes('conversation') ||
+            errorLower.includes('thread') ||
+            errorLower.includes('message') && errorLower.includes('load')) {
+          // Immediately clear the error if it somehow got set
+          setError(null);
           return null;
         }
         return (
