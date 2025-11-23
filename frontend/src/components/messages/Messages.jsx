@@ -72,36 +72,7 @@ function Messages() {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-    // Aggressively clear any conversation errors when thread has messages
-    if (thread.length > 0 && error) {
-      const errorLower = String(error).toLowerCase();
-      if (errorLower.includes('conversation') || 
-          errorLower.includes('load conversation') || 
-          errorLower.includes('failed to load') ||
-          errorLower.includes('thread') ||
-          (errorLower.includes('message') && errorLower.includes('load'))) {
-        // Immediately clear - conversation errors should never exist
-        setError(null);
-        setErrorSafe(null);
-      }
-    }
-  }, [thread, error]);
-
-  // Aggressively clear conversation errors on every render cycle
-  useEffect(() => {
-    if (error) {
-      const errorLower = String(error).toLowerCase();
-      if (errorLower.includes('conversation') || 
-          errorLower.includes('load conversation') || 
-          errorLower.includes('failed to load conversation') ||
-          errorLower.includes('failed to load') ||
-          (errorLower.includes('message') && errorLower.includes('load')) ||
-          (errorLower.includes('thread') && errorLower.includes('load'))) {
-        // Immediately clear - conversation errors should never exist
-        setError(null);
-      }
-    }
-  }, [error]); // Run on every error change
+  }, [thread]);
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -388,27 +359,12 @@ function Messages() {
         </button>
       </div>
       
-      {error && (() => {
-        const errorLower = String(error).toLowerCase();
-        // COMPLETELY BLOCK conversation-related errors - they should never exist
-        if (errorLower.includes('conversation') || 
-            errorLower.includes('load conversation') || 
-            errorLower.includes('failed to load conversation') ||
-            errorLower.includes('failed to load') ||
-            errorLower.includes('conversation') ||
-            errorLower.includes('thread') ||
-            errorLower.includes('message') && errorLower.includes('load')) {
-          // Immediately clear the error if it somehow got set
-          setError(null);
-          return null;
-        }
-        return (
-          <div style={styles.error}>
-            <span style={styles.errorIcon}>⚠️</span>
-            {error}
-          </div>
-        );
-      })()}
+      {error && (
+        <div style={styles.error}>
+          <span style={styles.errorIcon}>⚠️</span>
+          {error}
+        </div>
+      )}
       {success && (
         <div style={styles.success}>
           <span style={styles.successIcon}>✓</span>
