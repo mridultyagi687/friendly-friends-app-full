@@ -67,7 +67,11 @@ function Messages() {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [thread]);
+    // Clear any conversation errors when thread has messages
+    if (thread.length > 0 && error && (error.toLowerCase().includes('conversation') || error.toLowerCase().includes('load conversation'))) {
+      setError(null);
+    }
+  }, [thread, error]);
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -170,7 +174,7 @@ function Messages() {
       const res = await api.get(`/api/messages/${selectedUsername}`);
       const messages = res.data?.messages || [];
       setThread(messages);
-      // Always clear errors on successful load
+      // Always clear all errors on successful load
       setError(null);
       setLoadingThread(false);
       
@@ -352,7 +356,7 @@ function Messages() {
         </button>
       </div>
       
-      {error && (
+      {error && !error.toLowerCase().includes('conversation') && !error.toLowerCase().includes('load conversation') && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}
