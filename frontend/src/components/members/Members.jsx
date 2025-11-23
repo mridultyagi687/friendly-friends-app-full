@@ -34,10 +34,17 @@ function Members() {
           setError('Please log in to view members.');
           setMembers([]);
         } else if (e.response?.status === 401 && user) {
-          // User is logged in but got 401 - might be session expired
-          // Don't show error, just log it and keep existing members
-          console.warn('Got 401 but user is logged in, might be session issue');
-          setError(null);
+          // User is logged in but got 401 - might be session expired or cookie issue
+          // On iOS, this is often a cookie issue
+          const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+          if (isIOS) {
+            console.warn('Got 401 on iOS - likely cookie issue, user may need to re-login');
+            // Don't show error, just log it
+            setError(null);
+          } else {
+            console.warn('Got 401 but user is logged in, might be session issue');
+            setError(null);
+          }
           // Don't clear members - keep what we have
         } else if (e.response?.status !== 401) {
           // Only show error for non-401 errors

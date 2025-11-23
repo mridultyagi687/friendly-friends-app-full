@@ -90,6 +90,25 @@ export function AuthProvider({ children }) {
       if (res.data && res.data.ok) {
         setUser(res.data.user);
         setError(null); // Clear any previous errors
+        
+        // On iOS, immediately verify the session was set by checking /api/me
+        // This helps catch cookie issues early
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+          // Wait a bit for cookie to be set, then verify
+          setTimeout(async () => {
+            try {
+              const verifyRes = await api.get('/api/me');
+              if (!verifyRes.data?.ok) {
+                console.warn('iOS: Login succeeded but session verification failed - cookie may not be set');
+                // Don't clear user, but log the issue
+              }
+            } catch (e) {
+              console.warn('iOS: Failed to verify session after login:', e);
+            }
+          }, 500);
+        }
+        
         return true;
       }
       setError(new Error(res.data?.error || 'Invalid credentials'));
