@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../services/api';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useMobile } from '../../utils/useMobile';
 
 const getStyles = (isMobile) => ({
   container: {
@@ -10,12 +11,15 @@ const getStyles = (isMobile) => ({
     display: 'flex',
     flexDirection: 'column',
     minHeight: '100vh',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
+    backgroundSize: '400% 400%',
+    animation: 'gradientShift 15s ease infinite',
   },
   header: {
     marginBottom: '1.75rem',
   },
   title: {
-    fontSize: '2rem',
+    fontSize: isMobile ? '1.5rem' : '2rem',
     fontWeight: '700',
     color: '#ffffff',
     margin: 0,
@@ -23,7 +27,7 @@ const getStyles = (isMobile) => ({
   subtitle: {
     marginTop: '0.5rem',
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: '1rem',
+    fontSize: isMobile ? '0.9rem' : '1rem',
   },
   body: {
     flex: 1,
@@ -63,16 +67,18 @@ const getStyles = (isMobile) => ({
     WebkitBackdropFilter: 'blur(10px)',
   },
   chatListHeader: {
-    padding: '1.25rem',
+    padding: isMobile ? '1rem' : '1.25rem',
     borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+    flexWrap: isMobile ? 'wrap' : 'nowrap',
+    gap: isMobile ? '0.5rem' : '0',
   },
   chatListTitle: {
     margin: 0,
-    fontSize: '1rem',
+    fontSize: isMobile ? '0.9rem' : '1rem',
     fontWeight: 600,
     color: '#ffffff',
   },
@@ -81,11 +87,12 @@ const getStyles = (isMobile) => ({
     color: '#ffffff',
     border: 'none',
     borderRadius: '999px',
-    padding: '0.45rem 1rem',
-    fontSize: '0.85rem',
+    padding: isMobile ? '0.4rem 0.85rem' : '0.45rem 1rem',
+    fontSize: isMobile ? '0.8rem' : '0.85rem',
     fontWeight: 600,
     cursor: 'pointer',
     boxShadow: '0 8px 20px rgba(37, 99, 235, 0.25)',
+    whiteSpace: 'nowrap',
   },
   newChatButtonDisabled: {
     backgroundColor: '#9ca3af',
@@ -96,15 +103,17 @@ const getStyles = (isMobile) => ({
     flex: 1,
     overflowY: 'auto',
     padding: '0.5rem',
+    WebkitOverflowScrolling: 'touch',
   },
   chatListEmpty: {
-    padding: '1.5rem 1rem',
+    padding: isMobile ? '1rem' : '1.5rem 1rem',
     color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: '0.9rem',
+    fontSize: isMobile ? '0.85rem' : '0.9rem',
+    textAlign: 'center',
   },
   chatListItem: {
     borderRadius: '12px',
-    padding: '0.85rem 1rem',
+    padding: isMobile ? '0.75rem 0.85rem' : '0.85rem 1rem',
     marginBottom: '0.5rem',
     cursor: 'pointer',
     background: 'rgba(255, 255, 255, 0.1)',
@@ -133,46 +142,50 @@ const getStyles = (isMobile) => ({
   },
   chatListItemTitle: {
     margin: 0,
-    fontSize: '0.95rem',
+    fontSize: isMobile ? '0.85rem' : '0.95rem',
     fontWeight: 600,
     color: '#ffffff',
     lineHeight: 1.3,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   chatListItemMeta: {
     marginTop: '0.35rem',
-    fontSize: '0.8rem',
+    fontSize: isMobile ? '0.75rem' : '0.8rem',
     color: 'rgba(255, 255, 255, 0.7)',
   },
   chatDeleteButton: {
     backgroundColor: 'transparent',
     border: 'none',
     color: '#ef4444',
-    fontSize: '1.15rem',
+    fontSize: isMobile ? '1rem' : '1.15rem',
     cursor: 'pointer',
     padding: '0.25rem 0.4rem',
     borderRadius: '8px',
-    minWidth: '38px',
-    minHeight: '36px',
+    minWidth: isMobile ? '32px' : '38px',
+    minHeight: isMobile ? '32px' : '36px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'background-color 0.15s ease, color 0.15s ease',
+    flexShrink: 0,
   },
   chatHeader: {
-    padding: '1.25rem',
+    padding: isMobile ? '1rem' : '1.25rem',
     borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
     background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
   },
   chatTitle: {
     margin: 0,
-    fontSize: '1.125rem',
+    fontSize: isMobile ? '1rem' : '1.125rem',
     fontWeight: 600,
     color: '#111827',
   },
   chatSubtitle: {
     marginTop: '0.35rem',
     color: '#6b7280',
-    fontSize: '0.9rem',
+    fontSize: isMobile ? '0.85rem' : '0.9rem',
   },
   transcript: {
     flex: 1,
@@ -181,9 +194,8 @@ const getStyles = (isMobile) => ({
     overflowX: 'hidden',
     background: 'linear-gradient(180deg, rgba(248, 250, 252, 0.5) 0%, rgba(240, 245, 255, 0.5) 100%)',
     position: 'relative',
-    minHeight: 0, // Important for flex scrolling
+    minHeight: 0,
     maxHeight: '100%',
-    // Ensure scrollable on mobile
     WebkitOverflowScrolling: 'touch',
   },
   loadingOverlay: {
@@ -196,8 +208,9 @@ const getStyles = (isMobile) => ({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(248, 250, 252, 0.85)',
-    fontSize: '0.95rem',
+    fontSize: isMobile ? '0.9rem' : '0.95rem',
     color: '#4b5563',
+    zIndex: 10,
   },
   messageWrapper: {
     marginBottom: '1rem',
@@ -226,7 +239,7 @@ const getStyles = (isMobile) => ({
   },
   composer: {
     borderTop: '1px solid rgba(102, 126, 234, 0.2)',
-    padding: '1rem',
+    padding: isMobile ? '0.75rem' : '1rem',
     background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 245, 255, 0.95) 100%)',
   },
   textarea: (theme, isMobile) => ({
@@ -234,12 +247,13 @@ const getStyles = (isMobile) => ({
     minHeight: isMobile ? '70px' : '80px',
     resize: 'vertical',
     padding: '0.75rem 1rem',
-    fontSize: isMobile ? '16px' : '1rem', // 16px prevents zoom on iOS
+    fontSize: isMobile ? '16px' : '1rem',
     borderRadius: '10px',
     border: '1px solid rgba(102, 126, 234, 0.3)',
     outline: 'none',
-    backgroundColor: theme.colors.inputBackground,
-    color: theme.colors.inputText || '#000000', // Ensure text is visible
+    backgroundColor: theme.colors.inputBackground || '#ffffff',
+    color: theme.colors.inputText || '#000000',
+    fontFamily: 'inherit',
   }),
   actions: {
     marginTop: '0.75rem',
@@ -253,16 +267,17 @@ const getStyles = (isMobile) => ({
     backgroundColor: '#2563eb',
     color: '#ffffff',
     border: 'none',
-    padding: '0.65rem 1.6rem',
+    padding: isMobile ? '0.6rem 1.4rem' : '0.65rem 1.6rem',
     borderRadius: '999px',
     fontWeight: '600',
-    fontSize: '0.95rem',
+    fontSize: isMobile ? '0.9rem' : '0.95rem',
     cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',
     gap: '0.5rem',
     boxShadow: '0 10px 20px rgba(37, 99, 235, 0.25)',
     transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+    whiteSpace: 'nowrap',
   },
   sendButtonDisabled: {
     backgroundColor: '#9ca3af',
@@ -270,29 +285,17 @@ const getStyles = (isMobile) => ({
     cursor: 'not-allowed',
   },
   status: {
-    fontSize: '0.85rem',
+    fontSize: isMobile ? '0.8rem' : '0.85rem',
     color: '#6b7280',
   },
   error: {
     color: '#dc2626',
-    fontSize: '0.9rem',
+    fontSize: isMobile ? '0.85rem' : '0.9rem',
     marginTop: '0.5rem',
-  },
-  searchToggle: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    fontSize: '0.85rem',
-    color: '#475569',
-    marginTop: '0.75rem',
-  },
-  searchToggleInput: {
-    width: '18px',
-    height: '18px',
   },
   searchResultsBox: {
     marginBottom: '1rem',
-    padding: '1rem',
+    padding: isMobile ? '0.75rem' : '1rem',
     backgroundColor: '#f1f5f9',
     borderRadius: '12px',
     border: '1px solid #cbd5e1',
@@ -300,7 +303,7 @@ const getStyles = (isMobile) => ({
   },
   searchResultsHeader: {
     fontWeight: 600,
-    fontSize: '0.95rem',
+    fontSize: isMobile ? '0.9rem' : '0.95rem',
     color: '#1f2937',
     marginBottom: '0.5rem',
   },
@@ -309,7 +312,7 @@ const getStyles = (isMobile) => ({
   },
   searchResultsSource: {
     fontWeight: 600,
-    fontSize: '0.85rem',
+    fontSize: isMobile ? '0.8rem' : '0.85rem',
     color: '#2563eb',
     marginBottom: '0.4rem',
   },
@@ -322,7 +325,7 @@ const getStyles = (isMobile) => ({
     gap: '0.5rem',
   },
   searchResultItem: {
-    fontSize: '0.85rem',
+    fontSize: isMobile ? '0.8rem' : '0.85rem',
     color: '#1f2937',
   },
   searchResultLink: {
@@ -333,6 +336,7 @@ const getStyles = (isMobile) => ({
   searchResultSnippet: {
     marginTop: '0.2rem',
     color: '#475569',
+    fontSize: isMobile ? '0.75rem' : '0.8rem',
   },
 });
 
@@ -349,6 +353,7 @@ function AiChat() {
   }
 
   const theme = useTheme();
+  const isMobile = useMobile();
   const [chats, setChats] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -359,19 +364,9 @@ function AiChat() {
   const [error, setError] = useState(null);
   const [latestSearchResults, setLatestSearchResults] = useState(null);
   const transcriptEndRef = useRef(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   // Define dynamicStyles using getStyles
-  const dynamicStyles = useMemo(() => getStyles(isMobile), [isMobile]);
-
-  // Handle window resize for mobile detection
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const styles = useMemo(() => getStyles(isMobile), [isMobile]);
 
   const displayMessages = useMemo(() => {
     if (messages && messages.length > 0) {
@@ -381,7 +376,9 @@ function AiChat() {
   }, [messages]);
 
   const scrollToBottom = useCallback(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (transcriptEndRef.current) {
+      transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, []);
 
   useEffect(() => {
@@ -398,7 +395,6 @@ function AiChat() {
     setError(null);
     try {
       const { data } = await api.get(`/api/ai/chats/${chatId}/messages`);
-      // Update selected chat and messages
       if (data?.chat) {
         setSelectedChat(data.chat);
       }
@@ -407,7 +403,6 @@ function AiChat() {
       const serverMessage =
         err.response?.data?.error || 'Unable to load this chat right now. Please try again shortly.';
       setError(serverMessage);
-      // Clear messages on error
       setMessages([]);
     } finally {
       setMessagesLoading(false);
@@ -455,12 +450,9 @@ function AiChat() {
       if (!chat || sending) {
         return;
       }
-      // Set selected chat immediately for visual feedback
       setSelectedChat(chat);
-      // Clear search results
       setLatestSearchResults(null);
       setError(null);
-      // Load messages for the selected chat (always reload to ensure fresh data)
       await loadChatMessages(chat.id);
     },
     [loadChatMessages, sending],
@@ -497,31 +489,25 @@ function AiChat() {
 
     setError(null);
     try {
-      const response = await api.delete(`/api/ai/chats/${chat.id}`);
+      await api.delete(`/api/ai/chats/${chat.id}`);
       
-      // Remove the deleted chat from the list
       const remaining = chats.filter((item) => item.id !== chat.id);
       setChats(remaining);
 
-      // If the deleted chat was selected, switch to another chat or clear
       if (selectedChat?.id === chat.id) {
         if (remaining.length > 0) {
-          // Switch to the first remaining chat
           await loadChatMessages(remaining[0].id);
         } else {
-          // No chats left, clear selection
           setSelectedChat(null);
           setMessages([]);
         }
       }
       
-      // Clear any error messages on success
       setError(null);
     } catch (err) {
       console.error('Error deleting chat:', err);
       const serverMessage = err.response?.data?.error || 'Unable to delete this chat right now.';
       setError(serverMessage);
-      // Show error to user
       alert(`Failed to delete chat: ${serverMessage}`);
     }
   }, [chats, loadChatMessages, selectedChat]);
@@ -660,7 +646,7 @@ function AiChat() {
         })}
       </div>
     );
-  }, [latestSearchResults]);
+  }, [latestSearchResults, styles]);
 
   return (
     <div style={styles.container}>
@@ -672,8 +658,8 @@ function AiChat() {
         </p>
       </header>
 
-      <div style={dynamicStyles.body}>
-        <aside style={dynamicStyles.sidebar}>
+      <div style={styles.body}>
+        <aside style={styles.sidebar}>
           <div style={styles.chatListHeader}>
             <h2 style={styles.chatListTitle}>Conversations</h2>
             <button
@@ -742,7 +728,7 @@ function AiChat() {
           </div>
         </aside>
 
-        <section style={dynamicStyles.chatArea}>
+        <section style={styles.chatArea}>
           <div style={styles.chatHeader}>
             <h3 style={styles.chatTitle}>{selectedChat?.title || 'Start a conversation'}</h3>
             <p style={styles.chatSubtitle}>
@@ -752,13 +738,13 @@ function AiChat() {
             </p>
           </div>
 
-          <div style={dynamicStyles.transcript}>
+          <div style={styles.transcript}>
             {searchResultContent}
             {messagesLoading && <div style={styles.loadingOverlay}>Loading messages…</div>}
             {displayMessages.map((message, index) => {
               const isUser = message.role === 'user';
               const bubbleStyle = {
-                ...dynamicStyles.bubbleBase,
+                ...styles.bubbleBase,
                 ...(isUser ? styles.userBubble : styles.assistantBubble),
               };
               const wrapperStyle = {
@@ -787,7 +773,7 @@ function AiChat() {
             />
             <div style={styles.actions}>
               <span style={styles.status}>
-                {sending ? 'Thinking…' : 'Press Enter to send, Shift + Enter for newline.'}
+                {sending ? 'Thinking…' : isMobile ? 'Tap Send' : 'Press Enter to send, Shift + Enter for newline.'}
               </span>
               <button
                 type="button"
@@ -810,4 +796,3 @@ function AiChat() {
 }
 
 export default AiChat;
-
