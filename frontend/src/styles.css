@@ -361,10 +361,18 @@ button[title*="Fullscreen"]:hover {
   }
 }
 
-/* Hide email and role columns in Members table on mobile */
+/* Hide email and role columns in Members table on mobile - AGGRESSIVE */
 @media (max-width: 1024px) {
   .members-email-column,
   .members-role-column {
     display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 }

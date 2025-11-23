@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMobile } from '../../utils/useMobile';
@@ -17,6 +17,25 @@ function Messages() {
   const [loadingThread, setLoadingThread] = useState(false); // Track loading state for conversation
   const [error, setError] = useState(null);
   const conversationErrorRef = useRef(null); // Track conversation errors separately, never display them
+  
+  // Wrapper function to prevent conversation errors from ever being set
+  const setErrorSafe = useCallback((errorMessage) => {
+    if (!errorMessage) {
+      setError(null);
+      return;
+    }
+    const errorLower = String(errorMessage).toLowerCase();
+    // NEVER allow conversation errors to be set
+    if (errorLower.includes('conversation') || 
+        errorLower.includes('load conversation') || 
+        errorLower.includes('failed to load conversation') ||
+        errorLower.includes('failed to load')) {
+      conversationErrorRef.current = errorMessage;
+      setError(null);
+      return;
+    }
+    setError(errorMessage);
+  }, []);
   const [success, setSuccess] = useState(null);
   const [viewingImage, setViewingImage] = useState(null);
   const [hoveredImage, setHoveredImage] = useState(null);
@@ -53,20 +72,12 @@ function Messages() {
   useEffect(() => {
     if (!selectedUsername) {
       setThread([]);
-      setError(null); // Clear errors when no conversation selected
+      setErrorSafe(null); // Clear errors when no conversation selected
       setLoadingThread(false);
       return;
     }
     // Aggressively clear any conversation-related errors when switching conversations
-    setError((prevError) => {
-      if (prevError) {
-        const errorLower = prevError.toLowerCase();
-        if (errorLower.includes('conversation') || errorLower.includes('load conversation') || errorLower.includes('failed to load')) {
-          return null;
-        }
-      }
-      return prevError;
-    });
+    setErrorSafe(null); // Clear any conversation errors when switching
     fetchThread();
     const interval = setInterval(fetchThread, 3000);
     return () => clearInterval(interval);
@@ -80,7 +91,7 @@ function Messages() {
     if (thread.length > 0 && error) {
       const errorLower = error.toLowerCase();
       if (errorLower.includes('conversation') || errorLower.includes('load conversation') || errorLower.includes('failed to load')) {
-        setError(null);
+        setErrorSafe(null);
       }
     }
   }, [thread, error]);
@@ -112,15 +123,15 @@ function Messages() {
       console.error('Failed to load users:', e);
       // Only show login error if user is actually not logged in
       if (e.response?.status === 401 && !user) {
-        setError('Please log in to view users.');
+        setErrorSafe('Please log in to view users.');
       } else if (e.response?.status === 401 && user) {
         // User is logged in but got 401 - don't show error, just log it
         console.warn('Got 401 but user is logged in, might be session issue');
-        setError(null);
+        setErrorSafe(null);
       } else if (e.response?.status !== 401) {
-        setError('Failed to load users');
+        setErrorSafe('Failed to load users');
       } else {
-        setError(null);
+        setErrorSafe(null);
       }
       // Don't clear users on 401 if user is logged in
       if (e.response?.status === 401 && user) {
@@ -147,7 +158,7 @@ function Messages() {
 
   const handleEnableNotifications = async () => {
     if (!('Notification' in window)) {
-      setError('Your browser does not support notifications');
+      setErrorSafe('Your browser does not support notifications');
       return;
     }
 
@@ -165,11 +176,11 @@ function Messages() {
         setSuccess('Notifications enabled! You will receive alerts for new messages.');
         setTimeout(() => setSuccess(null), 3000);
       } else {
-        setError('Notification permission denied. Please enable it in your browser settings.');
+        setErrorSafe('Notification permission denied. Please enable it in your browser settings.');
       }
     } catch (e) {
       console.error('Failed to request notification permission:', e);
-      setError('Failed to enable notifications');
+      setErrorSafe('Failed to enable notifications');
     }
   };
 
@@ -187,7 +198,7 @@ function Messages() {
       const messages = res.data?.messages || [];
       setThread(messages);
       // Always clear all errors on successful load
-      setError(null);
+      setErrorSafe(null);
       setLoadingThread(false);
       
       if (messages.length > 0 && Notification.permission === 'granted') {
@@ -206,7 +217,7 @@ function Messages() {
       // Store error in ref but NEVER set it in state - conversation errors should never be displayed
       conversationErrorRef.current = e.message || 'Failed to load conversation';
       // Force error state to null - conversation errors should NEVER be shown
-      setError(null);
+      setErrorSafe(null);
     }
   };
 
@@ -251,12 +262,12 @@ function Messages() {
     e.preventDefault();
     if (!selectedUsername) return;
     if (!text.trim() && !file) {
-      setError('Please enter a message or attach a file');
+      setErrorSafe('Please enter a message or attach a file');
       return;
     }
 
     setLoading(true);
-    setError(null);
+    setErrorSafe(null);
     setSuccess(null);
     try {
       const formData = new FormData();
@@ -276,11 +287,11 @@ function Messages() {
       console.error('Failed to send message:', e);
       const message = e.response?.data?.error || 'Failed to send message';
       if (e.response?.status === 401) {
-        setError('Please log in to send messages.');
+        setErrorSafe('Please log in to send messages.');
       } else if (e.response?.status === 404) {
-        setError('Recipient not found');
+        setErrorSafe('Recipient not found');
       } else {
-        setError(message);
+        setErrorSafe(message);
       }
     } finally {
       setLoading(false);
