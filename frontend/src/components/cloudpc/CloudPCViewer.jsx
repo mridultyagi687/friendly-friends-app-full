@@ -750,6 +750,7 @@ function CloudPCViewer() {
               {app.name === 'Minecraft' && (
                 <div 
                   className="downloaded-app-container"
+                  style={{ position: 'relative', width: '100%', height: '100%' }}
                   onClick={(e) => {
                     // Focus the iframe when clicking on Minecraft window
                     e.stopPropagation();
@@ -772,6 +773,26 @@ function CloudPCViewer() {
                     }
                   }}
                 >
+                  {/* Loading indicator */}
+                  <div 
+                    id="minecraft-loading" 
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 10,
+                      color: '#fff',
+                      fontSize: '1.2rem',
+                      textAlign: 'center',
+                      display: 'none',
+                      background: 'rgba(0, 0, 0, 0.7)',
+                      padding: '1rem 2rem',
+                      borderRadius: '8px'
+                    }}
+                  >
+                    Loading Minecraft...
+                  </div>
                   <iframe
                     key={`minecraft-${app.id}`}
                     src={(() => {
