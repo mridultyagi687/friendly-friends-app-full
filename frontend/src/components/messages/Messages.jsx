@@ -73,6 +73,13 @@ function Messages() {
     }
   }, [thread]);
 
+  // Continuously clear errors when a conversation is selected - conversation errors should never exist
+  useEffect(() => {
+    if (selectedUsername && error) {
+      setError(null);
+    }
+  }, [selectedUsername, error]);
+
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && viewingImage) {
