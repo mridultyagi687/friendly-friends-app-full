@@ -14,6 +14,7 @@ function Messages() {
   const [filePreview, setFilePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true); // Track loading state for users
+  const [loadingThread, setLoadingThread] = useState(false); // Track loading state for conversation
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [viewingImage, setViewingImage] = useState(null);
@@ -51,8 +52,12 @@ function Messages() {
   useEffect(() => {
     if (!selectedUsername) {
       setThread([]);
+      setError(null); // Clear errors when no conversation selected
+      setLoadingThread(false);
       return;
     }
+    // Clear previous errors when switching conversations
+    setError(null);
     fetchThread();
     const interval = setInterval(fetchThread, 3000);
     return () => clearInterval(interval);
@@ -154,11 +159,20 @@ function Messages() {
 
   const fetchThread = async () => {
     if (!selectedUsername) return;
+    
+    // Only show loading on initial load, not on refresh
+    const isInitialLoad = thread.length === 0;
+    if (isInitialLoad) {
+      setLoadingThread(true);
+    }
+    
     try {
       const res = await api.get(`/api/messages/${selectedUsername}`);
       const messages = res.data?.messages || [];
       setThread(messages);
+      // Always clear errors on successful load
       setError(null);
+      setLoadingThread(false);
       
       if (messages.length > 0 && Notification.permission === 'granted') {
         const lastMessage = messages[messages.length - 1];
@@ -172,10 +186,21 @@ function Messages() {
       }
     } catch (e) {
       console.error('Failed to load conversation:', e);
-      if (e.response?.status === 404) {
-        setError('User not found');
+      setLoadingThread(false);
+      
+      // Only set error if we don't have any messages (don't overwrite successful loads)
+      if (thread.length === 0) {
+        if (e.response?.status === 404) {
+          setError('User not found');
+        } else if (e.response?.status === 401) {
+          // Don't show error for 401, might be transient session issue
+          console.warn('Got 401 loading conversation, might be session issue');
+        } else {
+          setError('Failed to load conversation');
+        }
       } else {
-        setError('Failed to load conversation');
+        // If we have messages, don't show error (conversation already loaded)
+        setError(null);
       }
     }
   };
@@ -340,7 +365,7 @@ function Messages() {
         </button>
       </div>
       
-      {error && (
+      {error && !error.includes('conversation') && (
         <div style={styles.error}>
           <span style={styles.errorIcon}>⚠️</span>
           {error}
@@ -459,7 +484,18 @@ function Messages() {
                 padding: isMobile ? '1rem' : '1.5rem',
                 minHeight: 0,
               }}>
-                {thread.map((msg) => {
+                {loadingThread && thread.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    <span style={styles.emptyIcon}>⏳</span>
+                    <p>Loading conversation...</p>
+                  </div>
+                ) : thread.length === 0 && error && error.includes('conversation') ? (
+                  <div style={styles.emptyState}>
+                    <span style={styles.emptyIcon}>⚠️</span>
+                    <p>{error}</p>
+                  </div>
+                ) : (
+                  thread.map((msg) => {
                   const isOwn = msg.sender_id === user.id;
                   return (
                     <div
@@ -499,8 +535,7 @@ function Messages() {
                                       />
                                       <div 
                                         style={{
-                                          ...styles.imageOverlay,
-                                          opacity: hoveredImage === filename ? 1 : 0,
+                                           opacity: hoveredImage === filename ? 1 : 0,
                                         }} 
                                         onClick={() => handleImageClick(filename)}
                                       >
@@ -558,7 +593,8 @@ function Messages() {
                       </div>
                     </div>
                   );
-                })}
+                  })
+                )}
                 <div ref={bottomRef} />
               </div>
               <form onSubmit={send} style={{
