@@ -353,15 +353,32 @@ function Messages() {
         </div>
       )}
 
-      <div style={styles.layout}>
-        <div style={styles.sidebar}>
-          <h2 style={styles.sidebarTitle}>All Users</h2>
+      <div style={{
+        ...styles.layout,
+        gridTemplateColumns: isMobile ? '200px 1fr' : '300px 1fr',
+        gap: isMobile ? '0.75rem' : '1.5rem',
+        height: isMobile ? 'calc(100vh - 150px)' : 'calc(100vh - 200px)',
+      }}>
+        <div style={{
+          ...styles.sidebar,
+          padding: isMobile ? '0.75rem' : '1.5rem',
+        }}>
+          <h2 style={{
+            ...styles.sidebarTitle,
+            fontSize: isMobile ? '1rem' : '1.25rem',
+            marginBottom: isMobile ? '0.75rem' : '1rem',
+          }}>All Users</h2>
           <input
             type="text"
             placeholder="🔍 Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={styles.searchInput}
+            style={{
+              ...styles.searchInput,
+              padding: isMobile ? '0.5rem' : '0.75rem',
+              fontSize: isMobile ? '0.85rem' : '0.95rem',
+              marginBottom: isMobile ? '0.75rem' : '1rem',
+            }}
           />
           {loadingUsers ? (
             <div style={styles.emptyState}>
@@ -380,19 +397,47 @@ function Messages() {
                   key={member.id}
                   style={{
                     ...styles.partnerItem,
+                    gap: isMobile ? '0.5rem' : '1rem',
+                    padding: isMobile ? '0.5rem' : '1rem',
                     ...(selectedUsername === member.username ? styles.partnerItemActive : {}),
                   }}
                   onClick={() => setSelectedUsername(member.username)}
                 >
-                  <div style={styles.partnerAvatar}>
+                  <div style={{
+                    ...styles.partnerAvatar,
+                    width: isMobile ? '32px' : '40px',
+                    height: isMobile ? '32px' : '40px',
+                    fontSize: isMobile ? '0.9rem' : '1.1rem',
+                  }}>
                     {member.username.charAt(0).toUpperCase()}
                   </div>
-                  <div style={styles.partnerInfo}>
-                    <div style={styles.partnerName}>
+                  <div style={{
+                    ...styles.partnerInfo,
+                    minWidth: 0,
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      ...styles.partnerName,
+                      fontSize: isMobile ? '0.9rem' : '1rem',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>
                       {member.username}
-                      {member.is_admin && <span style={styles.adminBadge}> 👑</span>}
+                      {!isMobile && member.is_admin && <span style={styles.adminBadge}> 👑</span>}
                     </div>
-                    {member.email && <div style={styles.partnerEmail}>{member.email}</div>}
+                    {!isMobile && member.email && (
+                      <div style={{
+                        ...styles.partnerEmail,
+                        fontSize: isMobile ? '0.75rem' : '0.85rem',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        display: 'block',
+                      }}>
+                        {member.email}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -403,10 +448,17 @@ function Messages() {
         <div style={styles.chatArea}>
           {selectedUsername ? (
             <>
-              <div style={styles.chatHeader}>
+              <div style={{
+                ...styles.chatHeader,
+                padding: isMobile ? '1rem' : '1.5rem',
+              }}>
                 <h3 style={styles.chatTitle}>Chat with {selectedUsername}</h3>
               </div>
-              <div style={styles.messagesContainer}>
+              <div style={{
+                ...styles.messagesContainer,
+                padding: isMobile ? '1rem' : '1.5rem',
+                minHeight: 0,
+              }}>
                 {thread.map((msg) => {
                   const isOwn = msg.sender_id === user.id;
                   return (
@@ -414,6 +466,7 @@ function Messages() {
                       key={msg.id}
                       style={{
                         ...styles.message,
+                        maxWidth: isMobile ? '85%' : '70%',
                         ...(isOwn ? styles.messageOwn : styles.messageOther),
                       }}
                     >
@@ -508,7 +561,10 @@ function Messages() {
                 })}
                 <div ref={bottomRef} />
               </div>
-              <form onSubmit={send} style={styles.composer}>
+              <form onSubmit={send} style={{
+                ...styles.composer,
+                padding: isMobile ? '1rem' : '1.5rem',
+              }}>
                 {filePreview && (
                   <div style={styles.filePreview}>
                     <img src={filePreview} alt="Preview" style={styles.previewImage} />
@@ -699,15 +755,15 @@ const styles = {
   },
   layout: {
     display: 'grid',
-    gridTemplateColumns: window.innerWidth <= 768 ? '200px 1fr' : '300px 1fr',
-    gap: window.innerWidth <= 768 ? '0.75rem' : '1.5rem',
-    height: window.innerWidth <= 768 ? 'calc(100vh - 150px)' : 'calc(100vh - 200px)',
+    gridTemplateColumns: '300px 1fr', // Default, overridden inline
+    gap: '1.5rem', // Default, overridden inline
+    height: 'calc(100vh - 200px)', // Default, overridden inline
   },
   sidebar: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     backdropFilter: 'blur(10px)',
     borderRadius: '20px',
-    padding: window.innerWidth <= 768 ? '0.75rem' : '1.5rem',
+    padding: '1.5rem', // Default, overridden inline
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
     display: 'flex',
@@ -715,18 +771,18 @@ const styles = {
     overflow: 'hidden',
   },
   sidebarTitle: {
-    fontSize: window.innerWidth <= 768 ? '1rem' : '1.25rem',
+    fontSize: '1.25rem', // Default, overridden inline
     fontWeight: '600',
-    marginBottom: window.innerWidth <= 768 ? '0.75rem' : '1rem',
+    marginBottom: '1rem', // Default, overridden inline
     color: '#333',
   },
   searchInput: {
     width: '100%',
-    padding: window.innerWidth <= 768 ? '0.5rem' : '0.75rem',
+    padding: '0.75rem', // Default, overridden inline
     border: '2px solid rgba(102, 126, 234, 0.3)',
     borderRadius: '8px',
-    fontSize: window.innerWidth <= 768 ? '0.85rem' : '0.95rem',
-    marginBottom: window.innerWidth <= 768 ? '0.75rem' : '1rem',
+    fontSize: '0.95rem', // Default, overridden inline
+    marginBottom: '1rem', // Default, overridden inline
     backgroundColor: 'white',
     color: '#000000',
     boxSizing: 'border-box',
@@ -749,8 +805,8 @@ const styles = {
     background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%)',
   },
   partnerAvatar: {
-    width: window.innerWidth <= 768 ? '32px' : '40px',
-    height: window.innerWidth <= 768 ? '32px' : '40px',
+    width: '40px', // Default, overridden inline
+    height: '40px', // Default, overridden inline
     borderRadius: '50%',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     color: 'white',
@@ -758,29 +814,20 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     fontWeight: '600',
-    fontSize: window.innerWidth <= 768 ? '0.9rem' : '1.1rem',
+    fontSize: '1.1rem', // Default, overridden inline
     flexShrink: 0,
   },
   partnerInfo: {
     flex: 1,
-    minWidth: 0, // Allow text to truncate
-    overflow: 'hidden',
   },
   partnerName: {
     fontWeight: '600',
     color: '#333',
-    fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    fontSize: '1rem', // Default, overridden inline
   },
   partnerEmail: {
-    fontSize: window.innerWidth <= 768 ? '0.75rem' : '0.85rem',
+    fontSize: '0.85rem', // Default, overridden inline
     color: '#666',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    display: 'block', // Ensure it displays
   },
   adminBadge: {
     fontSize: '0.9rem',
@@ -796,7 +843,7 @@ const styles = {
     overflow: 'hidden',
   },
   chatHeader: {
-    padding: window.innerWidth <= 768 ? '1rem' : '1.5rem',
+    padding: '1.5rem', // Default, overridden inline
     borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
     background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
   },
@@ -809,15 +856,14 @@ const styles = {
   messagesContainer: {
     flex: 1,
     overflowY: 'auto',
-    padding: window.innerWidth <= 768 ? '1rem' : '1.5rem',
+    padding: '1.5rem', // Default, overridden inline
     display: 'flex',
     flexDirection: 'column',
     gap: '1rem',
-    minHeight: 0, // Important for flex scrolling
   },
   message: {
     display: 'flex',
-    maxWidth: window.innerWidth <= 768 ? '85%' : '70%',
+    maxWidth: '70%', // Default, overridden inline
   },
   messageOwn: {
     alignSelf: 'flex-end',
