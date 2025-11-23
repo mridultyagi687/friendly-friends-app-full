@@ -44,29 +44,52 @@ function ProtectedRoute({ children, allowedRoles, denyRoles = [], requireAdmin =
   const { user, loading } = useAuth();
   const [iosWait, setIosWait] = useState(false);
   const waitTimerRef = useRef(null);
+  const hasWaitedRef = useRef(false);
   
   // On iOS, give extra time for auth to complete (cookie might be delayed)
   const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
   
   useEffect(() => {
-    if (isIOS && !loading && !user) {
-      // On iOS, if loading finished but no user, wait a bit more before redirecting
+    // If user exists, no need to wait
+    if (user) {
+      setIosWait(true);
+      hasWaitedRef.current = true;
+      return;
+    }
+    
+    // If not iOS, proceed immediately
+    if (!isIOS) {
+      setIosWait(true);
+      hasWaitedRef.current = true;
+      return;
+    }
+    
+    // On iOS, if loading finished but no user, wait a bit more before redirecting
+    // But only wait once - don't re-wait on re-renders
+    if (isIOS && !loading && !user && !hasWaitedRef.current) {
       if (waitTimerRef.current) clearTimeout(waitTimerRef.current);
       waitTimerRef.current = setTimeout(() => {
         setIosWait(true);
-      }, 1500); // Give 1.5 seconds for cookie to be recognized
+        hasWaitedRef.current = true;
+      }, 2000); // Give 2 seconds for cookie to be recognized
       return () => {
         if (waitTimerRef.current) clearTimeout(waitTimerRef.current);
       };
-    } else {
-      setIosWait(true); // On non-iOS or if user exists, proceed immediately
+    } else if (isIOS && !loading && !user && hasWaitedRef.current) {
+      // Already waited, proceed
+      setIosWait(true);
     }
   }, [loading, user, isIOS]);
   
+  // Show loading only if actually loading or waiting on iOS
   if (loading || (isIOS && !user && !iosWait)) {
-    return <div>Loading...</div>;
+    return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>;
   }
-  if (!user) return <Navigate to="/" replace />;
+  
+  // Only redirect if we've waited and still no user
+  if (!user && (iosWait || !isIOS)) {
+    return <Navigate to="/" replace />;
+  }
 
   // Check for denied roles (new role system)
   if (denyRoles.length > 0 && hasAnyRole(user, denyRoles)) {

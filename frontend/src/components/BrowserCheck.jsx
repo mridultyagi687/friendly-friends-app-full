@@ -3,14 +3,16 @@ import React, { useState, useEffect, useRef } from 'react';
 function BrowserCheck({ children }) {
   // Check if we've already verified browser (persist across navigation)
   const storageKey = 'browser_check_completed';
-  const wasChecked = sessionStorage.getItem(storageKey) === 'true';
+  const wasChecked = typeof sessionStorage !== 'undefined' && sessionStorage.getItem(storageKey) === 'true';
   const [isChrome, setIsChrome] = useState(wasChecked ? true : true);
   const [isChecking, setIsChecking] = useState(wasChecked ? false : true);
   const hasCompletedRef = useRef(wasChecked);
 
   useEffect(() => {
-    // If already checked, skip the check entirely
+    // If already checked, skip the check entirely and immediately render children
     if (wasChecked && hasCompletedRef.current) {
+      setIsChecking(false);
+      setIsChrome(true);
       return;
     }
     

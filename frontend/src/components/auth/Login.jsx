@@ -22,7 +22,7 @@ function Login() {
       // Wait for cookie to be set and session to be established before navigating
       // This is especially important on iOS where cookie setting can be delayed
       const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-      const waitTime = isIOS ? 800 : 300; // Longer wait on iOS
+      const waitTime = isIOS ? 1000 : 300; // Longer wait on iOS
       
       // Wait for cookie to be set
       await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -32,14 +32,17 @@ function Login() {
         // On iOS, verify multiple times to ensure cookie is accepted
         for (let i = 0; i < 3; i++) {
           await checkAuth();
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 400));
         }
+        // Extra wait after verification
+        await new Promise(resolve => setTimeout(resolve, 500));
       } else {
         await checkAuth();
         await new Promise(resolve => setTimeout(resolve, 200));
       }
       
-      navigate('/');
+      // Use replace to avoid adding to history and prevent back button issues
+      navigate('/', { replace: true });
     }
   };
 
