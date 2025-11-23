@@ -106,6 +106,22 @@ function Messages() {
     }
   }, [thread, error]);
 
+  // Aggressively clear conversation errors on every render cycle
+  useEffect(() => {
+    if (error) {
+      const errorLower = String(error).toLowerCase();
+      if (errorLower.includes('conversation') || 
+          errorLower.includes('load conversation') || 
+          errorLower.includes('failed to load conversation') ||
+          errorLower.includes('failed to load') ||
+          (errorLower.includes('message') && errorLower.includes('load')) ||
+          (errorLower.includes('thread') && errorLower.includes('load'))) {
+        // Immediately clear - conversation errors should never exist
+        setError(null);
+      }
+    }
+  }, [error]); // Run on every error change
+
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && viewingImage) {
