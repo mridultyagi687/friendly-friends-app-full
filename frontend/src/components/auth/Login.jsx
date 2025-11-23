@@ -27,15 +27,17 @@ function Login() {
       // Wait for cookie to be set
       await new Promise(resolve => setTimeout(resolve, waitTime));
       
-      // Verify session is established by checking auth
-      await checkAuth();
-      
-      // Wait a bit more to ensure state is updated
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Double-check user is set before navigating (re-check from context)
-      // The user should be set by the login function, but we verify here
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Verify session is established by checking auth multiple times on iOS
+      if (isIOS) {
+        // On iOS, verify multiple times to ensure cookie is accepted
+        for (let i = 0; i < 3; i++) {
+          await checkAuth();
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      } else {
+        await checkAuth();
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
       
       navigate('/');
     }
