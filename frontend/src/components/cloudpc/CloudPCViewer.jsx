@@ -774,7 +774,13 @@ function CloudPCViewer() {
                 >
                   <iframe
                     key={`minecraft-${app.id}`}
-                    src={`${import.meta.env.BASE_URL || '/'}minecraft.html`}
+                    src={(() => {
+                      // Get base URL for GitHub Pages
+                      const base = import.meta.env.BASE_URL || '/';
+                      // Ensure base ends with / and remove leading / from minecraft.html
+                      const basePath = base.endsWith('/') ? base : base + '/';
+                      return `${basePath}minecraft.html`;
+                    })()}
                     title="Minecraft"
                     className="downloaded-app-iframe"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock"
