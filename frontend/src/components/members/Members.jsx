@@ -3,16 +3,22 @@ import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 function Members() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // Wait for auth to finish loading before checking user
+    if (authLoading) {
+      return;
+    }
+    
     if (!user) {
       setLoading(false);
       return;
     }
+    
     const fetchMembers = async () => {
       setLoading(true);
       setError(null);
@@ -32,7 +38,19 @@ function Members() {
       }
     };
     fetchMembers();
-  }, [user]);
+  }, [user, authLoading]);
+
+  // Show loading while auth is checking
+  if (authLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loginPrompt}>
+          <h1 style={styles.title}>Members</h1>
+          <p style={styles.promptText}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

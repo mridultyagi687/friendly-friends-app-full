@@ -19,17 +19,22 @@ function AdminDashboard() {
     password: '',
     is_admin: false
   });
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
 
   useEffect(() => {
+    // Wait for auth to finish loading before checking user
+    if (authLoading) {
+      return;
+    }
+    
     if (!user?.is_admin) {
       navigate('/');
       return;
     }
     fetchUsers();
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   const fetchUsers = async () => {
     setLoading(true);
