@@ -17,13 +17,20 @@ export function AuthProvider({ children }) {
         setUser(res.data.user);
       } else {
         setUser(null);
+        // Clear invalid session token
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('session_token');
+        }
       }
     } catch (err) {
       // Don't set error for 401 (unauthorized) - user is just not logged in
       // Also don't show errors for network issues on initial load
       if (err.response) {
         if (err.response.status === 401) {
-          // Not logged in - this is normal
+          // Not logged in - clear session token
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('session_token');
+          }
           setError(null);
           setUser(null);
         } else if (err.response.status === 500) {
@@ -88,8 +95,12 @@ export function AuthProvider({ children }) {
         setUser(res.data.user);
         setError(null); // Clear any previous errors
         
+        // Store session token in localStorage for persistent login
+        if (res.data.session_token) {
+          localStorage.setItem('session_token', res.data.session_token);
+        }
+        
         // Single retry after login to ensure session is established
-        // With proper cookie configuration, this should work by default
         setTimeout(async () => {
           try {
             await checkAuth();
@@ -137,6 +148,10 @@ export function AuthProvider({ children }) {
       await api.post('/api/logout');
     } catch (err) {
       // ignore
+    }
+    // Remove session token from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('session_token');
     }
     setUser(null);
     setError(null);

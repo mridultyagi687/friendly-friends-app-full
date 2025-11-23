@@ -40,6 +40,14 @@ api.interceptors.request.use(
       config.baseURL = '';
     }
     
+    // Add session token from localStorage to Authorization header
+    if (typeof window !== 'undefined') {
+      const sessionToken = localStorage.getItem('session_token');
+      if (sessionToken) {
+        config.headers['Authorization'] = `Bearer ${sessionToken}`;
+      }
+    }
+    
     // Remove Content-Type header for FormData - axios will set it automatically with boundary
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type'];

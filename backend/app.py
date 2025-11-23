@@ -1,4 +1,4 @@
-import os
+5import os
 import io
 import uuid
 import json
@@ -1056,7 +1056,7 @@ def register():
 
 @app.post("/api/login")
 def login():
-    """Login endpoint with comprehensive error handling."""
+    """Login endpoint with database-based session management."""
     # Wrap everything in a try-except to ensure we always return a response
     try:
         # Parse JSON request
@@ -1106,11 +1106,33 @@ def login():
                 pass
             return jsonify({"error": "Authentication error. Please try again."}), 500
 
-        # Set session and serialize user
+        # Create database session
         try:
-            session["user_id"] = user.id
+            # Generate unique session token
+            session_token = str(uuid.uuid4())
+            
+            # Get device info and IP
+            device_info = request.headers.get("User-Agent", "Unknown")
+            ip_address = request.remote_addr or request.headers.get("X-Forwarded-For", "Unknown")
+            
+            # Create session with 30-day expiration
+            expires_at = datetime.utcnow() + timedelta(days=30)
+            
+            # Create new session in database
+            user_session = UserSession(
+                user_id=user.id,
+                session_token=session_token,
+                device_info=device_info[:255],  # Limit length
+                ip_address=ip_address[:45],  # IPv6 max length
+                expires_at=expires_at,
+                last_activity=datetime.utcnow()
+            )
+            
+            db.session.add(user_session)
+            db.session.commit()
+            
             try:
-                logger.info(f"User {username} logged in successfully")
+                logger.info(f"User {username} logged in successfully with session {session_token[:8]}...")
             except:
                 pass
             
@@ -1130,20 +1152,19 @@ def login():
                     "is_admin": user.is_admin,
                 }
             
-            # Create response and ensure cookie is set properly for iOS
-            response = make_response(jsonify({"ok": True, "message": "Login successful", "user": user_dict}))
-            
-            # Explicitly set session cookie with proper attributes for iOS cross-origin
-            # Flask should handle this via config, but we ensure it here for iOS compatibility
-            if session_cookie_secure and session_cookie_samesite == 'None':
-                # The cookie should already be set by Flask, but we can verify it's in the response
-                # Flask's session middleware handles this automatically based on app.config
-                pass
+            # Return session token to frontend (store in localStorage)
+            response = make_response(jsonify({
+                "ok": True, 
+                "message": "Login successful", 
+                "user": user_dict,
+                "session_token": session_token
+            }))
             
             return response
         except Exception as session_error:
             try:
-                logger.exception(f"Error setting session in /api/login: {session_error}")
+                logger.exception(f"Error creating session in /api/login: {session_error}")
+                db.session.rollback()
             except:
                 pass
             return jsonify({"error": "Failed to complete login. Please try again."}), 500
@@ -1172,33 +1193,110 @@ def login():
 
 
 @app.post("/api/logout")
-@login_required
 def logout():
-    session.pop("user_id", None)
-    resp = jsonify({"ok": True, "message": "Logged out"})
-    return resp
+    """Logout endpoint that deletes session from database."""
+    try:
+        # Get session token from request header or body
+        session_token = None
+        
+        # Try to get from Authorization header first
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            session_token = auth_header[7:]  # Remove "Bearer " prefix
+        
+        # If not in header, try request body
+        if not session_token and request.is_json:
+            data = request.get_json(silent=True)
+            if data and isinstance(data, dict):
+                session_token = data.get("session_token")
+        
+        if not session_token:
+            # If no token provided, still return success (idempotent)
+            return jsonify({"ok": True, "message": "Logged out"})
+        
+        # Find and delete session from database
+        try:
+            user_session = db.session.query(UserSession).filter_by(session_token=session_token).first()
+            if user_session:
+                db.session.delete(user_session)
+                db.session.commit()
+                try:
+                    logger.info(f"Session {session_token[:8]}... deleted (logout)")
+            except:
+                pass
+        except Exception as db_error:
+            try:
+                logger.exception(f"Database error in /api/logout: {db_error}")
+                db.session.rollback()
+            except:
+                pass
+            # Still return success even if deletion fails
+        
+        return jsonify({"ok": True, "message": "Logged out"})
+    except Exception as e:
+        try:
+            logger.exception(f"Error in /api/logout: {e}")
+        except:
+            pass
+        # Always return success for logout (idempotent)
+        return jsonify({"ok": True, "message": "Logged out"})
 
 
 @app.get("/api/me")
-@login_required
 def me():
-    """Get current user info with comprehensive error handling."""
+    """Get current user info using database session token."""
     # Wrap everything to ensure we always return a response
     try:
-        # Get user_id from session first
-        user_id = session.get("user_id")
-        if not user_id:
-            try:
-                session.clear()
-            except:
-                pass
+        # Get session token from request header or query parameter
+        session_token = None
+        
+        # Try to get from Authorization header first
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            session_token = auth_header[7:]  # Remove "Bearer " prefix
+        
+        # If not in header, try query parameter
+        if not session_token:
+            session_token = request.args.get("session_token")
+        
+        if not session_token:
             try:
                 return jsonify({"error": "Authentication required"}), 401
             except:
                 return make_response(json.dumps({"error": "Authentication required"}), 401, {"Content-Type": "application/json"})
         
-        # Try to get user from database
+        # Find session in database
         try:
+            user_session = db.session.query(UserSession).filter_by(session_token=session_token).first()
+            
+            if not user_session:
+                try:
+                    return jsonify({"error": "Invalid session"}), 401
+                except:
+                    return make_response(json.dumps({"error": "Invalid session"}), 401, {"Content-Type": "application/json"})
+            
+            # Check if session is expired
+            if user_session.is_expired():
+                # Delete expired session
+                try:
+                    db.session.delete(user_session)
+                    db.session.commit()
+                except:
+                    db.session.rollback()
+                try:
+                    return jsonify({"error": "Session expired"}), 401
+                except:
+                    return make_response(json.dumps({"error": "Session expired"}), 401, {"Content-Type": "application/json"})
+            
+            # Update last activity
+            try:
+                user_session.last_activity = datetime.utcnow()
+                db.session.commit()
+            except:
+                db.session.rollback()
+            
+            # Get user from database
+            user_id = user_session.user_id
             user = db.session.query(User).filter_by(id=user_id).first()
         except Exception as db_error:
             try:
@@ -1212,11 +1310,13 @@ def me():
                 return make_response(json.dumps({"error": "Database error. Please try again."}), 500, {"Content-Type": "application/json"})
         
         if not user:
-            # Session has user_id but user doesn't exist - clear session
+            # Session has user_id but user doesn't exist - delete session
             try:
-                session.clear()
+                if user_session:
+                    db.session.delete(user_session)
+                    db.session.commit()
             except:
-                pass
+                db.session.rollback()
             try:
                 return jsonify({"error": "User not found"}), 401
             except:
@@ -3272,16 +3372,16 @@ def create_cloud_pc():
             logger.exception(f"Error creating Cloud PC with raw SQL, falling back to ORM: {e}")
             db.session.rollback()
             try:
-                cloud_pc = CloudPC(
-                    owner_id=user.id,
-                    name=name,
-                    os_version=os_version,
-                    status="created",
-                    storage_used_mb=0
-                )
-                db.session.add(cloud_pc)
-                db.session.commit()
-                db.session.refresh(cloud_pc)
+            cloud_pc = CloudPC(
+                owner_id=user.id,
+                name=name,
+                os_version=os_version,
+                status="created",
+                storage_used_mb=0
+            )
+            db.session.add(cloud_pc)
+            db.session.commit()
+            db.session.refresh(cloud_pc)
             except Exception as orm_error:
                 logger.exception(f"Error creating Cloud PC with ORM fallback: {orm_error}")
                 db.session.rollback()
