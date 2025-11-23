@@ -9,6 +9,11 @@ function BrowserCheck({ children }) {
   const hasCompletedRef = useRef(wasChecked);
 
   useEffect(() => {
+    // If already checked, skip the check entirely
+    if (wasChecked && hasCompletedRef.current) {
+      return;
+    }
+    
     // Check if browser is Chrome with timeout
     const checkBrowser = () => {
       if (hasCompletedRef.current) return;
@@ -84,7 +89,7 @@ function BrowserCheck({ children }) {
         setIsChrome(true);
         setIsChecking(false);
         // Store in sessionStorage to prevent re-checking on navigation
-        sessionStorage.setItem('browser_check_completed', 'true');
+        sessionStorage.setItem(storageKey, 'true');
       }
     };
 
