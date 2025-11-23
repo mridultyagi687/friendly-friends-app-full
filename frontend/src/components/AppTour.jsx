@@ -13,19 +13,6 @@ function AppTour() {
   const [showTour, setShowTour] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
 
-  // Listen for manual tour start event (for mobile)
-  useEffect(() => {
-    const handleStartTour = () => {
-      if (user) {
-        setShowTour(true);
-        setIsRunning(true);
-        setCurrentStep(0);
-      }
-    };
-    window.addEventListener('startTour', handleStartTour);
-    return () => window.removeEventListener('startTour', handleStartTour);
-  }, [user]);
-
   // Check if user has completed the tour
   useEffect(() => {
     if (!user) {
