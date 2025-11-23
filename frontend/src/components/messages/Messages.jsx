@@ -786,7 +786,7 @@ const styles = {
     overflow: 'hidden',
   },
   chatHeader: {
-    padding: '1.5rem',
+    padding: window.innerWidth <= 768 ? '1rem' : '1.5rem',
     borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
     background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
   },
