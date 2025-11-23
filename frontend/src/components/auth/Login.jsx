@@ -22,10 +22,9 @@ function Login() {
       // On iOS, wait a bit for cookie to be set before navigating
       const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
       if (isIOS) {
-        // Wait for session to be established
+        // Wait for session to be established (cookie needs time to be set on iOS)
         await new Promise(resolve => setTimeout(resolve, 300));
         // Verify session before navigating
-        const { checkAuth } = useAuth();
         await checkAuth();
         await new Promise(resolve => setTimeout(resolve, 200));
       }
@@ -42,6 +41,7 @@ function Login() {
         // On iOS, wait a bit for cookie to be set before navigating
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
         if (isIOS) {
+          // Wait for session to be established (cookie needs time to be set on iOS)
           await new Promise(resolve => setTimeout(resolve, 300));
           await checkAuth();
           await new Promise(resolve => setTimeout(resolve, 200));
@@ -55,6 +55,7 @@ function Login() {
         // On iOS, wait a bit for cookie to be set before navigating
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
         if (isIOS) {
+          // Wait for session to be established (cookie needs time to be set on iOS)
           await new Promise(resolve => setTimeout(resolve, 300));
           await checkAuth();
           await new Promise(resolve => setTimeout(resolve, 200));
