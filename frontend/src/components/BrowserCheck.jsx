@@ -1,8 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 function BrowserCheck({ children }) {
-  // Check if we've already verified browser (persist across navigation)
   const storageKey = 'browser_check_completed';
+  
+  // For AI Chat route, immediately bypass check and set sessionStorage
+  // Use window.location since BrowserCheck is outside Router
+  // Check for both '/ai-chat' and paths containing 'ai-chat' (for GitHub Pages base path)
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  const isAiChatRoute = currentPath.includes('/ai-chat');
+  if (isAiChatRoute && typeof sessionStorage !== 'undefined') {
+    sessionStorage.setItem(storageKey, 'true');
+    return <>{children}</>;
+  }
+  
+  // Check if we've already verified browser (persist across navigation)
   const wasChecked = typeof sessionStorage !== 'undefined' && sessionStorage.getItem(storageKey) === 'true';
   
   // On iOS, if already checked, immediately render children without any state
