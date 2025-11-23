@@ -508,10 +508,10 @@ function Messages() {
                 padding: isMobile ? '1rem' : '1.5rem',
                 minHeight: 0,
               }}>
-                {loadingThread && thread.length === 0 ? (
+                {thread.length === 0 ? (
                   <div style={styles.emptyState}>
-                    <span style={styles.emptyIcon}>⏳</span>
-                    <p>Loading conversation...</p>
+                    <span style={styles.emptyIcon}>💬</span>
+                    <p>No messages yet. Start the conversation!</p>
                   </div>
                 ) : (
                   thread.map((msg) => {
