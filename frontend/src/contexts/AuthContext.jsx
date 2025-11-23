@@ -48,10 +48,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     checkAuth();
     
-    // On iOS, retry auth check multiple times (iOS Safari cookie issues)
+    // On iOS (including Chrome on iOS), retry auth check multiple times
+    // Chrome on iOS uses WebKit and has the same cookie restrictions as Safari
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
     if (isIOS) {
-      // Retry auth check multiple times to handle iOS Safari cookie delays
+      // Retry auth check multiple times to handle iOS cookie delays
+      // Chrome on iOS still uses WebKit, so it has the same restrictions
       const retries = [1000, 2000, 3000, 5000]; // Retry at 1s, 2s, 3s, 5s
       const timeouts = retries.map(delay => 
         setTimeout(() => {
@@ -104,11 +106,12 @@ export function AuthProvider({ children }) {
         setUser(res.data.user);
         setError(null); // Clear any previous errors
         
-        // On iOS, retry auth check multiple times to ensure cookie is set
-        // iOS Safari sometimes needs multiple attempts to accept the cookie
+        // On iOS (including Chrome on iOS), retry auth check multiple times
+        // Chrome on iOS uses WebKit and has the same cookie restrictions as Safari
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
         if (isIOS) {
           // Retry auth check immediately, then after delays
+          // Chrome on iOS still uses WebKit, so it needs the same retry mechanism
           const retryAuth = async (delay) => {
             await new Promise(resolve => setTimeout(resolve, delay));
             try {
@@ -118,11 +121,12 @@ export function AuthProvider({ children }) {
             }
           };
           
-          // Retry immediately, then at 500ms, 1s, and 2s
+          // Retry immediately, then at 500ms, 1s, 2s, and 3s
           retryAuth(0);
           retryAuth(500);
           retryAuth(1000);
           retryAuth(2000);
+          retryAuth(3000);
         }
         
         return true;

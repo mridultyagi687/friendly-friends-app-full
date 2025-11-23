@@ -20,11 +20,14 @@ const api = axios.create({
   timeout: 30000, // 30 second timeout
 });
 
-// iOS Safari workaround: Ensure credentials are always sent
+// iOS workaround (Safari and Chrome on iOS): Ensure credentials are always sent
+// Chrome on iOS uses WebKit and has the same cookie restrictions as Safari
 const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
 if (isIOS) {
-  // Force credentials on iOS
+  // Force credentials on iOS (works for both Safari and Chrome on iOS)
   api.defaults.withCredentials = true;
+  // Increase timeout for iOS cookie handling
+  api.defaults.timeout = 30000;
 }
 
 // Add request interceptor to log requests and ensure correct URL
