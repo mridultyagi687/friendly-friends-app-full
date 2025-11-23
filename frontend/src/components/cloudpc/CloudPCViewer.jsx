@@ -788,24 +788,67 @@ function CloudPCViewer() {
                       }
                       // Ensure base ends with /
                       const basePath = base.endsWith('/') ? base : base + '/';
-                      return `${basePath}minecraft.html`;
+                      const src = `${basePath}minecraft.html`;
+                      console.log('Minecraft iframe src:', src);
+                      return src;
                     })()}
                     title="Minecraft"
                     className="downloaded-app-iframe"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock allow-downloads allow-storage-access-by-user-activation"
+                    allow="fullscreen; autoplay; encrypted-media; picture-in-picture; web-share"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      display: 'block',
+                      backgroundColor: 'transparent'
+                    }}
                     tabIndex={0}
                     onLoad={(e) => {
                       // Focus the iframe when it loads
                       const iframe = e.target;
+                      console.log('Minecraft iframe loaded');
+                      
+                      // Hide loading indicator
+                      const loadingEl = document.getElementById('minecraft-loading');
+                      if (loadingEl) {
+                        loadingEl.style.display = 'none';
+                      }
+                      
                       if (iframe) {
                         iframe.focus();
                         try {
                           if (iframe.contentWindow) {
                             iframe.contentWindow.focus();
+                            console.log('Minecraft iframe contentWindow accessible');
+                            
+                            // Check if content is actually loaded
+                            setTimeout(() => {
+                              try {
+                                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                                if (iframeDoc && iframeDoc.body) {
+                                  console.log('Minecraft iframe document body found');
+                                  if (iframeDoc.body.innerHTML.trim() === '') {
+                                    console.warn('Minecraft iframe body is empty - might be white screen issue');
+                                  }
+                                }
+                              } catch (err) {
+                                console.warn('Cannot access iframe document (expected for same-origin):', err);
+                              }
+                            }, 1000);
                           }
                         } catch (err) {
                           // Cross-origin restrictions might prevent this
+                          console.warn('Minecraft iframe focus error (expected):', err);
                         }
+                      }
+                    }}
+                    onError={(e) => {
+                      console.error('Minecraft iframe error:', e);
+                      const loadingEl = document.getElementById('minecraft-loading');
+                      if (loadingEl) {
+                        loadingEl.textContent = 'Error loading Minecraft. Please refresh.';
+                        loadingEl.style.display = 'block';
                       }
                     }}
                     onMouseEnter={() => {
