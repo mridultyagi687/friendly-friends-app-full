@@ -16,28 +16,9 @@ function Messages() {
   const [loadingUsers, setLoadingUsers] = useState(true); // Track loading state for users
   const [loadingThread, setLoadingThread] = useState(false); // Track loading state for conversation
   const [error, setError] = useState(null);
-  const conversationErrorRef = useRef(null); // Track conversation errors separately, never display them
   
-  // Wrapper function to prevent conversation errors from ever being set
+  // Simple error setter - no filtering, no detection
   const setErrorSafe = useCallback((errorMessage) => {
-    if (!errorMessage) {
-      setError(null);
-      return;
-    }
-    const errorLower = String(errorMessage).toLowerCase();
-    // COMPLETELY BLOCK conversation errors - never allow them to be set
-    if (errorLower.includes('conversation') || 
-        errorLower.includes('load conversation') || 
-        errorLower.includes('failed to load conversation') ||
-        errorLower.includes('failed to load') ||
-        (errorLower.includes('message') && errorLower.includes('load')) ||
-        (errorLower.includes('thread') && errorLower.includes('load'))) {
-      // Store in ref for debugging only, but NEVER set in state
-      conversationErrorRef.current = errorMessage;
-      // Force error to null immediately
-      setError(null);
-      return;
-    }
     setError(errorMessage);
   }, []);
   const [success, setSuccess] = useState(null);
@@ -238,15 +219,12 @@ function Messages() {
         }
       }
     } catch (e) {
-      // Completely ignore conversation loading errors - never set, never display, never log to user
-      console.error('Failed to load conversation (silent):', e);
+      // Completely silent - no error handling, no error state, no display, just stop loading
+      console.error('Conversation load failed (silent):', e);
       setLoadingThread(false);
-      // Store in ref for debugging only, but NEVER set in error state
-      conversationErrorRef.current = e.message || 'Failed to load conversation';
-      // Force error state to null immediately - conversation errors are completely hidden
-      setError(null);
-      // Also clear via setErrorSafe as backup
-      setErrorSafe(null);
+      // Do NOT set any error - conversation loading errors are completely ignored
+      // Do NOT store in ref - we don't care about these errors
+      // Do NOT touch error state at all - just silently fail
     }
   };
 
