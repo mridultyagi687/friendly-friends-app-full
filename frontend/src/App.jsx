@@ -26,6 +26,7 @@ const BugReporter = lazy(() => import('./components/bugs/BugReporter'));
 const ResearchList = lazy(() => import('./components/research/ResearchList'));
 const ResearchViewer = lazy(() => import('./components/research/ResearchViewer'));
 const CreateResearch = lazy(() => import('./components/research/CreateResearch'));
+const ResearchData = lazy(() => import('./components/research/ResearchData'));
 const Reminders = lazy(() => import('./components/reminders/Reminders'));
 
 // Loading component for lazy routes
@@ -425,6 +426,16 @@ function AppRoutes() {
                 <ProtectedRoute>
                   <Suspense fallback={<LoadingSpinner />}>
                     <ResearchViewer />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/research-data"
+              element={
+                <ProtectedRoute>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ResearchData />
                   </Suspense>
                 </ProtectedRoute>
               }

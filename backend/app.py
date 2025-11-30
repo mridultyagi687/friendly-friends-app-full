@@ -2962,6 +2962,133 @@ def get_research_photo(filename: str):
     return send_from_directory(RESEARCH_PHOTO_DIR, filename)
 
 
+@app.post("/api/research/data/search")
+@login_required
+def search_research_data():
+    """Search and aggregate research data using AI."""
+    try:
+        user = current_user()
+        data = ensure_json_request()
+        query = data.get("query", "").strip()
+        
+        if not query:
+            return jsonify({"error": "Search query is required"}), 400
+        
+        # Search through all research (title, description, results)
+        # Get all research that might be relevant
+        all_research = db.session.query(Research).filter(
+            db.or_(
+                Research.title.ilike(f"%{query}%"),
+                Research.description.ilike(f"%{query}%"),
+                Research.results.ilike(f"%{query}%")
+            )
+        ).order_by(Research.created_at.desc()).all()
+        
+        if not all_research:
+            return jsonify({
+                "aggregated_data": "No research found matching your query.",
+                "sources": [],
+                "query": query
+            })
+        
+        # Get user information for "published by"
+        user_map = {}
+        for research in all_research:
+            if research.created_by not in user_map:
+                creator = db.session.get(User, research.created_by)
+                if creator:
+                    user_map[research.created_by] = creator.username
+        
+        # Prepare research data for AI aggregation
+        research_data = []
+        for research in all_research:
+            research_data.append({
+                "title": research.title,
+                "description": research.description,
+                "results": research.results or "",
+                "created_at": research.created_at.isoformat() if research.created_at else None,
+                "created_by": user_map.get(research.created_by, "Unknown"),
+                "id": research.id
+            })
+        
+        # Use AI to aggregate the research data
+        client = get_openai_client()
+        if not client:
+            # Fallback: simple aggregation without AI
+            aggregated_text = "\n\n".join([
+                f"Research: {r['title']}\nDescription: {r['description']}\nResults: {r['results']}"
+                for r in research_data
+            ])
+        else:
+            # Create a comprehensive prompt for AI aggregation
+            research_summaries = "\n\n".join([
+                f"Research #{i+1}: {r['title']}\n"
+                f"Description: {r['description']}\n"
+                f"Results: {r['results']}\n"
+                f"Published by: {r['created_by']}\n"
+                f"Date: {r['created_at']}\n"
+                for i, r in enumerate(research_data)
+            ])
+            
+            system_prompt = """You are a research data aggregator. Your task is to analyze multiple research sources and combine them into a comprehensive, well-organized summary. 
+            Synthesize the information from all sources, identify common themes, key findings, and important insights. 
+            Present the aggregated data in a clear, structured format that combines all relevant information."""
+            
+            user_prompt = f"""Please aggregate and synthesize the following research data related to the query: "{query}"
+
+            Research Sources:
+            {research_summaries}
+
+            Please provide a comprehensive summary that:
+            1. Combines all relevant information from the research sources
+            2. Identifies common themes and patterns
+            3. Highlights key findings and insights
+            4. Organizes the information in a clear, structured manner
+            5. Preserves important details from each source
+            
+            Format your response as a well-structured document with clear sections."""
+            
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=2000
+                )
+                aggregated_text = response.choices[0].message.content.strip()
+            except Exception as ai_error:
+                logger.exception(f"Error calling OpenAI for research aggregation: {ai_error}")
+                # Fallback to simple aggregation
+                aggregated_text = "\n\n".join([
+                    f"Research: {r['title']}\nDescription: {r['description']}\nResults: {r['results']}"
+                    for r in research_data
+                ])
+        
+        # Prepare sources with metadata
+        sources = []
+        for research in all_research:
+            sources.append({
+                "id": research.id,
+                "title": research.title,
+                "date": research.created_at.isoformat() if research.created_at else None,
+                "published_by": user_map.get(research.created_by, "Unknown")
+            })
+        
+        return jsonify({
+            "aggregated_data": aggregated_text,
+            "sources": sources,
+            "query": query,
+            "total_sources": len(sources)
+        })
+        
+    except Exception as e:
+        logger.exception(f"Error in /api/research/data/search: {e}")
+        return jsonify({"error": "Failed to search research data"}), 500
+
+
 ###############################################################################
 # Reminders                                                                    #
 ###############################################################################

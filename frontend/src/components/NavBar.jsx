@@ -194,6 +194,16 @@ function NavBar() {
           🔬 Live Research
         </Link>
         <Link 
+          to="/research-data" 
+          data-tour="research-data"
+          style={{
+            ...linkStyle,
+            ...(isActive('/research-data') ? activeLinkStyle : {})
+          }}
+        >
+          📊 Research Data
+        </Link>
+        <Link 
           to="/reminders" 
           data-tour="reminders"
           style={{
