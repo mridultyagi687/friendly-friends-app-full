@@ -10,6 +10,11 @@ function ResearchData() {
   const [sources, setSources] = useState([]);
   const [error, setError] = useState(null);
 
+  // Ensure component is visible
+  useEffect(() => {
+    console.log('ResearchData component mounted');
+  }, []);
+
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!searchQuery.trim() || searching) return;
