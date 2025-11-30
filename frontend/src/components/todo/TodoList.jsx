@@ -272,6 +272,7 @@ const styles = {
     marginBottom: '2rem',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   form: {
     display: 'flex',
@@ -313,6 +314,7 @@ const styles = {
     textAlign: 'center',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   emptyIcon: {
     fontSize: '3rem',
@@ -330,6 +332,7 @@ const styles = {
     boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
     transition: 'all 0.3s ease',
+    color: '#1f2937', // Dark text on white background
   },
   checkbox: {
     width: '20px',

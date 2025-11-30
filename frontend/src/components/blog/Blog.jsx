@@ -369,6 +369,7 @@ const styles = {
     textAlign: 'center',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   header: { 
     display: 'flex', 
@@ -566,6 +567,7 @@ const styles = {
     textAlign: 'center',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   emptyIcon: {
     fontSize: '3rem',
@@ -586,6 +588,7 @@ const styles = {
     cursor: 'pointer', 
     transition: 'all 0.3s ease',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   cardImage: { 
     width: '100%', 
@@ -621,6 +624,7 @@ const styles = {
     fontWeight: '500',
     boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)',
     transition: 'all 0.3s ease',
+    color: '#1f2937', // Dark text on white background
   },
   blogPost: { 
     background: 'rgba(255, 255, 255, 0.95)',
@@ -629,6 +633,7 @@ const styles = {
     borderRadius: '20px', 
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   blogTitle: { 
     marginTop: 0, 

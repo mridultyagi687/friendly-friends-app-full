@@ -196,6 +196,11 @@ function AiDocs() {
     const cleanedPrompt = docPrompt.trim();
     if (!cleanedPrompt || generatingDoc) return;
 
+    // Save current document if there are unsaved changes before creating new one
+    if (selectedDocId && hasUnsavedChanges) {
+      await handleSaveDoc();
+    }
+
     setGeneratingDoc(true);
     setError(null);
     setSuccess(null);
@@ -205,6 +210,8 @@ function AiDocs() {
       });
       if (data?.doc) {
         setDocs(prev => [data.doc, ...prev]);
+        // Clear unsaved changes before switching to new document
+        setHasUnsavedChanges(false);
         setSelectedDocId(data.doc.id);
         setDocPrompt('');
         setSuccess('Document generated successfully!');
@@ -225,6 +232,11 @@ function AiDocs() {
   };
 
   const handleCreateManualDoc = async () => {
+    // Save current document if there are unsaved changes before creating new one
+    if (selectedDocId && hasUnsavedChanges) {
+      await handleSaveDoc();
+    }
+
     setError(null);
     setSuccess(null);
     try {
@@ -235,6 +247,8 @@ function AiDocs() {
       });
       if (data?.doc) {
         setDocs(prev => [data.doc, ...prev]);
+        // Clear unsaved changes before switching to new document
+        setHasUnsavedChanges(false);
         setSelectedDocId(data.doc.id);
         setSuccess('New document created!');
         setTimeout(() => setSuccess(null), 2000);
@@ -382,11 +396,23 @@ function AiDocs() {
     }
   }, [docTitle, docContent, originalDocTitle, originalDocContent, selectedDocId]);
 
-  // Auto-save only when there are actual changes
+  // Track the previous selectedDocId to prevent saving to wrong document
+  const prevSelectedDocIdRef = useRef(selectedDocId);
+  
+  // Auto-save only when there are actual changes and document hasn't changed
   useEffect(() => {
+    // If document changed, update the ref and don't auto-save
+    if (prevSelectedDocIdRef.current !== selectedDocId) {
+      prevSelectedDocIdRef.current = selectedDocId;
+      return;
+    }
+    
     if (activeTab === 'docs' && selectedDocId && hasUnsavedChanges && docTitle.trim() && docContent.trim()) {
       const timer = setTimeout(() => {
-        handleSaveDoc();
+        // Double-check the document ID hasn't changed before saving
+        if (prevSelectedDocIdRef.current === selectedDocId) {
+          handleSaveDoc();
+        }
       }, 2000);
       return () => clearTimeout(timer);
     }
