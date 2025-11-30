@@ -145,13 +145,15 @@ const styles = {
   container: {
     maxWidth: '1200px',
     margin: '2rem auto',
-    padding: '0 1rem',
+    padding: '2rem 1rem',
     minHeight: 'calc(100vh - 4rem)',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
     backgroundSize: '400% 400%',
     animation: 'gradientShift 15s ease infinite',
     position: 'relative',
     zIndex: 1,
+    display: 'block',
+    visibility: 'visible',
   },
   header: {
     textAlign: 'center',
