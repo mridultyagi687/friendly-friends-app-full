@@ -2,11 +2,15 @@ import axios from 'axios';
 
 // When using Vite proxy, use relative URLs (Vite will proxy /api to backend)
 // If VITE_API_URL is set, use that instead (for production builds)
+// In Electron, use localhost:5002 for backend
+const isElectron = typeof window !== 'undefined' && window.electronAPI;
 const DEFAULT_API_ORIGIN = 'https://jerilyn-nonobligated-punningly.ngrok-free.dev';
 const BASE_URL =
   import.meta.env.VITE_API_URL ||
   import.meta.env.REACT_APP_API_URL ||
-  (typeof window !== 'undefined' && window.location.origin
+  (isElectron
+    ? 'http://localhost:5002'
+    : typeof window !== 'undefined' && window.location.origin
     ? window.location.origin
     : DEFAULT_API_ORIGIN);
 
