@@ -91,7 +91,7 @@ All three services are connected via GitHub - when you push code to the `main` b
 - **Cost**: Free tier (truly unlimited storage)
 - **Connection**: Via connection string in `DATABASE_URL`
 - **Auto-deploy**: N/A (database is persistent)
-- **Limits**: None for storage and connections
+- **Limits**: None for storage and connections(can be a little slow when too many requsets on your single databse)
 
 ---
 

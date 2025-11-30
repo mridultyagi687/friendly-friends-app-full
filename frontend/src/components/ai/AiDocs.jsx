@@ -37,6 +37,20 @@ function AiDocs() {
   const [docInputFileName, setDocInputFileName] = useState('');
   const [importingDoc, setImportingDoc] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  
+  // Chat state for document editing
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [chatId, setChatId] = useState(null);
+  const chatBottomRef = useRef(null);
+  
+  // Chat state for image editing
+  const [imageChatMessages, setImageChatMessages] = useState([]);
+  const [imageChatInput, setImageChatInput] = useState('');
+  const [sendingImageMessage, setSendingImageMessage] = useState(false);
+  const [imageChatId, setImageChatId] = useState(null);
+  const imageChatBottomRef = useRef(null);
 
   const docInputRef = useRef(null);
   const downloadMenuRef = useRef(null);
@@ -109,14 +123,43 @@ function AiDocs() {
       setOriginalDocContent(selectedDoc.content);
       setHasUnsavedChanges(false);
       setSuccess(null); // Clear any success message when selecting a new doc
+      // Reset chat when switching documents
+      setChatMessages([]);
+      setChatId(null);
     } else {
       setDocTitle('');
       setDocContent('');
       setOriginalDocTitle('');
       setOriginalDocContent('');
       setHasUnsavedChanges(false);
+      setChatMessages([]);
+      setChatId(null);
     }
   }, [selectedDoc]);
+
+  useEffect(() => {
+    // Reset image chat when switching images
+    if (selectedImage) {
+      setImageChatMessages([]);
+      setImageChatId(null);
+    } else {
+      setImageChatMessages([]);
+      setImageChatId(null);
+    }
+  }, [selectedImage]);
+
+  // Scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (imageChatBottomRef.current) {
+      imageChatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [imageChatMessages]);
 
   useEffect(() => {
     if (!downloadMenuOpen) return undefined;
@@ -176,6 +219,33 @@ function AiDocs() {
       }
     } finally {
       setGeneratingDoc(false);
+    }
+  };
+
+  const handleCreateManualDoc = async () => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const { data } = await api.post('/api/ai/docs', {
+        prompt: '', // Empty prompt for manual document
+        title: 'Untitled Document',
+        content: '',
+      });
+      if (data?.doc) {
+        setDocs(prev => [data.doc, ...prev]);
+        setSelectedDocId(data.doc.id);
+        setSuccess('New document created!');
+        setTimeout(() => setSuccess(null), 2000);
+      } else {
+        setError('Failed to create document.');
+      }
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to create document. Please try again later.';
+      if (err.response?.status === 401) {
+        setError('Please log in to create documents.');
+      } else {
+        setError(message);
+      }
     }
   };
 
@@ -362,6 +432,131 @@ function AiDocs() {
       }).catch(() => {
         setError('Failed to copy document.');
       });
+    }
+  };
+
+  // Function to detect and apply document edits from AI response
+  const applyDocumentEdits = (aiResponse) => {
+    // Look for patterns like "UPDATE_DOCUMENT:" or "EDIT:" followed by JSON or structured content
+    const updatePattern = /(?:UPDATE_DOCUMENT|EDIT_DOCUMENT|APPLY_EDIT):\s*\{[\s\S]*?\}/i;
+    const match = aiResponse.match(updatePattern);
+    
+    if (match) {
+      try {
+        const editData = JSON.parse(match[0].split(':')[1].trim());
+        if (editData.title !== undefined) {
+          setDocTitle(editData.title);
+        }
+        if (editData.content !== undefined) {
+          setDocContent(editData.content);
+        }
+        setSuccess('Document updated by AI!');
+        setTimeout(() => setSuccess(null), 3000);
+        return true;
+      } catch (e) {
+        console.error('Failed to parse AI edit:', e);
+      }
+    }
+    
+    // Also check for simpler patterns like "Replace X with Y" or "Add Z to the document"
+    // This is a basic implementation - can be enhanced
+    return false;
+  };
+
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || sendingMessage || !selectedDocId) return;
+
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    setSendingMessage(true);
+    setError(null);
+
+    // Add user message to chat
+    const newUserMessage = { role: 'user', content: userMessage, id: Date.now() };
+    setChatMessages(prev => [...prev, newUserMessage]);
+
+    try {
+      // Send message with document context
+      const { data } = await api.post('/api/ai/chat', {
+        message: userMessage,
+        chat_id: chatId,
+        document_context: {
+          doc_id: selectedDocId,
+          title: docTitle,
+          content: docContent,
+        },
+      });
+
+      if (data?.messages) {
+        // Add AI response to chat
+        const aiMessage = data.messages.find(m => m.role === 'assistant');
+        if (aiMessage) {
+          setChatMessages(prev => [...prev, { ...aiMessage, id: Date.now() + 1 }]);
+          
+          // Try to apply document edits from AI response
+          applyDocumentEdits(aiMessage.content);
+        }
+        
+        // Update chat ID if this is a new chat
+        if (data.chat && !chatId) {
+          setChatId(data.chat.id);
+        }
+      }
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to send message. Please try again.';
+      setError(message);
+      // Remove the user message if sending failed
+      setChatMessages(prev => prev.filter(m => m.id !== newUserMessage.id));
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleSendImageChatMessage = async (e) => {
+    e.preventDefault();
+    if (!imageChatInput.trim() || sendingImageMessage || !selectedImage) return;
+
+    const userMessage = imageChatInput.trim();
+    setImageChatInput('');
+    setSendingImageMessage(true);
+    setError(null);
+
+    // Add user message to chat
+    const newUserMessage = { role: 'user', content: userMessage, id: Date.now() };
+    setImageChatMessages(prev => [...prev, newUserMessage]);
+
+    try {
+      // Send message with image context
+      const { data } = await api.post('/api/ai/chat', {
+        message: userMessage,
+        chat_id: imageChatId,
+        image_context: {
+          image_id: selectedImage.id,
+          title: selectedImage.title,
+          filename: selectedImage.filename,
+        },
+      });
+
+      if (data?.messages) {
+        // Add AI response to chat
+        const aiMessage = data.messages.find(m => m.role === 'assistant');
+        if (aiMessage) {
+          setImageChatMessages(prev => [...prev, { ...aiMessage, id: Date.now() + 1 }]);
+        }
+        
+        // Update chat ID if this is a new chat
+        if (data.chat && !imageChatId) {
+          setImageChatId(data.chat.id);
+        }
+      }
+    } catch (err) {
+      const message = err.response?.data?.error || 'Failed to send message. Please try again.';
+      setError(message);
+      // Remove the user message if sending failed
+      setImageChatMessages(prev => prev.filter(m => m.id !== newUserMessage.id));
+    } finally {
+      setSendingImageMessage(false);
     }
   };
 
@@ -636,6 +831,16 @@ function AiDocs() {
                 >
                   {generatingDoc ? 'Generating…' : 'Generate Document'}
                 </button>
+                <button
+                  type="button"
+                  onClick={handleCreateManualDoc}
+                  style={{
+                    ...styles.submitButton,
+                    ...styles.manualDocButton,
+                  }}
+                >
+                  📝 Create Manual Document
+                </button>
               </div>
             </form>
           </div>
@@ -712,80 +917,134 @@ function AiDocs() {
 
           <div style={{ ...styles.panel, gridColumn: '1 / span 2', minHeight: '500px' }}>
             {selectedDoc ? (
-              <>
-                <div style={styles.editorHeader}>
-                  <input
-                    style={styles.input}
-                    value={docTitle}
-                    onChange={(e) => setDocTitle(e.target.value)}
-                    placeholder="Document title"
-                  />
-                  <div style={styles.editorActions}>
-                    <button
-                      onClick={handleCopyDoc}
-                      style={styles.actionButton}
-                      title="Copy to clipboard"
-                    >
-                      📋 Copy
-                    </button>
-                    <div style={styles.downloadMenuWrapper} ref={downloadMenuRef}>
+              <div style={styles.editorContainer}>
+                <div style={styles.editorMain}>
+                  <div style={styles.editorHeader}>
+                    <input
+                      style={styles.input}
+                      value={docTitle}
+                      onChange={(e) => setDocTitle(e.target.value)}
+                      placeholder="Document title"
+                    />
+                    <div style={styles.editorActions}>
                       <button
-                        onClick={() => setDownloadMenuOpen((prev) => !prev)}
-                        style={styles.downloadButton}
-                        title="Download document"
-                        type="button"
+                        onClick={handleCopyDoc}
+                        style={styles.actionButton}
+                        title="Copy to clipboard"
                       >
-                        ⬇️ Download
+                        📋 Copy
                       </button>
-                      {downloadMenuOpen && (
-                        <div style={styles.formatMenu}>
-                          <div style={styles.formatMenuTitle}>Choose format</div>
-                          <button
-                            type="button"
-                            style={styles.formatMenuButton}
-                            onClick={() => handleDownloadDoc('txt')}
-                          >
-                            Plain text (.txt)
-                          </button>
-                          <button
-                            type="button"
-                            style={styles.formatMenuButton}
-                            onClick={() => handleDownloadDoc('docx')}
-                          >
-                            Word (.docx)
-                          </button>
-                          <button
-                            type="button"
-                            style={styles.formatMenuButton}
-                            onClick={() => handleDownloadDoc('pdf')}
-                          >
-                            PDF (.pdf)
-                          </button>
-                        </div>
-                      )}
+                      <div style={styles.downloadMenuWrapper} ref={downloadMenuRef}>
+                        <button
+                          onClick={() => setDownloadMenuOpen((prev) => !prev)}
+                          style={styles.downloadButton}
+                          title="Download document"
+                          type="button"
+                        >
+                          ⬇️ Download
+                        </button>
+                        {downloadMenuOpen && (
+                          <div style={styles.formatMenu}>
+                            <div style={styles.formatMenuTitle}>Choose format</div>
+                            <button
+                              type="button"
+                              style={styles.formatMenuButton}
+                              onClick={() => handleDownloadDoc('txt')}
+                            >
+                              Plain text (.txt)
+                            </button>
+                            <button
+                              type="button"
+                              style={styles.formatMenuButton}
+                              onClick={() => handleDownloadDoc('docx')}
+                            >
+                              Word (.docx)
+                            </button>
+                            <button
+                              type="button"
+                              style={styles.formatMenuButton}
+                              onClick={() => handleDownloadDoc('pdf')}
+                            >
+                              PDF (.pdf)
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleDeleteDoc}
+                        style={styles.deleteButton}
+                        title="Delete document"
+                      >
+                        🗑️ Delete
+                      </button>
                     </div>
+                  </div>
+                  <div style={styles.editorBody}>
+                    <textarea
+                      style={styles.documentTextarea}
+                      value={docContent}
+                      onChange={(e) => setDocContent(e.target.value)}
+                      placeholder="Document content..."
+                      rows={20}
+                    />
+                    <div style={styles.statusText}>
+                      {savingDoc ? 'Saving changes…' : hasUnsavedChanges ? 'Unsaved changes - saving automatically...' : 'All changes saved'}
+                    </div>
+                  </div>
+                </div>
+                <div style={styles.chatSidebar}>
+                  <div style={styles.chatHeader}>
+                    <h3 style={styles.chatTitle}>💬 AI Editor</h3>
+                    <p style={styles.chatSubtitle}>Edit your document with AI</p>
+                  </div>
+                  <div style={styles.chatMessages}>
+                    {chatMessages.length === 0 ? (
+                      <div style={styles.chatEmpty}>
+                        <p>Start a conversation to edit your document with AI.</p>
+                        <p style={styles.chatHint}>Try: "Make the introduction more engaging" or "Add a conclusion paragraph"</p>
+                      </div>
+                    ) : (
+                      chatMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          style={{
+                            ...styles.chatMessage,
+                            ...(msg.role === 'user' ? styles.chatMessageUser : styles.chatMessageAssistant),
+                          }}
+                        >
+                          <div style={styles.chatMessageContent}>{msg.content}</div>
+                        </div>
+                      ))
+                    )}
+                    {sendingMessage && (
+                      <div style={styles.chatMessageAssistant}>
+                        <div style={styles.chatMessageContent}>Thinking...</div>
+                      </div>
+                    )}
+                    <div ref={chatBottomRef} />
+                  </div>
+                  <form style={styles.chatInputForm} onSubmit={handleSendChatMessage}>
+                    <textarea
+                      style={styles.chatInput}
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="Ask AI to edit your document..."
+                      rows={3}
+                      disabled={sendingMessage}
+                    />
                     <button
-                      onClick={handleDeleteDoc}
-                      style={styles.deleteButton}
-                      title="Delete document"
+                      type="submit"
+                      style={{
+                        ...styles.chatSendButton,
+                        ...(sendingMessage || !chatInput.trim() ? styles.chatSendButtonDisabled : {}),
+                      }}
+                      disabled={sendingMessage || !chatInput.trim()}
                     >
-                      🗑️ Delete
+                      {sendingMessage ? 'Sending...' : 'Send'}
                     </button>
-                  </div>
+                  </form>
                 </div>
-                <div style={styles.editorBody}>
-                  <textarea
-                    style={styles.documentTextarea}
-                    value={docContent}
-                    onChange={(e) => setDocContent(e.target.value)}
-                    placeholder="Document content..."
-                    rows={20}
-                  />
-                  <div style={styles.statusText}>
-                    {savingDoc ? 'Saving changes…' : hasUnsavedChanges ? 'Unsaved changes - saving automatically...' : 'All changes saved'}
-                  </div>
-                </div>
-              </>
+              </div>
             ) : (
               <div style={styles.emptyState}>
                 <span style={styles.emptyIcon}>📄</span>
@@ -868,42 +1127,96 @@ function AiDocs() {
 
           <div style={{ ...styles.panel, gridColumn: '1 / span 2', minHeight: '500px' }}>
             {selectedImage ? (
-              <>
-                <div style={styles.editorHeader}>
-                  <div style={styles.imageTitle}>{selectedImage.title || 'Untitled image'}</div>
-                  <div style={styles.editorActions}>
-                    <button
-                      onClick={handleDownloadImage}
-                      style={styles.downloadButton}
-                      title="Download image"
-                    >
-                      ⬇️ Download JPEG
-                    </button>
-                    <button
-                      onClick={handleDeleteImage}
-                      style={styles.deleteButton}
-                      title="Delete image"
-                    >
-                      🗑️ Delete
-                    </button>
+              <div style={styles.editorContainer}>
+                <div style={styles.editorMain}>
+                  <div style={styles.editorHeader}>
+                    <div style={styles.imageTitle}>{selectedImage.title || 'Untitled image'}</div>
+                    <div style={styles.editorActions}>
+                      <button
+                        onClick={handleDownloadImage}
+                        style={styles.downloadButton}
+                        title="Download image"
+                      >
+                        ⬇️ Download JPEG
+                      </button>
+                      <button
+                        onClick={handleDeleteImage}
+                        style={styles.deleteButton}
+                        title="Delete image"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div style={styles.imageViewer}>
+                    <img
+                      src={getImageUrl(selectedImage.filename)}
+                      alt={selectedImage.title}
+                      style={styles.imageFull}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                    {selectedImage.prompt && (
+                      <div style={styles.imagePrompt}>
+                        <strong>Prompt:</strong> {selectedImage.prompt}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div style={styles.imageViewer}>
-                  <img
-                    src={getImageUrl(selectedImage.filename)}
-                    alt={selectedImage.title}
-                    style={styles.imageFull}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                  {selectedImage.prompt && (
-                    <div style={styles.imagePrompt}>
-                      <strong>Prompt:</strong> {selectedImage.prompt}
-                    </div>
-                  )}
+                <div style={styles.chatSidebar}>
+                  <div style={styles.chatHeader}>
+                    <h3 style={styles.chatTitle}>💬 AI Assistant</h3>
+                    <p style={styles.chatSubtitle}>Ask questions about your image</p>
+                  </div>
+                  <div style={styles.chatMessages}>
+                    {imageChatMessages.length === 0 ? (
+                      <div style={styles.chatEmpty}>
+                        <p>Start a conversation about your image.</p>
+                        <p style={styles.chatHint}>Try: "Describe this image" or "What improvements could be made?"</p>
+                      </div>
+                    ) : (
+                      imageChatMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          style={{
+                            ...styles.chatMessage,
+                            ...(msg.role === 'user' ? styles.chatMessageUser : styles.chatMessageAssistant),
+                          }}
+                        >
+                          <div style={styles.chatMessageContent}>{msg.content}</div>
+                        </div>
+                      ))
+                    )}
+                    {sendingImageMessage && (
+                      <div style={styles.chatMessageAssistant}>
+                        <div style={styles.chatMessageContent}>Thinking...</div>
+                      </div>
+                    )}
+                    <div ref={imageChatBottomRef} />
+                  </div>
+                  <form style={styles.chatInputForm} onSubmit={handleSendImageChatMessage}>
+                    <textarea
+                      style={styles.chatInput}
+                      value={imageChatInput}
+                      onChange={(e) => setImageChatInput(e.target.value)}
+                      placeholder="Ask AI about your image..."
+                      rows={3}
+                      disabled={sendingImageMessage}
+                    />
+                    <button
+                      type="submit"
+                      style={{
+                        ...styles.chatSendButton,
+                        ...(sendingImageMessage || !imageChatInput.trim() ? styles.chatSendButtonDisabled : {}),
+                      }}
+                      disabled={sendingImageMessage || !imageChatInput.trim()}
+                    >
+                      {sendingImageMessage ? 'Sending...' : 'Send'}
+                    </button>
+                  </form>
                 </div>
-              </>
+              </div>
             ) : (
               <div style={styles.emptyState}>
                 <span style={styles.emptyIcon}>🖼️</span>
@@ -1154,6 +1467,9 @@ const styles = {
     boxShadow: 'none',
     background: 'linear-gradient(135deg, #94a3b8 0%, #757575 100%)',
   },
+  manualDocButton: {
+    background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
+  },
   list: {
     flex: 1,
     overflowY: 'auto',
@@ -1383,6 +1699,120 @@ const styles = {
     fontSize: '3rem',
     display: 'block',
     marginBottom: '1rem',
+  },
+  editorContainer: {
+    display: 'flex',
+    flexDirection: 'row',
+    height: '100%',
+    minHeight: '500px',
+  },
+  editorMain: {
+    flex: '1 1 60%',
+    display: 'flex',
+    flexDirection: 'column',
+    borderRight: '1px solid rgba(102, 126, 234, 0.2)',
+  },
+  chatSidebar: {
+    flex: '1 1 40%',
+    display: 'flex',
+    flexDirection: 'column',
+    background: 'rgba(102, 126, 234, 0.05)',
+    minWidth: '300px',
+  },
+  chatHeader: {
+    padding: '1rem 1.25rem',
+    borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
+    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+  },
+  chatTitle: {
+    margin: 0,
+    fontSize: '1.1rem',
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  chatSubtitle: {
+    margin: '0.25rem 0 0 0',
+    fontSize: '0.85rem',
+    color: '#64748b',
+  },
+  chatMessages: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '1rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+  },
+  chatEmpty: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+    textAlign: 'center',
+    color: '#94a3b8',
+  },
+  chatHint: {
+    marginTop: '0.5rem',
+    fontSize: '0.85rem',
+    fontStyle: 'italic',
+  },
+  chatMessage: {
+    display: 'flex',
+    flexDirection: 'column',
+    maxWidth: '85%',
+  },
+  chatMessageUser: {
+    alignSelf: 'flex-end',
+  },
+  chatMessageAssistant: {
+    alignSelf: 'flex-start',
+  },
+  chatMessageContent: {
+    padding: '0.75rem 1rem',
+    borderRadius: '12px',
+    fontSize: '0.9rem',
+    lineHeight: 1.5,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  },
+  chatInputForm: {
+    padding: '1rem',
+    borderTop: '1px solid rgba(102, 126, 234, 0.2)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+    background: 'rgba(255, 255, 255, 0.5)',
+  },
+  chatInput: {
+    width: '100%',
+    borderRadius: '10px',
+    border: '2px solid rgba(102, 126, 234, 0.3)',
+    padding: '0.75rem',
+    fontSize: '0.9rem',
+    background: '#ffffff',
+    color: '#1f2937',
+    resize: 'vertical',
+    fontFamily: 'inherit',
+  },
+  chatSendButton: {
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: '#ffffff',
+    border: 'none',
+    padding: '0.65rem 1.5rem',
+    borderRadius: '8px',
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+    transition: 'all 0.3s ease',
+    alignSelf: 'flex-end',
+  },
+  chatSendButtonDisabled: {
+    backgroundColor: '#94a3b8',
+    cursor: 'not-allowed',
+    boxShadow: 'none',
   },
 };
 

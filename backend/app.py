@@ -2259,10 +2259,53 @@ def send_ai_message():
         training_snippets = gather_training_context(message_content)
         search_snippets = search_external_sources(message_content)
 
+        # Check for document or image context
+        document_context = data.get("document_context")
+        image_context = data.get("image_context")
         system_prompt = "You are Friendly Friends AI, a warm, concise companion."
-        messages_payload = [
-            {"role": "user", "content": message_content},
-        ]
+        
+        # If document context is provided, modify system prompt and add document info
+        if document_context:
+            doc_id = document_context.get("doc_id")
+            doc_title = document_context.get("title", "")
+            doc_content = document_context.get("content", "")
+            
+            system_prompt = (
+                "You are Friendly Friends AI, a warm, concise companion. "
+                "You are currently helping the user edit a document. "
+                "When the user asks you to edit the document, you can provide the updated content in a special format: "
+                "UPDATE_DOCUMENT: {\"title\": \"New Title\", \"content\": \"New Content\"} "
+                "If you want to update only the content, you can use: UPDATE_DOCUMENT: {\"content\": \"New Content\"}. "
+                "Always provide helpful explanations along with any edits you make."
+            )
+            
+            # Add document context to the message
+            enhanced_message = f"Current Document:\nTitle: {doc_title}\n\nContent:\n{doc_content}\n\n---\n\nUser Request: {message_content}"
+            messages_payload = [
+                {"role": "user", "content": enhanced_message},
+            ]
+        elif image_context:
+            image_id = image_context.get("image_id")
+            image_title = image_context.get("title", "")
+            image_filename = image_context.get("filename", "")
+            
+            system_prompt = (
+                "You are Friendly Friends AI, a warm, concise companion. "
+                "You are currently helping the user with an image. "
+                "The user can ask you questions about the image, request edits, or get suggestions. "
+                "Be helpful and descriptive when discussing images."
+            )
+            
+            # Add image context to the message
+            enhanced_message = f"Current Image:\nTitle: {image_title}\nFilename: {image_filename}\n\n---\n\nUser Request: {message_content}"
+            messages_payload = [
+                {"role": "user", "content": enhanced_message},
+            ]
+        else:
+            messages_payload = [
+                {"role": "user", "content": message_content},
+            ]
+        
         context_parts = []
         if training_snippets:
             context_parts.append("Training:\n" + "\n".join(training_snippets))
@@ -2306,8 +2349,24 @@ def generate_ai_doc():
     user = current_user()
     data = ensure_json_request()
     prompt = data.get("prompt", "").strip()
+    title = data.get("title", "").strip()
+    content = data.get("content", "").strip()
+    
+    # Allow manual document creation (empty prompt)
+    if not prompt and not title and not content:
+        # Create empty manual document
+        doc = AIDoc(
+            owner_id=user.id,
+            title=title or "Untitled Document",
+            content=content or "",
+            prompt="Manual document",
+        )
+        db.session.add(doc)
+        db.session.commit()
+        return jsonify({"doc": doc.to_dict()})
+    
     if not prompt:
-        return jsonify({"error": "Prompt is required"}), 400
+        return jsonify({"error": "Prompt is required for AI-generated documents"}), 400
 
     instructions = (
         "You are Friendly Friends AI, create a helpful document for the user."
@@ -3199,6 +3258,67 @@ def get_ai_image(image_id: int):
         return jsonify({"error": "Image not found"}), 404
     return jsonify(ai_image.to_dict())
 
+
+@app.post("/api/ai/images/upload")
+@login_required
+def upload_ai_image():
+    """Upload an image file to My Images."""
+    user = current_user()
+    if 'image' not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
+    
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({"error": "No file selected"}), 400
+    
+    title = request.form.get('title', 'Untitled Image').strip()[:255]
+    prompt = request.form.get('prompt', '').strip()
+    
+    try:
+        # Generate filename
+        filename = secure_filename(file.filename)
+        if not filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+            filename = f"{filename}.jpeg"
+        
+        # Add unique identifier
+        unique_filename = f"{uuid.uuid4().hex[:8]}_{filename}"
+        filepath = os.path.join(AI_IMAGE_DIR, unique_filename)
+        
+        # Save file
+        file.save(filepath)
+        
+        # Convert to JPEG if needed
+        from PIL import Image
+        img = Image.open(filepath)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            img = background
+        
+        # Save as JPEG
+        if not unique_filename.lower().endswith('.jpeg'):
+            unique_filename = f"{os.path.splitext(unique_filename)[0]}.jpeg"
+            filepath = os.path.join(AI_IMAGE_DIR, unique_filename)
+        
+        img.save(filepath, 'JPEG', quality=95)
+        
+        # Save to database
+        ai_image = AIImage(
+            owner_id=user.id,
+            title=title,
+            filename=unique_filename,
+            prompt=prompt or f"Uploaded image: {title}",
+        )
+        db.session.add(ai_image)
+        db.session.commit()
+        
+        return jsonify({"message": "Image uploaded", "image": ai_image.to_dict()})
+    except Exception as e:
+        logger.exception(f"Error uploading image: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to upload image. Please try again."}), 500
 
 @app.delete("/api/ai/images/<int:image_id>")
 @login_required

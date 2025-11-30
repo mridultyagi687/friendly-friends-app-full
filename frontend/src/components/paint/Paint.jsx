@@ -129,6 +129,52 @@ function Paint() {
     }
   };
 
+  const savePaintingAsImage = async () => {
+    if (!canvas || !title.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      // Get canvas element and convert to image
+      const canvasElement = canvas.canvas.drawing;
+      if (!canvasElement) {
+        setError('Canvas not ready');
+        return;
+      }
+      
+      // Convert canvas to blob
+      canvasElement.toBlob(async (blob) => {
+        try {
+          const formData = new FormData();
+          formData.append('image', blob, `${title.trim()}.jpeg`);
+          formData.append('title', title.trim());
+          formData.append('prompt', `Painting: ${title.trim()}`);
+          
+          const response = await api.post('/api/ai/images/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          
+          if (response.data?.image) {
+            setError(null);
+            alert('Painting saved to My Images!');
+            setTitle('');
+            canvas.clear();
+          } else {
+            setError('Failed to save image');
+          }
+        } catch (err) {
+          console.error('Failed to save painting as image:', err);
+          setError('Failed to save painting as image');
+        } finally {
+          setSaving(false);
+        }
+      }, 'image/jpeg', 0.95);
+    } catch (err) {
+      console.error('Failed to convert painting to image:', err);
+      setError('Failed to convert painting to image');
+      setSaving(false);
+    }
+  };
+
   const deletePainting = async (paintingId) => {
     const ok = window.confirm('Delete this painting?');
     if (!ok) return;
@@ -342,6 +388,9 @@ function Paint() {
           />
           <button onClick={savePainting} style={styles.saveButton} disabled={saving}>
             {saving ? 'Saving...' : 'Save Painting'}
+          </button>
+          <button onClick={savePaintingAsImage} style={styles.saveImageButton} disabled={saving}>
+            {saving ? 'Saving...' : '💾 Save to My Images'}
           </button>
           <button onClick={() => {
             canvas?.clear();
@@ -574,6 +623,18 @@ const styles = {
     border: '1px solid #ddd',
     borderRadius: '4px',
     width: '300px',
+  },
+  saveImageButton: {
+    padding: '0.75rem 1.5rem',
+    backgroundColor: '#667eea',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '1rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+    transition: 'all 0.3s ease',
   },
   saveButton: {
     padding: '0.875rem 1.75rem',

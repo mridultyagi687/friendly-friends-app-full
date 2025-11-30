@@ -135,7 +135,7 @@ Complete step-by-step guide to deploy with Render (backend) + Neon (database).
      **Value**: `true`
    
    - **Key**: `FRONTEND_URL`  
-     **Value**: `https://mridultyagi687.github.io/friendly-friends-app-full`
+     **Value**: `giturl`
 
 5. **Generate Secret Key**:
    - **Key**: `FLASK_SECRET_KEY`
@@ -147,7 +147,7 @@ Complete step-by-step guide to deploy with Render (backend) + Neon (database).
    - Click **"Save Changes"**
 
 6. **Add OpenAI Key** (if using AI features):
-   - **Key**: `OPENAI_API_KEY`
+   - **Key**: ``
    - **Value**: Your OpenAI API key (if you have one)
    - Click **"Save Changes"**
 
