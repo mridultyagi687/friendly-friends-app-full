@@ -102,6 +102,76 @@ input::placeholder, textarea::placeholder {
   color: rgba(255, 255, 255, 0.4) !important;
 }
 
+/* Fix text color on white/light backgrounds - ensure dark text */
+[style*="background"][style*="255, 255, 255"],
+[style*="background"][style*="#fff"],
+[style*="background"][style*="white"],
+[style*="backgroundColor"][style*="255, 255, 255"],
+[style*="backgroundColor"][style*="#fff"],
+[style*="backgroundColor"][style*="white"] {
+  color: #000000 !important;
+}
+
+/* Fix text color for elements with white background classes or inline styles */
+div[style*="background"][style*="255, 255, 255"],
+div[style*="background"][style*="#fff"],
+div[style*="background"][style*="white"],
+div[style*="backgroundColor"][style*="255, 255, 255"],
+div[style*="backgroundColor"][style*="#fff"],
+div[style*="backgroundColor"][style*="white"],
+section[style*="background"][style*="255, 255, 255"],
+section[style*="background"][style*="#fff"],
+section[style*="background"][style*="white"],
+article[style*="background"][style*="255, 255, 255"],
+article[style*="background"][style*="#fff"],
+article[style*="background"][style*="white"] {
+  color: #1f2937 !important;
+}
+
+/* Ensure headings and text in white backgrounds are dark */
+div[style*="background"][style*="255, 255, 255"] h1,
+div[style*="background"][style*="255, 255, 255"] h2,
+div[style*="background"][style*="255, 255, 255"] h3,
+div[style*="background"][style*="255, 255, 255"] h4,
+div[style*="background"][style*="255, 255, 255"] h5,
+div[style*="background"][style*="255, 255, 255"] h6,
+div[style*="background"][style*="255, 255, 255"] p,
+div[style*="background"][style*="255, 255, 255"] span,
+div[style*="background"][style*="255, 255, 255"] div,
+div[style*="background"][style*="255, 255, 255"] label,
+div[style*="background"][style*="#fff"] h1,
+div[style*="background"][style*="#fff"] h2,
+div[style*="background"][style*="#fff"] h3,
+div[style*="background"][style*="#fff"] h4,
+div[style*="background"][style*="#fff"] h5,
+div[style*="background"][style*="#fff"] h6,
+div[style*="background"][style*="#fff"] p,
+div[style*="background"][style*="#fff"] span,
+div[style*="background"][style*="#fff"] div,
+div[style*="background"][style*="#fff"] label {
+  color: #1f2937 !important;
+}
+
+/* Fix for rgba white backgrounds */
+div[style*="rgba(255, 255, 255"],
+section[style*="rgba(255, 255, 255"],
+article[style*="rgba(255, 255, 255"] {
+  color: #1f2937 !important;
+}
+
+div[style*="rgba(255, 255, 255"] h1,
+div[style*="rgba(255, 255, 255"] h2,
+div[style*="rgba(255, 255, 255"] h3,
+div[style*="rgba(255, 255, 255"] h4,
+div[style*="rgba(255, 255, 255"] h5,
+div[style*="rgba(255, 255, 255"] h6,
+div[style*="rgba(255, 255, 255"] p,
+div[style*="rgba(255, 255, 255"] span,
+div[style*="rgba(255, 255, 255"] div,
+div[style*="rgba(255, 255, 255"] label {
+  color: #1f2937 !important;
+}
+
 /* Mobile responsive styles */
 @media (max-width: 768px) {
   body {

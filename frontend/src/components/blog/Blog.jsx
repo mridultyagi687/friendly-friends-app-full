@@ -444,6 +444,7 @@ const styles = {
     marginBottom: '2rem', 
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   formTitle: { 
     marginTop: 0, 

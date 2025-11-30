@@ -668,6 +668,7 @@ const styles = {
     padding: '2rem',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   subtitle: {
     color: '#333',
@@ -687,6 +688,7 @@ const styles = {
     overflow: 'hidden',
     transition: 'all 0.3s ease',
     border: '1px solid rgba(102, 126, 234, 0.4)',
+    color: '#1f2937', // Dark text on white background
   },
   paintingThumbnail: {
     cursor: 'pointer',
@@ -751,6 +753,7 @@ const styles = {
     flexDirection: 'column',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   modalHeader: {
     padding: '1rem',

@@ -736,6 +736,7 @@ const styles = {
     textAlign: 'center',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   header: {
     display: 'flex',
@@ -824,6 +825,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
+    color: '#1f2937', // Dark text on white background
   },
   sidebarTitle: {
     fontSize: '1.25rem', // Default, overridden inline

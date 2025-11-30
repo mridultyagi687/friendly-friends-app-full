@@ -1248,6 +1248,7 @@ const styles = {
     textAlign: 'center',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   header: {
     display: 'flex',
@@ -1348,6 +1349,7 @@ const styles = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
+    color: '#1f2937', // Dark text on white background
   },
   panelHeader: {
     padding: '1.25rem 1.5rem',
@@ -1784,6 +1786,7 @@ const styles = {
     flexDirection: 'column',
     gap: '0.75rem',
     background: 'rgba(255, 255, 255, 0.5)',
+    color: '#1f2937', // Dark text on white background
   },
   chatInput: {
     width: '100%',

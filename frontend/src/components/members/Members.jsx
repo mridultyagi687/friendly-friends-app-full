@@ -157,6 +157,7 @@ const styles = {
     textAlign: 'center',
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   title: {
     fontSize: '2.5rem',
@@ -201,6 +202,7 @@ const styles = {
     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
     padding: '2rem',
     border: '1px solid rgba(102, 126, 234, 0.3)',
+    color: '#1f2937', // Dark text on white background
   },
   emptyState: {
     textAlign: 'center',
@@ -236,6 +238,7 @@ const styles = {
     border: '1px solid #f0f0f0',
     transition: 'all 0.2s ease',
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+    color: '#1f2937', // Dark text on white background
   },
   cell: {
     padding: '0 0.5rem',
