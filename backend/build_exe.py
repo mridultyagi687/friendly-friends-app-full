@@ -44,6 +44,7 @@ a = Analysis(
         'psycopg2',
         'PyPDF2',
         'docx',
+        'pkg_resources.py2_warn',
     ],
     hookspath=[],
     hooksconfig={},
