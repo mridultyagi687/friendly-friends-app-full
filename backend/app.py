@@ -22,7 +22,7 @@ from flask import (
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
-from sqlalchemy import text
+from sqlalchemy import text, true
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -2417,10 +2417,6 @@ def import_ai_doc():
 
     if extension == ".doc":
         return jsonify({"error": "Legacy .doc files are not supported. Please convert the document to .docx first."}), 400
-
-    if extension not in ALLOWED_DOC_IMPORT_EXTENSIONS:
-        allowed_display = ", ".join(sorted(ALLOWED_DOC_IMPORT_EXTENSIONS))
-        return jsonify({"error": f"Unsupported file type. Allowed types: {allowed_display}"}), 400
 
     file_bytes = uploaded_file.read()
     file_size = len(file_bytes)

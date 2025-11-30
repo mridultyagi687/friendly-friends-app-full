@@ -595,7 +595,6 @@ function AiDocs() {
                   <input
                     ref={docInputRef}
                     type="file"
-                    accept=".pdf,.docx,.txt,.md,.markdown,.rtf"
                     onChange={handleDocInputChange}
                     style={styles.hiddenFileInput}
                   />
