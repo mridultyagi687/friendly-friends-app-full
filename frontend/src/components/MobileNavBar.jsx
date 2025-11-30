@@ -267,6 +267,13 @@ function MobileNavBar() {
               🔬 Live Research
             </Link>
             <Link 
+              to="/research-data" 
+              style={menuLinkStyle(isActive('/research-data'))}
+              onClick={() => setShowMenu(false)}
+            >
+              📊 Research Data
+            </Link>
+            <Link 
               to="/reminders" 
               style={menuLinkStyle(isActive('/reminders'))}
               onClick={() => setShowMenu(false)}
