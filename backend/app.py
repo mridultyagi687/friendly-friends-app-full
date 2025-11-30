@@ -2783,9 +2783,9 @@ def get_research(research_id: int):
 
 
 @app.put("/api/research/<int:research_id>")
-@admin_required
+@login_required
 def update_research(research_id: int):
-    """Update research (admin only) - can mark as completed and add results."""
+    """Update research - creator can mark as completed, admins can update anything."""
     user = current_user()
     data = ensure_json_request()
     
@@ -2794,20 +2794,31 @@ def update_research(research_id: int):
         if not research:
             return jsonify({"error": "Research not found"}), 404
         
-        if "title" in data:
-            research.title = data["title"].strip()
-        if "description" in data:
-            research.description = data["description"].strip()
+        # Check if user is creator or admin
+        is_creator = research.created_by == user.id
+        if not user.is_admin and not is_creator:
+            return jsonify({"error": "Only the research creator or admin can update research"}), 403
+        
+        # Only admins can update title and description
+        if user.is_admin:
+            if "title" in data:
+                research.title = data["title"].strip()
+            if "description" in data:
+                research.description = data["description"].strip()
+        
+        # Creator and admin can mark as completed
         if "status" in data:
             research.status = data["status"]
             if data["status"] == "completed" and not research.completed_at:
                 research.completed_at = datetime.utcnow()
-        if "results" in data:
+        
+        # Only admins can set results directly
+        if "results" in data and user.is_admin:
             research.results = data["results"]
         
         db.session.commit()
         
-        logger.info(f"Admin {user.id} updated research {research_id}")
+        logger.info(f"User {user.id} updated research {research_id}")
         return jsonify({"message": "Research updated successfully", "research": research.to_dict()})
     except Exception as e:
         logger.exception(f"Error updating research: {e}")
@@ -2853,7 +2864,7 @@ def participate_in_research(research_id: int):
 @app.get("/api/research/<int:research_id>/submissions")
 @login_required
 def get_research_submissions(research_id: int):
-    """Get submissions for a research - participants can see their own, admins can see all."""
+    """Get submissions for a research - participants see their own, creator/admin see all with user info."""
     try:
         user = current_user()
         if not user:
@@ -2863,32 +2874,43 @@ def get_research_submissions(research_id: int):
         if not research:
             return jsonify({"error": "Research not found"}), 404
         
-        # Check if user is participant or admin
+        # Check if user is creator, participant, or admin
+        is_creator = research.created_by == user.id
         is_participant = db.session.query(ResearchParticipant).filter_by(
             user_id=user.id, research_id=research_id
         ).first() is not None
         
-        if not user.is_admin and not is_participant:
+        if not user.is_admin and not is_participant and not is_creator:
             return jsonify({"error": "Access denied"}), 403
         
-        # Get submissions - participants see only their own, admins see all
-        if user.is_admin:
+        # Get submissions - creator/admin see all with user info, participants see only their own
+        if user.is_admin or is_creator:
             submissions = db.session.query(ResearchSubmission).filter_by(
                 research_id=research_id
             ).order_by(ResearchSubmission.created_at.desc()).all()
+            # Include user information for creator/admin
+            submissions_list = []
+            for s in submissions:
+                sub_dict = s.to_dict(include_photos=True)
+                # Get user info
+                submission_user = db.session.get(User, s.user_id)
+                if submission_user:
+                    sub_dict["user"] = {
+                        "id": submission_user.id,
+                        "username": submission_user.username,
+                        "email": submission_user.email,
+                    }
+                submissions_list.append(sub_dict)
         else:
             submissions = db.session.query(ResearchSubmission).filter_by(
                 research_id=research_id, user_id=user.id
             ).order_by(ResearchSubmission.created_at.desc()).all()
+            submissions_list = [s.to_dict(include_photos=True) for s in submissions]
         
-        submissions_list = [s.to_dict(include_photos=True) for s in submissions]
         return jsonify({"submissions": submissions_list})
     except Exception as e:
         logger.exception(f"Error in /api/research/{research_id}/submissions: {e}")
         db.session.rollback()
-        return jsonify({"error": "Failed to load submissions"}), 500
-    except Exception as e:
-        logger.exception(f"Error getting submissions: {e}")
         return jsonify({"error": "Failed to load submissions"}), 500
 
 

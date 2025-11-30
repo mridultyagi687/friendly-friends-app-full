@@ -16,6 +16,7 @@ function ResearchViewer() {
   const [textContent, setTextContent] = useState('');
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [photoPreviews, setPhotoPreviews] = useState([]);
+  const [markingFinished, setMarkingFinished] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -76,6 +77,28 @@ function ResearchViewer() {
   const removePhoto = (index) => {
     setSelectedPhotos(prev => prev.filter((_, i) => i !== index));
     setPhotoPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMarkFinished = async () => {
+    if (!window.confirm('Are you sure you want to mark this research as finished? This will block new participants and submissions.')) {
+      return;
+    }
+
+    setMarkingFinished(true);
+    setError(null);
+
+    try {
+      await api.put(`/api/research/${researchId}`, {
+        status: 'completed',
+      });
+
+      await fetchResearch();
+      setError(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to mark research as finished');
+    } finally {
+      setMarkingFinished(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -148,6 +171,8 @@ function ResearchViewer() {
   const isActive = research.status === 'active';
   const canParticipate = isActive && !research.is_participant;
   const canSubmit = isActive && research.is_participant;
+  const isCreator = user && research.created_by === user.id;
+  const canMarkFinished = isCreator && isActive;
 
   return (
     <div style={styles.container}>
@@ -178,6 +203,22 @@ function ResearchViewer() {
           <span style={styles.errorIcon}>⚠️</span>
           {error}
         </div>
+      )}
+
+      {canMarkFinished && (
+        <section style={styles.creatorSection}>
+          <h2 style={styles.sectionTitle}>🔧 Research Management</h2>
+          <p style={styles.creatorText}>
+            As the research creator, you can mark this research as finished. This will block new participants and submissions.
+          </p>
+          <button 
+            style={styles.finishButton} 
+            onClick={handleMarkFinished}
+            disabled={markingFinished}
+          >
+            {markingFinished ? 'Marking as Finished...' : '✅ Mark as Finished'}
+          </button>
+        </section>
       )}
 
       {research.results && (
@@ -260,15 +301,25 @@ function ResearchViewer() {
       {submissions.length > 0 && (
         <section style={styles.submissionsSection}>
           <h2 style={styles.sectionTitle}>
-            {user.is_admin ? 'All Submissions' : 'Your Submissions'}
+            {isCreator || user.is_admin ? 'All Submissions' : 'Your Submissions'}
+            {isCreator && research.status === 'completed' && (
+              <span style={styles.submissionCount}> ({submissions.length} total)</span>
+            )}
           </h2>
           <div style={styles.submissionsList}>
             {submissions.map((submission) => (
               <div key={submission.id} style={styles.submissionCard}>
                 <div style={styles.submissionHeader}>
-                  <span style={styles.submissionDate}>
-                    {new Date(submission.created_at).toLocaleString()}
-                  </span>
+                  <div style={styles.submissionHeaderLeft}>
+                    <span style={styles.submissionDate}>
+                      {new Date(submission.created_at).toLocaleString()}
+                    </span>
+                    {(isCreator || user.is_admin) && submission.user && (
+                      <span style={styles.submissionUser}>
+                        👤 {submission.user.username} ({submission.user.email})
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p style={styles.submissionText}>{submission.text_content}</p>
                 {submission.photos && submission.photos.length > 0 && (
@@ -570,6 +621,48 @@ const styles = {
   promptText: {
     fontSize: '1.1rem',
     color: '#666',
+  },
+  creatorSection: {
+    background: 'rgba(255, 255, 255, 0.95)',
+    backdropFilter: 'blur(10px)',
+    borderRadius: '20px',
+    padding: '2rem',
+    marginBottom: '2rem',
+    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+    border: '2px solid rgba(102, 126, 234, 0.3)',
+  },
+  creatorText: {
+    fontSize: '1rem',
+    color: '#475569',
+    marginBottom: '1.5rem',
+    lineHeight: 1.6,
+  },
+  finishButton: {
+    background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
+    color: '#ffffff',
+    border: 'none',
+    padding: '0.875rem 2rem',
+    borderRadius: '12px',
+    fontSize: '1rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    boxShadow: '0 4px 15px rgba(76, 175, 80, 0.4)',
+    transition: 'all 0.3s ease',
+  },
+  submissionHeaderLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+  },
+  submissionUser: {
+    fontSize: '0.9rem',
+    color: '#667eea',
+    fontWeight: '600',
+  },
+  submissionCount: {
+    fontSize: '1rem',
+    color: '#64748b',
+    fontWeight: '400',
   },
 };
 
