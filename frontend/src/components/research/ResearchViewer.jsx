@@ -31,39 +31,55 @@ function ResearchViewer() {
 
   // Load photos as blobs with authentication
   useEffect(() => {
+    if (submissions.length === 0) return;
+
     const loadPhotos = async () => {
       const newPhotoUrls = {};
+      const photoKeysToLoad = [];
+
+      // First, identify which photos need to be loaded
       for (const submission of submissions) {
         if (submission.photos && submission.photos.length > 0) {
           for (const photo of submission.photos) {
             const photoKey = `${submission.id}_${photo.id}`;
-            if (!photoUrls[photoKey]) {
-              try {
-                const response = await api.get(`/uploads/research_photos/${photo.filename}`, {
-                  responseType: 'blob',
-                });
-                const blobUrl = URL.createObjectURL(response.data);
-                newPhotoUrls[photoKey] = blobUrl;
-              } catch (err) {
-                console.error(`Failed to load photo ${photo.filename}:`, err);
-              }
+            if (!photoUrls[photoKey] && photo.filename) {
+              photoKeysToLoad.push({ photoKey, filename: photo.filename, submissionId: submission.id, photoId: photo.id });
             }
           }
         }
       }
+
+      // Load all photos in parallel
+      const loadPromises = photoKeysToLoad.map(async ({ photoKey, filename }) => {
+        try {
+          const response = await api.get(`/uploads/research_photos/${filename}`, {
+            responseType: 'blob',
+          });
+          const blobUrl = URL.createObjectURL(response.data);
+          newPhotoUrls[photoKey] = blobUrl;
+        } catch (err) {
+          console.error(`Failed to load photo ${filename}:`, err);
+        }
+      });
+
+      await Promise.all(loadPromises);
+
       if (Object.keys(newPhotoUrls).length > 0) {
         setPhotoUrls(prev => ({ ...prev, ...newPhotoUrls }));
       }
     };
 
-    if (submissions.length > 0) {
-      loadPhotos();
-    }
+    loadPhotos();
 
-    // Cleanup blob URLs on unmount
+    // Cleanup blob URLs on unmount or when submissions change
     return () => {
-      Object.values(photoUrls).forEach(url => {
-        if (url) URL.revokeObjectURL(url);
+      setPhotoUrls(prev => {
+        Object.values(prev).forEach(url => {
+          if (url && typeof url === 'string' && url.startsWith('blob:')) {
+            URL.revokeObjectURL(url);
+          }
+        });
+        return {};
       });
     };
   }, [submissions]);
@@ -366,22 +382,23 @@ function ResearchViewer() {
                   <div style={styles.submissionPhotos}>
                     {submission.photos.map((photo) => {
                       const photoKey = `${submission.id}_${photo.id}`;
-                      const imageUrl = photoUrls[photoKey] || null;
+                      const imageUrl = photoUrls[photoKey];
                       return (
                         <div key={photo.id} style={styles.photoContainer}>
                           {imageUrl ? (
                             <img
                               src={imageUrl}
-                              alt="Submission photo"
+                              alt={`Submission photo ${photo.id}`}
                               style={styles.submissionPhoto}
                               onError={(e) => {
-                                console.error('Failed to load research photo:', photo.filename);
+                                console.error('Failed to display research photo:', photo.filename, photoKey);
                                 e.target.style.display = 'none';
+                                e.target.nextSibling?.style?.display === 'none' && (e.target.nextSibling.style.display = 'flex');
                               }}
                             />
                           ) : (
                             <div style={styles.photoPlaceholder}>
-                              <span style={styles.photoLoadingText}>Loading...</span>
+                              <span style={styles.photoLoadingText}>Loading photo...</span>
                             </div>
                           )}
                         </div>
