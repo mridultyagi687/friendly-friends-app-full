@@ -192,30 +192,32 @@ def cors_origin_check(origin: str) -> bool:
             return True
     return False
 
-# CORS configuration - use a list of allowed origins
-# Flask-CORS doesn't support callables for origins, so we need to provide a list
-# We'll handle dynamic origin checking in the after_request hook
+# CORS configuration - Flask-CORS doesn't support regex patterns in origins list
+# So we'll use a more permissive approach and validate in after_request hook
+# For production, we need to allow GitHub Pages origin explicitly
 cors_allowed_origins_list = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    # Explicitly allow your GitHub Pages origin (path is ignored by CORS)
+    # Explicitly allow your GitHub Pages origin
     "https://mridultyagi687.github.io",
     # Keep known external preview hosts
     "https://jerilyn-nonobligated-punningly.ngrok-free.dev",
-    r"https://.*\.ngrok-free\.dev",
-    r"https://.*\.ngrok\.app",
-    r"https://.*\.github\.io",
 ]
 
+# For production, allow all origins and validate in after_request
+# This is necessary because Flask-CORS doesn't support regex patterns
+# We'll validate origins in the after_request hook using cors_origin_check
 CORS(
     app,
     supports_credentials=True,
     resources={r"/api/*": {
-        "origins": cors_allowed_origins_list,
+        "origins": "*",  # Allow all origins, validate in after_request
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
         "allow_headers": ["Content-Type", "Authorization", "Accept", "Range"],
         "expose_headers": ["Content-Range", "Accept-Ranges", "Content-Length", "Content-Type"],
     }},
+    allow_headers=["Content-Type", "Authorization", "Accept", "Range"],
+    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length", "Content-Type"],
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -4999,24 +5001,22 @@ def handle_exception(e):  # pragma: no cover - global safeguard
 
 @app.after_request
 def apply_cors_headers(response):
-    """Apply CORS headers to all responses (only if not already set by flask-cors)."""
+    """Apply CORS headers to all responses, validating origin."""
     try:
         origin = request.headers.get("Origin")
         if origin and cors_origin_check(origin):
-            # Only set CORS headers if flask-cors hasn't already set them
-            if "Access-Control-Allow-Origin" not in response.headers:
-                response.headers.add("Access-Control-Allow-Origin", origin)
-            if "Access-Control-Allow-Credentials" not in response.headers:
-                response.headers.add("Access-Control-Allow-Credentials", "true")
-            if "Access-Control-Allow-Headers" not in response.headers:
-                response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Range")
-            if "Access-Control-Allow-Methods" not in response.headers:
-                response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD")
-            
-            # For iOS: Ensure Vary header is set to prevent caching issues
-            # This helps iOS Safari/Chrome properly handle CORS preflight and cookies
-            if "Vary" not in response.headers:
-                response.headers.add("Vary", "Origin")
+            # Always set CORS headers to ensure they're present and correct
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, Range"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+            response.headers["Vary"] = "Origin"
+        elif origin:
+            # Reject unauthorized origins - don't set CORS headers
+            logger.warning(f"CORS: Rejected origin: {origin}")
+            # Remove any CORS headers that might have been set by flask-cors
+            response.headers.pop("Access-Control-Allow-Origin", None)
+            response.headers.pop("Access-Control-Allow-Credentials", None)
         return response
     except Exception as e:
         logger.error(f"Error applying CORS headers: {e}")
