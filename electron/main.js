@@ -103,6 +103,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       webSecurity: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     show: false, // Don't show until ready
