@@ -324,14 +324,25 @@ function ResearchViewer() {
                 <p style={styles.submissionText}>{submission.text_content}</p>
                 {submission.photos && submission.photos.length > 0 && (
                   <div style={styles.submissionPhotos}>
-                    {submission.photos.map((photo) => (
-                      <img
-                        key={photo.id}
-                        src={`/uploads/research_photos/${photo.filename}`}
-                        alt="Submission photo"
-                        style={styles.submissionPhoto}
-                      />
-                    ))}
+                    {submission.photos.map((photo) => {
+                      // Use API base URL to ensure authentication headers are included
+                      const imageUrl = api.defaults.baseURL 
+                        ? `${api.defaults.baseURL}/uploads/research_photos/${photo.filename}`
+                        : `/uploads/research_photos/${photo.filename}`;
+                      return (
+                        <img
+                          key={photo.id}
+                          src={imageUrl}
+                          alt="Submission photo"
+                          style={styles.submissionPhoto}
+                          onError={(e) => {
+                            console.error('Failed to load research photo:', photo.filename);
+                            e.target.style.display = 'none';
+                          }}
+                          crossOrigin="anonymous"
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -605,6 +616,8 @@ const styles = {
     height: '200px',
     objectFit: 'cover',
     borderRadius: '8px',
+    backgroundColor: '#f3f4f6',
+    display: 'block',
   },
   loading: {
     textAlign: 'center',
