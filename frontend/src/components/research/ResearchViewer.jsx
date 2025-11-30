@@ -42,36 +42,56 @@ function ResearchViewer() {
         if (submission.photos && submission.photos.length > 0) {
           for (const photo of submission.photos) {
             const photoKey = `${submission.id}_${photo.id}`;
-            if (!photoUrls[photoKey] && photo.filename) {
-              photoKeysToLoad.push({ photoKey, filename: photo.filename, submissionId: submission.id, photoId: photo.id });
-            }
+            // Check if we already have this photo loaded
+            setPhotoUrls(prev => {
+              if (!prev[photoKey] && photo.filename) {
+                photoKeysToLoad.push({ photoKey, filename: photo.filename });
+              }
+              return prev; // Don't change state here, just check
+            });
           }
         }
       }
 
       // Load all photos in parallel
-      const loadPromises = photoKeysToLoad.map(async ({ photoKey, filename }) => {
-        try {
-          const response = await api.get(`/uploads/research_photos/${filename}`, {
-            responseType: 'blob',
+      if (photoKeysToLoad.length > 0) {
+        console.log(`Loading ${photoKeysToLoad.length} research photos...`);
+        const loadPromises = photoKeysToLoad.map(async ({ photoKey, filename }) => {
+          try {
+            const response = await api.get(`/uploads/research_photos/${filename}`, {
+              responseType: 'blob',
+            });
+            const blobUrl = URL.createObjectURL(response.data);
+            newPhotoUrls[photoKey] = blobUrl;
+            console.log(`Loaded photo: ${filename} -> ${photoKey}`);
+          } catch (err) {
+            console.error(`Failed to load photo ${filename}:`, err.response?.status, err.message);
+          }
+        });
+
+        await Promise.all(loadPromises);
+
+        if (Object.keys(newPhotoUrls).length > 0) {
+          setPhotoUrls(prev => {
+            const updated = { ...prev, ...newPhotoUrls };
+            console.log(`Photo URLs updated. Total: ${Object.keys(updated).length}`);
+            return updated;
           });
-          const blobUrl = URL.createObjectURL(response.data);
-          newPhotoUrls[photoKey] = blobUrl;
-        } catch (err) {
-          console.error(`Failed to load photo ${filename}:`, err);
         }
-      });
-
-      await Promise.all(loadPromises);
-
-      if (Object.keys(newPhotoUrls).length > 0) {
-        setPhotoUrls(prev => ({ ...prev, ...newPhotoUrls }));
       }
     };
 
     loadPhotos();
 
-    // Cleanup blob URLs on unmount or when submissions change
+    // Cleanup blob URLs only on unmount
+    return () => {
+      // Don't revoke on every render - only on unmount
+      // The component will handle cleanup when it unmounts
+    };
+  }, [submissions]);
+
+  // Cleanup all blob URLs when component unmounts
+  useEffect(() => {
     return () => {
       setPhotoUrls(prev => {
         Object.values(prev).forEach(url => {
@@ -82,7 +102,7 @@ function ResearchViewer() {
         return {};
       });
     };
-  }, [submissions]);
+  }, []);
 
   const fetchResearch = async () => {
     try {
