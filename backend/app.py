@@ -193,8 +193,8 @@ def cors_origin_check(origin: str) -> bool:
     return False
 
 # CORS configuration - Flask-CORS doesn't support regex patterns in origins list
-# So we'll use a more permissive approach and validate in after_request hook
-# For production, we need to allow GitHub Pages origin explicitly
+# We need to explicitly list allowed origins or use a function
+# For GitHub Pages, we'll validate in after_request hook
 cors_allowed_origins_list = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -204,14 +204,20 @@ cors_allowed_origins_list = [
     "https://jerilyn-nonobligated-punningly.ngrok-free.dev",
 ]
 
-# For production, allow all origins and validate in after_request
-# This is necessary because Flask-CORS doesn't support regex patterns
-# We'll validate origins in the after_request hook using cors_origin_check
+# Use a function to dynamically check origins (Flask-CORS supports this)
+def cors_origin_function(origin, callback):
+    """Callback function for Flask-CORS to validate origins."""
+    if origin and cors_origin_check(origin):
+        callback(origin)
+        return True
+    return False
+
+# Configure CORS with explicit origins list and function-based validation
 CORS(
     app,
     supports_credentials=True,
     resources={r"/api/*": {
-        "origins": "*",  # Allow all origins, validate in after_request
+        "origins": cors_allowed_origins_list,
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
         "allow_headers": ["Content-Type", "Authorization", "Accept", "Range"],
         "expose_headers": ["Content-Range", "Accept-Ranges", "Content-Length", "Content-Type"],
