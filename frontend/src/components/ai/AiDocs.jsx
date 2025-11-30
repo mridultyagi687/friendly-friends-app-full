@@ -1012,13 +1012,19 @@ function AiDocs() {
                             ...(msg.role === 'user' ? styles.chatMessageUser : styles.chatMessageAssistant),
                           }}
                         >
-                          <div style={styles.chatMessageContent}>{msg.content}</div>
+                          <div style={{
+                            ...styles.chatMessageContent,
+                            ...(msg.role === 'user' ? styles.chatMessageUserBubble : styles.chatMessageAssistantBubble),
+                          }}>{msg.content}</div>
                         </div>
                       ))
                     )}
                     {sendingMessage && (
                       <div style={styles.chatMessageAssistant}>
-                        <div style={styles.chatMessageContent}>Thinking...</div>
+                        <div style={{
+                          ...styles.chatMessageContent,
+                          ...styles.chatMessageAssistantBubble,
+                        }}>Thinking...</div>
                       </div>
                     )}
                     <div ref={chatBottomRef} />
@@ -1184,13 +1190,19 @@ function AiDocs() {
                             ...(msg.role === 'user' ? styles.chatMessageUser : styles.chatMessageAssistant),
                           }}
                         >
-                          <div style={styles.chatMessageContent}>{msg.content}</div>
+                          <div style={{
+                            ...styles.chatMessageContent,
+                            ...(msg.role === 'user' ? styles.chatMessageUserBubble : styles.chatMessageAssistantBubble),
+                          }}>{msg.content}</div>
                         </div>
                       ))
                     )}
                     {sendingImageMessage && (
                       <div style={styles.chatMessageAssistant}>
-                        <div style={styles.chatMessageContent}>Thinking...</div>
+                        <div style={{
+                          ...styles.chatMessageContent,
+                          ...styles.chatMessageAssistantBubble,
+                        }}>Thinking...</div>
                       </div>
                     )}
                     <div ref={imageChatBottomRef} />
@@ -1718,13 +1730,17 @@ const styles = {
     flex: '1 1 40%',
     display: 'flex',
     flexDirection: 'column',
-    background: 'rgba(102, 126, 234, 0.05)',
+    background: 'rgba(255, 255, 255, 0.95)',
+    backdropFilter: 'blur(10px)',
     minWidth: '300px',
+    borderLeft: '1px solid rgba(102, 126, 234, 0.2)',
+    color: '#1f2937', // Dark text on white background
   },
   chatHeader: {
     padding: '1rem 1.25rem',
     borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
     background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+    color: '#1f2937', // Dark text
   },
   chatTitle: {
     margin: 0,
@@ -1744,6 +1760,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.75rem',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   chatEmpty: {
     flex: 1,
@@ -1771,6 +1788,15 @@ const styles = {
   chatMessageAssistant: {
     alignSelf: 'flex-start',
   },
+  chatMessageUserBubble: {
+    background: '#2563eb',
+    color: '#ffffff',
+  },
+  chatMessageAssistantBubble: {
+    background: 'rgba(102, 126, 234, 0.1)',
+    color: '#1f2937',
+    border: '1px solid rgba(102, 126, 234, 0.2)',
+  },
   chatMessageContent: {
     padding: '0.75rem 1rem',
     borderRadius: '12px',
@@ -1778,6 +1804,7 @@ const styles = {
     lineHeight: 1.5,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
+    color: '#1f2937', // Dark text for readability
   },
   chatInputForm: {
     padding: '1rem',
