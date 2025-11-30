@@ -55,7 +55,8 @@ for path in [UPLOAD_ROOT, VIDEO_DIR, BLOG_IMAGE_DIR, MESSAGE_ATTACH_DIR, AI_IMAG
     os.makedirs(path, exist_ok=True)
 
 ALLOWED_DOC_IMPORT_EXTENSIONS = {".txt", ".md", ".markdown", ".rtf", ".pdf", ".docx"}
-MAX_DOC_IMPORT_SIZE_BYTES = int(os.environ.get("MAX_DOC_IMPORT_SIZE_BYTES", 5 * 1024 * 1024))
+# Unlimited file size - set to a very large value (100 GB)
+MAX_DOC_IMPORT_SIZE_BYTES = int(os.environ.get("MAX_DOC_IMPORT_SIZE_BYTES", 100 * 1024 * 1024 * 1024))
 BUG_HISTORY_WINDOW = timedelta(days=1)
 
 app = Flask(__name__)
@@ -2483,8 +2484,7 @@ def import_ai_doc():
     if file_size == 0:
         return jsonify({"error": "The uploaded file is empty."}), 400
 
-    if file_size > MAX_DOC_IMPORT_SIZE_BYTES:
-        return jsonify({"error": f"File is too large. Max size is {MAX_DOC_IMPORT_SIZE_BYTES // (1024 * 1024)} MB."}), 400
+    # File size check removed - unlimited size
 
     try:
         content = _extract_text_from_document_bytes(file_bytes, extension)

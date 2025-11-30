@@ -910,7 +910,7 @@ function AiDocs() {
                 </button>
               </div>
               <p style={styles.docInputCaption}>
-                Files stay private and never leave your browser except for this secure upload. Maximum size: 5 MB.
+                Files stay private and never leave your browser except for this secure upload. Maximum size: Unlimited.
               </p>
             </div>
           </div>
