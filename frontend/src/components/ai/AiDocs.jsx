@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { Document as DocxDocument, Packer, Paragraph } from 'docx';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -371,34 +372,125 @@ function AiDocs() {
 
     try {
       if (format === 'pdf') {
-        const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
-        const maxWidth = 520;
-        const leftMargin = 48;
-        const topMargin = 64;
-        const lineHeight = 16;
-        let cursorY = topMargin;
-        pdf.setFont('Helvetica', '');
-        pdf.setFontSize(12);
-
+        // Create a temporary div to render the content with emojis preserved
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.width = '816px'; // Letter size width in pixels at 96 DPI
+        tempDiv.style.padding = '48px';
+        tempDiv.style.fontFamily = 'Arial, sans-serif';
+        tempDiv.style.fontSize = '12pt';
+        tempDiv.style.lineHeight = '1.5';
+        tempDiv.style.color = '#000000';
+        tempDiv.style.backgroundColor = '#ffffff';
+        tempDiv.style.whiteSpace = 'pre-wrap';
+        tempDiv.style.wordWrap = 'break-word';
+        
+        // Add title if present
         if (docTitle.trim()) {
-          pdf.setFontSize(18);
-          pdf.text(docTitle.trim(), leftMargin, cursorY);
-          cursorY += lineHeight * 2;
-          pdf.setFontSize(12);
+          const titleDiv = document.createElement('div');
+          titleDiv.style.fontSize = '18pt';
+          titleDiv.style.fontWeight = 'bold';
+          titleDiv.style.marginBottom = '24px';
+          titleDiv.textContent = docTitle.trim();
+          tempDiv.appendChild(titleDiv);
         }
-
-        const lines = pdf.splitTextToSize(docContent, maxWidth);
-
-        lines.forEach((line) => {
-          if (cursorY > pdf.internal.pageSize.getHeight() - 64) {
-            pdf.addPage();
-            cursorY = topMargin;
+        
+        // Add content
+        const contentDiv = document.createElement('div');
+        contentDiv.textContent = docContent;
+        tempDiv.appendChild(contentDiv);
+        
+        document.body.appendChild(tempDiv);
+        
+        try {
+          // Capture the content as an image using html2canvas (preserves emojis)
+          const canvas = await html2canvas(tempDiv, {
+            scale: 2, // Higher quality
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+          });
+          
+          document.body.removeChild(tempDiv);
+          
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' });
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = pdf.internal.pageSize.getHeight();
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+          
+          // Calculate scaling to fit PDF width
+          const widthRatio = pdfWidth / imgWidth;
+          const scaledWidth = pdfWidth;
+          const scaledHeight = imgHeight * widthRatio;
+          
+          // If content fits on one page, add it directly
+          if (scaledHeight <= pdfHeight) {
+            pdf.addImage(imgData, 'PNG', 0, 0, scaledWidth, scaledHeight);
+          } else {
+            // Split across multiple pages
+            const pageHeightInPixels = pdfHeight / widthRatio;
+            let sourceY = 0;
+            let pageNumber = 0;
+            
+            while (sourceY < imgHeight) {
+              if (pageNumber > 0) {
+                pdf.addPage();
+              }
+              
+              const remainingHeight = imgHeight - sourceY;
+              const pageSourceHeight = Math.min(pageHeightInPixels, remainingHeight);
+              const pageDisplayHeight = pageSourceHeight * widthRatio;
+              
+              // Extract this page's portion from the canvas
+              const pageCanvas = document.createElement('canvas');
+              pageCanvas.width = imgWidth;
+              pageCanvas.height = Math.ceil(pageSourceHeight);
+              const ctx = pageCanvas.getContext('2d');
+              ctx.drawImage(canvas, 0, sourceY, imgWidth, pageSourceHeight, 0, 0, imgWidth, pageSourceHeight);
+              
+              const pageImgData = pageCanvas.toDataURL('image/png');
+              pdf.addImage(pageImgData, 'PNG', 0, 0, scaledWidth, pageDisplayHeight);
+              
+              sourceY += pageHeightInPixels;
+              pageNumber++;
+            }
           }
-          pdf.text(line, leftMargin, cursorY);
-          cursorY += lineHeight;
-        });
+          
+          pdf.save(`${sanitizedTitle}.pdf`);
+        } catch (canvasError) {
+          document.body.removeChild(tempDiv);
+          // Fallback to text-based PDF if html2canvas fails
+          const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
+          const maxWidth = 520;
+          const leftMargin = 48;
+          const topMargin = 64;
+          const lineHeight = 16;
+          let cursorY = topMargin;
+          pdf.setFont('Helvetica', '');
+          pdf.setFontSize(12);
 
-        pdf.save(`${sanitizedTitle}.pdf`);
+          if (docTitle.trim()) {
+            pdf.setFontSize(18);
+            pdf.text(docTitle.trim(), leftMargin, cursorY);
+            cursorY += lineHeight * 2;
+            pdf.setFontSize(12);
+          }
+
+          const lines = pdf.splitTextToSize(docContent, maxWidth);
+          lines.forEach((line) => {
+            if (cursorY > pdf.internal.pageSize.getHeight() - 64) {
+              pdf.addPage();
+              cursorY = topMargin;
+            }
+            pdf.text(line, leftMargin, cursorY);
+            cursorY += lineHeight;
+          });
+
+          pdf.save(`${sanitizedTitle}.pdf`);
+        }
       } else if (format === 'docx') {
         const paragraphs = docContent.split(/\r?\n/).map((line) => new Paragraph(line || ' '));
         const docx = new DocxDocument({
