@@ -205,15 +205,6 @@ function MobileNavBar() {
                 📝 To-Do List
               </Link>
             )}
-            {canAccessFeature(user, 'paint') && (
-              <Link 
-                to="/paint" 
-                style={menuLinkStyle(isActive('/paint'))}
-                onClick={() => setShowMenu(false)}
-              >
-                🎨 Paint
-              </Link>
-            )}
             {canAccessFeature(user, 'videos') && (
               <Link 
                 to="/videos" 
@@ -286,13 +277,6 @@ function MobileNavBar() {
               onClick={() => setShowMenu(false)}
             >
               🎭 Roles
-            </Link>
-            <Link 
-              to="/cloud-pcs" 
-              style={menuLinkStyle(isActive('/cloud-pcs'))}
-              onClick={() => setShowMenu(false)}
-            >
-              💻 My Cloud PCs
             </Link>
             {user?.is_admin && (
               <>
