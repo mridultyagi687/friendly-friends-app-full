@@ -17,6 +17,7 @@ function ResearchViewer() {
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [photoPreviews, setPhotoPreviews] = useState([]);
   const [markingFinished, setMarkingFinished] = useState(false);
+  const [photoUrls, setPhotoUrls] = useState({}); // Cache for photo blob URLs
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -27,6 +28,45 @@ function ResearchViewer() {
     fetchResearch();
     fetchSubmissions();
   }, [user, researchId]);
+
+  // Load photos as blobs with authentication
+  useEffect(() => {
+    const loadPhotos = async () => {
+      const newPhotoUrls = {};
+      for (const submission of submissions) {
+        if (submission.photos && submission.photos.length > 0) {
+          for (const photo of submission.photos) {
+            const photoKey = `${submission.id}_${photo.id}`;
+            if (!photoUrls[photoKey]) {
+              try {
+                const response = await api.get(`/uploads/research_photos/${photo.filename}`, {
+                  responseType: 'blob',
+                });
+                const blobUrl = URL.createObjectURL(response.data);
+                newPhotoUrls[photoKey] = blobUrl;
+              } catch (err) {
+                console.error(`Failed to load photo ${photo.filename}:`, err);
+              }
+            }
+          }
+        }
+      }
+      if (Object.keys(newPhotoUrls).length > 0) {
+        setPhotoUrls(prev => ({ ...prev, ...newPhotoUrls }));
+      }
+    };
+
+    if (submissions.length > 0) {
+      loadPhotos();
+    }
+
+    // Cleanup blob URLs on unmount
+    return () => {
+      Object.values(photoUrls).forEach(url => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    };
+  }, [submissions]);
 
   const fetchResearch = async () => {
     try {
@@ -325,22 +365,26 @@ function ResearchViewer() {
                 {submission.photos && submission.photos.length > 0 && (
                   <div style={styles.submissionPhotos}>
                     {submission.photos.map((photo) => {
-                      // Use API base URL to ensure authentication headers are included
-                      const imageUrl = api.defaults.baseURL 
-                        ? `${api.defaults.baseURL}/uploads/research_photos/${photo.filename}`
-                        : `/uploads/research_photos/${photo.filename}`;
+                      const photoKey = `${submission.id}_${photo.id}`;
+                      const imageUrl = photoUrls[photoKey] || null;
                       return (
-                        <img
-                          key={photo.id}
-                          src={imageUrl}
-                          alt="Submission photo"
-                          style={styles.submissionPhoto}
-                          onError={(e) => {
-                            console.error('Failed to load research photo:', photo.filename);
-                            e.target.style.display = 'none';
-                          }}
-                          crossOrigin="anonymous"
-                        />
+                        <div key={photo.id} style={styles.photoContainer}>
+                          {imageUrl ? (
+                            <img
+                              src={imageUrl}
+                              alt="Submission photo"
+                              style={styles.submissionPhoto}
+                              onError={(e) => {
+                                console.error('Failed to load research photo:', photo.filename);
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div style={styles.photoPlaceholder}>
+                              <span style={styles.photoLoadingText}>Loading...</span>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -611,13 +655,30 @@ const styles = {
     gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
     gap: '1rem',
   },
-  submissionPhoto: {
+  photoContainer: {
     width: '100%',
     height: '200px',
-    objectFit: 'cover',
     borderRadius: '8px',
+    overflow: 'hidden',
     backgroundColor: '#f3f4f6',
+  },
+  submissionPhoto: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
     display: 'block',
+  },
+  photoPlaceholder: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+  },
+  photoLoadingText: {
+    color: '#64748b',
+    fontSize: '0.9rem',
   },
   loading: {
     textAlign: 'center',
