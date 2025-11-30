@@ -30,6 +30,8 @@ function AiDocs() {
   const [images, setImages] = useState([]);
   const [selectedImageId, setSelectedImageId] = useState(null);
   const [loadingImages, setLoadingImages] = useState(true);
+  const [imageUrls, setImageUrls] = useState({}); // Cache for image blob URLs
+  const [imageUrls, setImageUrls] = useState({}); // Cache for image blob URLs
   
   // Common state
   const [error, setError] = useState(null);
@@ -571,15 +573,25 @@ function AiDocs() {
         const tempDiv = document.createElement('div');
         tempDiv.style.position = 'absolute';
         tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '0';
         tempDiv.style.width = '816px'; // Letter size width in pixels at 96 DPI
         tempDiv.style.padding = '48px';
-        tempDiv.style.fontFamily = 'Arial, sans-serif';
+        // Use system fonts that support emojis
+        tempDiv.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
         tempDiv.style.fontSize = '12pt';
         tempDiv.style.lineHeight = '1.5';
         tempDiv.style.color = '#000000';
         tempDiv.style.backgroundColor = '#ffffff';
         tempDiv.style.whiteSpace = 'pre-wrap';
         tempDiv.style.wordWrap = 'break-word';
+        tempDiv.style.unicodeBidi = 'embed'; // Ensure proper emoji rendering
+        
+        // Helper function to escape HTML but preserve emojis
+        const escapeHtml = (text) => {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
+        };
         
         // Add title if present
         if (docTitle.trim()) {
@@ -587,24 +599,38 @@ function AiDocs() {
           titleDiv.style.fontSize = '18pt';
           titleDiv.style.fontWeight = 'bold';
           titleDiv.style.marginBottom = '24px';
-          titleDiv.textContent = docTitle.trim();
+          // Use innerHTML to preserve emojis (after escaping HTML)
+          titleDiv.innerHTML = escapeHtml(docTitle.trim());
           tempDiv.appendChild(titleDiv);
         }
         
-        // Add content
+        // Add content - use innerHTML to preserve emojis
         const contentDiv = document.createElement('div');
-        contentDiv.textContent = docContent;
+        // Escape HTML but preserve emojis by using textContent then innerHTML
+        contentDiv.innerHTML = escapeHtml(docContent);
         tempDiv.appendChild(contentDiv);
         
         document.body.appendChild(tempDiv);
         
+        // Wait a bit for fonts to load, especially emoji fonts
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         try {
           // Capture the content as an image using html2canvas (preserves emojis)
           const canvas = await html2canvas(tempDiv, {
-            scale: 2, // Higher quality
+            scale: 3, // Higher quality for better emoji rendering
             useCORS: true,
             logging: false,
             backgroundColor: '#ffffff',
+            allowTaint: false,
+            foreignObjectRendering: true, // Better emoji support
+            onclone: (clonedDoc) => {
+              // Ensure emoji fonts are loaded in the cloned document
+              const clonedDiv = clonedDoc.querySelector('div');
+              if (clonedDiv) {
+                clonedDiv.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+              }
+            },
           });
           
           document.body.removeChild(tempDiv);
@@ -727,24 +753,96 @@ function AiDocs() {
     }
   };
 
-  const handleDownloadImage = () => {
+  const handleDownloadImage = async () => {
     if (!selectedImage) return;
     
-    const imageUrl = `/uploads/ai_images/${selectedImage.filename}`;
-    const link = document.createElement('a');
-    link.href = imageUrl;
-    link.download = selectedImage.filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    setSuccess('Image downloaded!');
-    setTimeout(() => setSuccess(null), 2000);
+    try {
+      const imageUrl = `/uploads/ai_images/${selectedImage.filename}`;
+      // Fetch the image as a blob to ensure it downloads properly with authentication
+      const response = await fetch(imageUrl, {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('session_token') || ''}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = selectedImage.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      setSuccess('Image downloaded!');
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (err) {
+      console.error('Download error:', err);
+      setError(`Failed to download image: ${err.message}. Please try again.`);
+    }
   };
 
-  const getImageUrl = (filename) => {
+  // Load image as blob to handle authentication
+  const loadImageAsBlob = useCallback(async (filename) => {
+    if (imageUrls[filename]) {
+      return imageUrls[filename];
+    }
+    
+    try {
+      const imageUrl = `/uploads/ai_images/${filename}`;
+      const response = await fetch(imageUrl, {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('session_token') || ''}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load image');
+      }
+      
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setImageUrls(prev => ({ ...prev, [filename]: blobUrl }));
+      return blobUrl;
+    } catch (err) {
+      console.error('Error loading image:', err);
+      return null;
+    }
+  }, [imageUrls]);
+
+  const getImageUrl = useCallback((filename) => {
+    // Return cached blob URL if available, otherwise trigger load
+    if (imageUrls[filename]) {
+      return imageUrls[filename];
+    }
+    // Trigger async load
+    loadImageAsBlob(filename);
+    // Return a placeholder or the direct URL as fallback
     return `/uploads/ai_images/${filename}`;
-  };
+  }, [imageUrls, loadImageAsBlob]);
+
+  // Load images when they're displayed
+  useEffect(() => {
+    if (selectedImage?.filename && !imageUrls[selectedImage.filename]) {
+      loadImageAsBlob(selectedImage.filename);
+    }
+  }, [selectedImage, imageUrls, loadImageAsBlob]);
+
+  // Load thumbnail images
+  useEffect(() => {
+    images.forEach(img => {
+      if (img.filename && !imageUrls[img.filename]) {
+        loadImageAsBlob(img.filename);
+      }
+    });
+  }, [images, imageUrls, loadImageAsBlob]);
 
   if (!user) {
     return (
