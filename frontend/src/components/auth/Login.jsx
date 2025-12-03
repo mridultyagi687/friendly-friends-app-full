@@ -5,14 +5,15 @@ import logo from '../../assets/friendly-friends-logo.png';
 import { isSafari } from '../../utils/safariCompat';
 
 function Login() {
-  const { login, register, error } = useAuth();
-  const [mode, setMode] = useState('member'); // 'member' or 'viewer'
+  const { login, register, error, checkAuth, user } = useAuth();
+  const [mode, setMode] = useState('member'); // 'member', 'viewer', or 'join'
   const [isRegistering, setIsRegistering] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     password: ''
   });
+  const [joinRequestStatus, setJoinRequestStatus] = useState(null);
   const navigate = useNavigate();
 
   const handleMemberLogin = async (e) => {
@@ -100,6 +101,42 @@ function Login() {
     }
   };
 
+  const handleJoinRequest = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('/api/join-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.username,
+          password: formData.password,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setJoinRequestStatus({
+          type: 'success',
+          message: data.message
+        });
+        setFormData({ username: '', email: '', password: '' });
+      } else {
+        setJoinRequestStatus({
+          type: 'error',
+          message: data.error || 'Failed to submit join request'
+        });
+      }
+    } catch (error) {
+      setJoinRequestStatus({
+        type: 'error',
+        message: 'Network error. Please try again.'
+      });
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -110,11 +147,13 @@ function Login() {
   const switchToRegister = () => {
     setIsRegistering(true);
     setFormData({ username: '', email: '', password: '' });
+    setJoinRequestStatus(null);
   };
 
   const switchToLogin = () => {
     setIsRegistering(false);
     setFormData({ username: '', email: '', password: '' });
+    setJoinRequestStatus(null);
   };
 
   return (
@@ -168,7 +207,8 @@ function Login() {
       <div style={styles.loginBox} className="login-box-mobile">
         <img src={logo} alt="Friendly Friends AI logo" style={styles.logo} className="logo-mobile" />
         <p style={styles.subtitle}>
-          {mode === 'member' ? 'Research, Share, Connect, Enjoy' : 'Enjoy, Research'}
+          {mode === 'member' ? 'Research, Share, Connect, Enjoy' : 
+           mode === 'viewer' ? 'Enjoy, Research' : 'Join the Community'}
         </p>
         
         {/* Mode Selection */}
@@ -179,6 +219,7 @@ function Login() {
               setMode('member');
               setIsRegistering(false);
               setFormData({ username: '', email: '', password: '' });
+              setJoinRequestStatus(null);
             }}
             style={{
               ...styles.modeButton,
@@ -194,6 +235,7 @@ function Login() {
               setMode('viewer');
               setIsRegistering(false);
               setFormData({ username: '', email: '', password: '' });
+              setJoinRequestStatus(null);
             }}
             style={{
               ...styles.modeButton,
@@ -202,6 +244,22 @@ function Login() {
             className="mode-button-mobile"
           >
             📖 Research Viewer
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('join');
+              setIsRegistering(false);
+              setFormData({ username: '', email: '', password: '' });
+              setJoinRequestStatus(null);
+            }}
+            style={{
+              ...styles.modeButton,
+              ...(mode === 'join' ? styles.modeButtonActive : {})
+            }}
+            className="mode-button-mobile"
+          >
+            🚀 Join Friendly Friends
           </button>
         </div>
 
@@ -236,7 +294,7 @@ function Login() {
               </button>
             </form>
           </>
-        ) : (
+        ) : mode === 'viewer' ? (
           <>
             <h2 style={styles.modeTitle} className="mode-title-mobile">
               Friendly Friends AI Research Viewer? - {isRegistering ? 'Register' : 'Login'}
@@ -297,6 +355,50 @@ function Login() {
                   </p>
                 )}
               </div>
+            </form>
+          </>
+        ) : (
+          <>
+            <h2 style={styles.modeTitle} className="mode-title-mobile">
+              Join Friendly Friends
+            </h2>
+            <p style={styles.joinDescription}>
+              Want to become a member? Submit a join request and our admins will review it!
+            </p>
+            
+            {joinRequestStatus && (
+              <div style={{
+                ...styles.statusMessage,
+                ...(joinRequestStatus.type === 'success' ? styles.successMessage : styles.errorMessage)
+              }}>
+                {joinRequestStatus.message}
+              </div>
+            )}
+            
+            <form onSubmit={handleJoinRequest} style={styles.form}>
+              <input
+                type="text"
+                name="username"
+                placeholder="Desired Username"
+                value={formData.username}
+                onChange={handleChange}
+                style={styles.input}
+                required
+              />
+              
+              <input
+                type="password"
+                name="password"
+                placeholder="Password"
+                value={formData.password}
+                onChange={handleChange}
+                style={styles.input}
+                required
+              />
+              
+              <button type="submit" style={styles.loginButton}>
+                Submit Join Request
+              </button>
             </form>
           </>
         )}
@@ -430,6 +532,29 @@ const styles = {
     fontSize: '0.9rem',
     padding: 0,
     marginLeft: '0.25rem',
+  },
+  joinDescription: {
+    color: '#666',
+    fontSize: '0.9rem',
+    marginBottom: '1.5rem',
+    lineHeight: 1.4,
+  },
+  statusMessage: {
+    padding: '0.75rem',
+    borderRadius: '8px',
+    marginBottom: '1rem',
+    fontSize: '0.9rem',
+    textAlign: 'center',
+  },
+  successMessage: {
+    backgroundColor: '#e8f5e8',
+    color: '#2e7d32',
+    border: '1px solid #4caf50',
+  },
+  errorMessage: {
+    backgroundColor: '#ffebee',
+    color: '#c62828',
+    border: '1px solid #f44336',
   },
 };
 

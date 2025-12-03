@@ -808,6 +808,29 @@ class UserSession(TimestampMixin, db.Model):
         return datetime.utcnow() > self.expires_at
 
 
+class JoinRequest(TimestampMixin, db.Model):
+    __tablename__ = "join_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(20), default="pending", nullable=False)  # pending, approved, rejected
+    reviewed_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    review_note = db.Column(db.Text, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "status": self.status,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "review_note": self.review_note,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 ###############################################################################
 # Helper utilities                                                             #
 ###############################################################################
@@ -4948,6 +4971,168 @@ def remove_download(app_id: int):
         logger.exception(f"Error removing download: {e}")
         db.session.rollback()
         return jsonify({"error": "Failed to remove download"}), 500
+
+
+###############################################################################
+# Join Requests                                                                #
+###############################################################################
+
+
+@app.post("/api/join-requests")
+def submit_join_request():
+    """Submit a join request to Friendly Friends."""
+    try:
+        data = ensure_json_request()
+        name = data.get("name", "").strip()
+        password = data.get("password", "").strip()
+        
+        if not name or not password:
+            return jsonify({"error": "Name and password are required"}), 400
+        
+        # Check if name already exists as a user
+        existing_user = db.session.query(User).filter_by(username=name).first()
+        if existing_user:
+            return jsonify({"error": "This name is already taken"}), 400
+        
+        # Check if there's already a pending request with this name
+        existing_request = db.session.query(JoinRequest).filter_by(
+            name=name, status="pending"
+        ).first()
+        if existing_request:
+            return jsonify({"error": "A join request with this name is already pending"}), 400
+        
+        # Create join request
+        join_request = JoinRequest(
+            name=name,
+            password=hash_password(password),
+            status="pending"
+        )
+        db.session.add(join_request)
+        db.session.commit()
+        
+        logger.info(f"Join request submitted for name: {name}")
+        
+        return jsonify({
+            "message": "Join request submitted successfully! Admins will review your request.",
+            "request_id": join_request.id
+        })
+    except Exception as e:
+        logger.exception(f"Error submitting join request: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to submit join request"}), 500
+
+
+@app.get("/api/join-requests")
+@admin_required
+def list_join_requests():
+    """Get all join requests (admin only)."""
+    try:
+        requests = db.session.query(JoinRequest).order_by(
+            JoinRequest.status.asc(),  # pending first
+            JoinRequest.created_at.desc()
+        ).all()
+        
+        # Add reviewer info
+        requests_with_reviewer = []
+        for req in requests:
+            req_dict = req.to_dict()
+            if req.reviewed_by:
+                reviewer = db.session.get(User, req.reviewed_by)
+                if reviewer:
+                    req_dict["reviewer_name"] = reviewer.username
+            requests_with_reviewer.append(req_dict)
+        
+        return jsonify({"requests": requests_with_reviewer})
+    except Exception as e:
+        logger.exception(f"Error listing join requests: {e}")
+        return jsonify({"error": "Failed to load join requests"}), 500
+
+
+@app.post("/api/join-requests/<int:request_id>/approve")
+@admin_required
+def approve_join_request(request_id: int):
+    """Approve a join request and create user account."""
+    try:
+        admin_user = current_user()
+        if not admin_user:
+            return jsonify({"error": "Authentication required"}), 401
+        
+        join_request = db.session.get(JoinRequest, request_id)
+        if not join_request:
+            return jsonify({"error": "Join request not found"}), 404
+        
+        if join_request.status != "pending":
+            return jsonify({"error": "Join request has already been reviewed"}), 400
+        
+        # Check if username is still available
+        existing_user = db.session.query(User).filter_by(username=join_request.name).first()
+        if existing_user:
+            return jsonify({"error": "Username is no longer available"}), 400
+        
+        # Create user account
+        user = User(
+            username=join_request.name,
+            email=f"{join_request.name}@friendlyfriends.local",  # Generate email
+            password_hash=join_request.password,  # Already hashed
+            is_admin=False
+        )
+        db.session.add(user)
+        
+        # Update join request
+        join_request.status = "approved"
+        join_request.reviewed_by = admin_user.id
+        join_request.reviewed_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        logger.info(f"Admin {admin_user.id} approved join request for {join_request.name}")
+        
+        return jsonify({
+            "message": f"Join request approved! User '{join_request.name}' has been created.",
+            "user": user.to_dict()
+        })
+    except Exception as e:
+        logger.exception(f"Error approving join request: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to approve join request"}), 500
+
+
+@app.post("/api/join-requests/<int:request_id>/reject")
+@admin_required
+def reject_join_request(request_id: int):
+    """Reject a join request."""
+    try:
+        admin_user = current_user()
+        if not admin_user:
+            return jsonify({"error": "Authentication required"}), 401
+        
+        data = ensure_json_request()
+        review_note = data.get("review_note", "").strip()
+        
+        join_request = db.session.get(JoinRequest, request_id)
+        if not join_request:
+            return jsonify({"error": "Join request not found"}), 404
+        
+        if join_request.status != "pending":
+            return jsonify({"error": "Join request has already been reviewed"}), 400
+        
+        # Update join request
+        join_request.status = "rejected"
+        join_request.reviewed_by = admin_user.id
+        join_request.reviewed_at = datetime.utcnow()
+        join_request.review_note = review_note
+        
+        db.session.commit()
+        
+        logger.info(f"Admin {admin_user.id} rejected join request for {join_request.name}")
+        
+        return jsonify({
+            "message": f"Join request for '{join_request.name}' has been rejected."
+        })
+    except Exception as e:
+        logger.exception(f"Error rejecting join request: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to reject join request"}), 500
 
 
 ###############################################################################

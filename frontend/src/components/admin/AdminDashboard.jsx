@@ -6,9 +6,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 function AdminDashboard() {
   const [users, setUsers] = useState([]);
+  const [joinRequests, setJoinRequests] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [joinRequestsLoading, setJoinRequestsLoading] = useState(true);
   const [creating, setCreating] = useState(false); // Loading state for creating member
   const [showNewMemberForm, setShowNewMemberForm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -34,6 +36,7 @@ function AdminDashboard() {
       return;
     }
     fetchUsers();
+    fetchJoinRequests();
   }, [user, authLoading, navigate]);
 
   const fetchUsers = async () => {
@@ -60,6 +63,44 @@ function AdminDashboard() {
       setUsers([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchJoinRequests = async () => {
+    setJoinRequestsLoading(true);
+    try {
+      const response = await api.get('/api/join-requests');
+      setJoinRequests(response.data?.requests || []);
+    } catch (err) {
+      console.error('Failed to fetch join requests:', err);
+    } finally {
+      setJoinRequestsLoading(false);
+    }
+  };
+
+  const handleApproveRequest = async (requestId) => {
+    try {
+      await api.post(`/api/join-requests/${requestId}/approve`);
+      setSuccess('Join request approved successfully!');
+      fetchJoinRequests();
+      fetchUsers();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Failed to approve request: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleRejectRequest = async (requestId) => {
+    const reason = prompt('Reason for rejection (optional):');
+    try {
+      await api.post(`/api/join-requests/${requestId}/reject`, {
+        review_note: reason || ''
+      });
+      setSuccess('Join request rejected.');
+      fetchJoinRequests();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      setError('Failed to reject request: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -234,6 +275,68 @@ function AdminDashboard() {
         </form>
       )}
       
+      {/* Join Requests Section */}
+      <div style={styles.tableContainer}>
+        <h2 style={styles.tableTitle}>Join Requests ({joinRequests.filter(r => r.status === 'pending').length} pending)</h2>
+        {joinRequestsLoading ? (
+          <div style={styles.loading}>Loading join requests...</div>
+        ) : joinRequests.length === 0 ? (
+          <div style={styles.emptyState}>No join requests found.</div>
+        ) : (
+          <div style={styles.usersTable}>
+            <div style={styles.tableHeader}>
+              <div style={styles.headerCell}>Name</div>
+              <div style={styles.headerCell}>Status</div>
+              <div style={styles.headerCell}>Requested</div>
+              <div style={styles.headerCell}>Actions</div>
+            </div>
+            
+            {joinRequests.map(request => (
+              <div key={request.id} style={styles.tableRow}>
+                <div style={styles.cell}>{request.name}</div>
+                <div style={styles.cell}>
+                  <span style={{
+                    ...styles.memberBadge,
+                    ...(request.status === 'pending' ? styles.pendingBadge : 
+                        request.status === 'approved' ? styles.approvedBadge : styles.rejectedBadge)
+                  }}>
+                    {request.status}
+                  </span>
+                </div>
+                <div style={styles.cell}>
+                  {new Date(request.created_at).toLocaleDateString()}
+                </div>
+                <div style={styles.cell}>
+                  {request.status === 'pending' ? (
+                    <div style={styles.actionButtons}>
+                      <button
+                        onClick={() => handleApproveRequest(request.id)}
+                        style={styles.approveButton}
+                        title="Approve request"
+                      >
+                        ✓ Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectRequest(request.id)}
+                        style={styles.rejectButton}
+                        title="Reject request"
+                      >
+                        ✕ Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={styles.reviewedLabel}>
+                      {request.reviewer_name ? `By ${request.reviewer_name}` : 'Reviewed'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Members Section */}
       <div style={styles.tableContainer}>
         <h2 style={styles.tableTitle}>Members ({users.length})</h2>
         {loading ? (
@@ -577,6 +680,49 @@ const styles = {
   currentUserLabel: {
     color: 'rgba(255, 255, 255, 0.6)',
     fontSize: '0.9rem',
+    fontStyle: 'italic',
+  },
+  pendingBadge: {
+    background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+    color: 'white',
+  },
+  approvedBadge: {
+    background: 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
+    color: 'white',
+  },
+  rejectedBadge: {
+    background: 'linear-gradient(135deg, #f44336 0%, #c62828 100%)',
+    color: 'white',
+  },
+  actionButtons: {
+    display: 'flex',
+    gap: '0.5rem',
+  },
+  approveButton: {
+    padding: '0.4rem 0.8rem',
+    background: 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    transition: 'all 0.3s ease',
+  },
+  rejectButton: {
+    padding: '0.4rem 0.8rem',
+    background: 'linear-gradient(135deg, #f44336 0%, #c62828 100%)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    transition: 'all 0.3s ease',
+  },
+  reviewedLabel: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: '0.85rem',
     fontStyle: 'italic',
   },
 };
