@@ -820,14 +820,15 @@ class JoinRequest(TimestampMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
     password = db.Column(db.String(255), nullable=False)
     status = db.Column(db.String(20), default="pending", nullable=False)  # pending, approved, rejected
     reviewed_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
     review_note = db.Column(db.Text, nullable=True)
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_email=False):
+        data = {
             "id": self.id,
             "name": self.name,
             "status": self.status,
@@ -836,6 +837,9 @@ class JoinRequest(TimestampMixin, db.Model):
             "review_note": self.review_note,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+        if include_email:
+            data["email"] = self.email
+        return data
 
 
 ###############################################################################
@@ -5004,26 +5008,39 @@ def submit_join_request():
     try:
         data = ensure_json_request()
         name = data.get("name", "").strip()
+        email = data.get("email", "").strip()
         password = data.get("password", "").strip()
         
-        if not name or not password:
-            return jsonify({"error": "Name and password are required"}), 400
+        if not name or not email or not password:
+            return jsonify({"error": "Name, email, and password are required"}), 400
         
         # Check if name already exists as a user
         existing_user = db.session.query(User).filter_by(username=name).first()
         if existing_user:
             return jsonify({"error": "This name is already taken"}), 400
         
-        # Check if there's already a pending request with this name
-        existing_request = db.session.query(JoinRequest).filter_by(
-            name=name, status="pending"
+        # Check if email already exists as a user
+        existing_email_user = db.session.query(User).filter_by(email=email).first()
+        if existing_email_user:
+            return jsonify({"error": "This email is already registered"}), 400
+        
+        # Check if there's already a pending request with this name or email
+        existing_request = db.session.query(JoinRequest).filter(
+            db.or_(
+                db.and_(JoinRequest.name == name, JoinRequest.status == "pending"),
+                db.and_(JoinRequest.email == email, JoinRequest.status == "pending")
+            )
         ).first()
         if existing_request:
-            return jsonify({"error": "A join request with this name is already pending"}), 400
+            if existing_request.name == name:
+                return jsonify({"error": "A join request with this name is already pending"}), 400
+            else:
+                return jsonify({"error": "A join request with this email is already pending"}), 400
         
         # Create join request
         join_request = JoinRequest(
             name=name,
+            email=email,
             password=hash_password(password),
             status="pending"
         )
