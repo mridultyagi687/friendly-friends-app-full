@@ -12,6 +12,12 @@ export function AuthProvider({ children }) {
     setLoading(true);
     setError(null);
     try {
+      // Debug: Log the session token being used
+      const sessionToken = typeof window !== 'undefined' ? localStorage.getItem('session_token') : null;
+      if (import.meta.env.DEV) {
+        console.log('Checking auth with token:', sessionToken ? 'present' : 'missing');
+      }
+      
       const res = await api.get('/api/me');
       if (res.data && res.data.ok) {
         setUser(res.data.user);
@@ -39,7 +45,12 @@ export function AuthProvider({ children }) {
           setError(null); // Don't show error on initial load
           setUser(null);
         } else {
-          setError(err);
+          // For other errors, clear session and don't block
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('session_token');
+          }
+          setError(null);
+          setUser(null);
         }
       } else {
         // Network error - don't show on initial load

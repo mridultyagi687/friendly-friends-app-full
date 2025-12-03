@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import logo from '../../assets/friendly-friends-logo.png';
 import { isSafari } from '../../utils/safariCompat';
+import api from '../../services/api';
 
 function Login() {
   const { login, register, error, checkAuth, user } = useAuth();
@@ -104,35 +105,23 @@ function Login() {
   const handleJoinRequest = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/join-requests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.username,
-          password: formData.password,
-        }),
+      const response = await api.post('/api/join-requests', {
+        name: formData.username,
+        password: formData.password,
       });
       
-      const data = await response.json();
-      
-      if (response.ok) {
+      if (response.data) {
         setJoinRequestStatus({
           type: 'success',
-          message: data.message
+          message: response.data.message || 'Join request submitted successfully!'
         });
         setFormData({ username: '', email: '', password: '' });
-      } else {
-        setJoinRequestStatus({
-          type: 'error',
-          message: data.error || 'Failed to submit join request'
-        });
       }
     } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Network error. Please try again.';
       setJoinRequestStatus({
         type: 'error',
-        message: 'Network error. Please try again.'
+        message: errorMessage
       });
     }
   };

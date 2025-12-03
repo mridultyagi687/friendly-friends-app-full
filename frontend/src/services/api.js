@@ -4,14 +4,12 @@ import axios from 'axios';
 // If VITE_API_URL is set, use that instead (for production builds)
 // In Electron, use localhost:5002 for backend
 const isElectron = typeof window !== 'undefined' && window.electronAPI;
-const DEFAULT_API_ORIGIN = 'https://jerilyn-nonobligated-punningly.ngrok-free.dev';
+const DEFAULT_API_ORIGIN = 'https://friendly-friends-app-full.onrender.com';
 const BASE_URL =
   import.meta.env.VITE_API_URL ||
   import.meta.env.REACT_APP_API_URL ||
   (isElectron
     ? 'http://localhost:5002'
-    : typeof window !== 'undefined' && window.location.origin
-    ? window.location.origin
     : DEFAULT_API_ORIGIN);
 
 const api = axios.create({
@@ -37,11 +35,10 @@ if (isIOS) {
 // Add request interceptor to log requests and ensure correct URL
 api.interceptors.request.use(
   (config) => {
-    // Ensure we're using relative URLs for proxy (should be empty BASE_URL)
-    // Fix any localhost:5000 or localhost:5001 URLs to use proxy instead
-    if (config.baseURL && (config.baseURL.includes('localhost:5000') || config.baseURL.includes('localhost:5001'))) {
-      // Force relative URL for proxy
-      config.baseURL = '';
+    // In production, ensure we always use the configured backend URL
+    // Don't allow relative URLs in production builds
+    if (!config.baseURL || config.baseURL === '' || config.baseURL === window.location.origin) {
+      config.baseURL = DEFAULT_API_ORIGIN;
     }
     
     // Add session token from localStorage to Authorization header

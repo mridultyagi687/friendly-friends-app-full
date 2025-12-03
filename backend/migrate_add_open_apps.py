@@ -6,8 +6,14 @@ import os
 import sys
 
 # Get database path
-BASE_DIR = os.environ.get('BASE_DIR') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Friendly Friends App Database')
-DB_PATH = os.path.join(BASE_DIR, 'mydatabase.db')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'friendly_friends.db')
+
+# Try multiple possible database locations
+if not os.path.exists(DB_PATH):
+    DB_PATH = os.path.join(BASE_DIR, 'instance', 'friendly_friends.db')
+if not os.path.exists(DB_PATH):
+    DB_PATH = os.path.join(BASE_DIR, 'mydatabase.db')
 
 if not os.path.exists(DB_PATH):
     print(f'Database not found at {DB_PATH}')

@@ -87,9 +87,11 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     os.environ.get("FRONTEND_URL", "http://localhost:5173"),
     "https://jerilyn-nonobligated-punningly.ngrok-free.dev",
+    "https://friendly-friends-app-full.onrender.com",
     re.compile(r'https://.*\.ngrok-free\.dev'),
     re.compile(r'https://.*\.ngrok\.app'),
     re.compile(r'https://.*\.github\.io'),  # GitHub Pages
+    re.compile(r'https://.*\.onrender\.com'),  # Render deployments
 ]
 
 # Session cookie configuration
@@ -202,6 +204,8 @@ cors_allowed_origins_list = [
     "https://mridultyagi687.github.io",
     # Keep known external preview hosts
     "https://jerilyn-nonobligated-punningly.ngrok-free.dev",
+    # Render frontend URL
+    "https://friendly-friends-app-full.onrender.com",
 ]
 
 # Use a function to dynamically check origins (Flask-CORS supports this)
@@ -216,12 +220,15 @@ def cors_origin_function(origin, callback):
 CORS(
     app,
     supports_credentials=True,
-    resources={r"/api/*": {
-        "origins": cors_allowed_origins_list,
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
-        "allow_headers": ["Content-Type", "Authorization", "Accept", "Range"],
-        "expose_headers": ["Content-Range", "Accept-Ranges", "Content-Length", "Content-Type"],
-    }},
+    origins=cors_allowed_origins_list,
+    resources={
+        r"/api/*": {
+            "origins": cors_allowed_origins_list,
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+            "allow_headers": ["Content-Type", "Authorization", "Accept", "Range"],
+            "expose_headers": ["Content-Range", "Accept-Ranges", "Content-Length", "Content-Type"],
+        }
+    },
     allow_headers=["Content-Type", "Authorization", "Accept", "Range"],
     expose_headers=["Content-Range", "Accept-Ranges", "Content-Length", "Content-Type"],
 )
@@ -1417,7 +1424,7 @@ def logout():
         return jsonify({"ok": True, "message": "Logged out"})
 
 
-@app.get("/api/me")
+@app.route("/api/me", methods=["GET"])
 def me():
     """Get current user info using database session token."""
     # Wrap everything to ensure we always return a response
@@ -1436,9 +1443,11 @@ def me():
         
         if not session_token:
             try:
-                return jsonify({"error": "Authentication required"}), 401
+                response = jsonify({"error": "Authentication required", "code": "NO_TOKEN"})
+                response.status_code = 401
+                return response
             except:
-                return make_response(json.dumps({"error": "Authentication required"}), 401, {"Content-Type": "application/json"})
+                return make_response(json.dumps({"error": "Authentication required", "code": "NO_TOKEN"}), 401, {"Content-Type": "application/json"})
         
         # Find session in database
         try:
@@ -4978,8 +4987,19 @@ def remove_download(app_id: int):
 ###############################################################################
 
 
-@app.post("/api/join-requests")
+@app.route("/api/join-requests", methods=["POST", "OPTIONS"])
 def submit_join_request():
+    # Handle preflight OPTIONS request
+    if request.method == "OPTIONS":
+        response = make_response()
+        origin = request.headers.get("Origin")
+        if origin and cors_origin_check(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+    
     """Submit a join request to Friendly Friends."""
     try:
         data = ensure_json_request()
