@@ -31,7 +31,6 @@ function AiDocs() {
   const [selectedImageId, setSelectedImageId] = useState(null);
   const [loadingImages, setLoadingImages] = useState(true);
   const [imageUrls, setImageUrls] = useState({}); // Cache for image blob URLs
-  const [imageUrls, setImageUrls] = useState({}); // Cache for image blob URLs
   
   // Common state
   const [error, setError] = useState(null);
