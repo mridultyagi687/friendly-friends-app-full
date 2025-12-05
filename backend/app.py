@@ -3040,25 +3040,28 @@ def search_research_data():
         if not query:
             return jsonify({"error": "Search query is required"}), 400
         
-        # Require minimum query length to avoid matching everything
-        # Single character queries like "h" match too broadly
-        if len(query) < 2:
-            return jsonify({
-                "error": "Search query must be at least 2 characters long",
-                "aggregated_data": "Please enter a more specific search query (at least 2 characters). Single character searches are too broad and will match too many results.",
-                "sources": [],
-                "query": query
-            }), 400
+        # Get all research - we'll filter by content relevance using AI
+        # This allows single character searches to work by matching based on actual content meaning
+        all_research = db.session.query(Research).order_by(Research.created_at.desc()).all()
         
-        # Search through all research (title, description, results)
-        # Get all research that might be relevant
-        all_research = db.session.query(Research).filter(
-            db.or_(
-                Research.title.ilike(f"%{query}%"),
-                Research.description.ilike(f"%{query}%"),
-                Research.results.ilike(f"%{query}%")
-            )
-        ).order_by(Research.created_at.desc()).all()
+        # For very short queries (1-2 chars), use substring matching as initial filter
+        # For longer queries, use substring matching
+        if len(query) <= 2:
+            # For short queries, match in title, description, or results
+            all_research = [r for r in all_research if (
+                query.lower() in (r.title or "").lower() or
+                query.lower() in (r.description or "").lower() or
+                query.lower() in (r.results or "").lower()
+            )]
+        else:
+            # For longer queries, use database filtering for efficiency
+            all_research = db.session.query(Research).filter(
+                db.or_(
+                    Research.title.ilike(f"%{query}%"),
+                    Research.description.ilike(f"%{query}%"),
+                    Research.results.ilike(f"%{query}%")
+                )
+            ).order_by(Research.created_at.desc()).all()
         
         if not all_research:
             return jsonify({
@@ -3109,31 +3112,32 @@ def search_research_data():
             # Build example titles for the prompt
             example_titles = ", ".join([r['title'] for r in research_data[:3]])
             
-            system_prompt = """You are a research data aggregator. Your task is to analyze multiple research sources and combine them into a comprehensive, well-organized summary. 
-            Synthesize the information from all sources, identify common themes, key findings, and important insights. 
-            Present the aggregated data in a clear, structured format that combines all relevant information.
+            system_prompt = """You are a research data aggregator. Your task is to analyze research sources based on their ACTUAL CONTENT (description and results), not just titles.
             
-            CRITICAL RULE: When referencing research sources in your summary, you MUST use the exact research title/name provided in the "Research Title:" field. 
-            NEVER use generic labels like "Research #1", "Research #2", "The first research", "Research number one", etc.
-            ALWAYS use the actual title exactly as provided (e.g., if the title is "The test", say "The test", not "Research #1" or "The first research")."""
+            IMPORTANT RULES:
+            1. Focus on the DESCRIPTION and RESULTS fields - these contain the actual research information
+            2. Only include research that is RELEVANT to the query based on its content, not just title matches
+            3. When referencing sources, use the exact research title from "Research Title:" field
+            4. NEVER use generic labels like "Research #1", "Research #2", etc.
+            5. If a research source doesn't contain relevant information about the query in its description or results, exclude it from the summary even if the title matches."""
             
-            user_prompt = f"""Please aggregate and synthesize the following research data related to the query: "{query}"
+            user_prompt = f"""Analyze the following research sources and create a summary based on the query: "{query}"
 
             Research Sources:
             {research_summaries}
 
-            Please provide a comprehensive summary that:
-            1. Combines all relevant information from the research sources
-            2. Identifies common themes and patterns
-            3. Highlights key findings and insights
-            4. Organizes the information in a clear, structured manner
-            5. Preserves important details from each source
-            6. CRITICAL: When referencing sources, you MUST use the exact research title from the "Research Title:" field above. 
-               Example titles to use: {example_titles}
-               DO NOT use "Research #1", "Research #2", "The first research", or any generic labels.
-               Use the actual titles like "{research_data[0]['title'] if research_data else 'The test'}" exactly as shown.
+            Instructions:
+            1. Review each research source's DESCRIPTION and RESULTS fields (not just the title)
+            2. Only include research that contains information RELEVANT to "{query}" in its description or results
+            3. If a research title matches but the description/results don't contain relevant information about "{query}", exclude it
+            4. Focus on the actual submitted research information, not just title matches
+            5. Combine relevant information from the included sources
+            6. Identify common themes and patterns in the actual research content
+            7. Highlight key findings from the research results
+            8. When referencing sources, use the exact title (e.g., "{research_data[0]['title'] if research_data else 'The test'}"), NOT "Research #1"
             
-            Format your response as a well-structured document with clear sections."""
+            Format your response as a well-structured document with clear sections.
+            Only include research sources that have actual relevant content about "{query}" in their description or results."""
             
             try:
                 response = client.chat.completions.create(

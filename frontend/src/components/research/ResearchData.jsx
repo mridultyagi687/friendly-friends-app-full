@@ -20,12 +20,6 @@ function ResearchData() {
     const trimmedQuery = searchQuery.trim();
     
     if (!trimmedQuery || searching) return;
-    
-    // Frontend validation: require at least 2 characters
-    if (trimmedQuery.length < 2) {
-      setError('Search query must be at least 2 characters long. Single character searches are too broad.');
-      return;
-    }
 
     setSearching(true);
     setError(null);
