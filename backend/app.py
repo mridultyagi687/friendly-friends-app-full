@@ -5050,7 +5050,7 @@ def submit_join_request():
         logger.info(f"Join request submitted for name: {name}")
         
         return jsonify({
-            "message": "Join request submitted successfully! Admins will review your request.",
+            "message": "Join request submitted successfully! You will be informed when you are added to the team.",
             "request_id": join_request.id
         })
     except Exception as e:

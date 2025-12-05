@@ -358,7 +358,7 @@ function Login() {
               Join Friendly Friends
             </h2>
             <p style={styles.joinDescription}>
-              Want to become a member? Submit a join request and our admins will review it!
+              Want to become a member? Submit a join request and you will be informed when you are added to team!
             </p>
             
             {joinRequestStatus && (
