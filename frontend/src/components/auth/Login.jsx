@@ -107,6 +107,7 @@ function Login() {
     try {
       const response = await api.post('/api/join-requests', {
         name: formData.username,
+        email: formData.email,
         password: formData.password,
       });
       
@@ -370,6 +371,16 @@ function Login() {
                 name="username"
                 placeholder="Desired Username"
                 value={formData.username}
+                onChange={handleChange}
+                style={styles.input}
+                required
+              />
+              
+              <input
+                type="email"
+                name="email"
+                placeholder="Email Address"
+                value={formData.email}
                 onChange={handleChange}
                 style={styles.input}
                 required

@@ -286,6 +286,7 @@ function AdminDashboard() {
           <div style={styles.usersTable}>
             <div style={styles.tableHeader}>
               <div style={styles.headerCell}>Name</div>
+              <div style={styles.headerCell}>Email</div>
               <div style={styles.headerCell}>Status</div>
               <div style={styles.headerCell}>Requested</div>
               <div style={styles.headerCell}>Actions</div>
@@ -294,6 +295,7 @@ function AdminDashboard() {
             {joinRequests.map(request => (
               <div key={request.id} style={styles.tableRow}>
                 <div style={styles.cell}>{request.name}</div>
+                <div style={styles.cell}>{request.email || 'N/A'}</div>
                 <div style={styles.cell}>
                   <span style={{
                     ...styles.memberBadge,
@@ -623,7 +625,7 @@ const styles = {
   },
   tableHeader: {
     display: 'grid',
-    gridTemplateColumns: '2fr 2fr 1fr 1.5fr',
+    gridTemplateColumns: '1.5fr 2fr 1fr 1fr 1.5fr',
     padding: '1.25rem 1rem',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     color: 'white',
@@ -632,7 +634,7 @@ const styles = {
   },
   tableRow: {
     display: 'grid',
-    gridTemplateColumns: '2fr 2fr 1fr 1.5fr',
+    gridTemplateColumns: '1.5fr 2fr 1fr 1fr 1.5fr',
     padding: '1.25rem 1rem',
     borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
     transition: 'background-color 0.2s',
