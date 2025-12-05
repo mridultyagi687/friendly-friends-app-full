@@ -3106,10 +3106,16 @@ def search_research_data():
                 for i, r in enumerate(research_data)
             ])
             
+            # Build example titles for the prompt
+            example_titles = ", ".join([r['title'] for r in research_data[:3]])
+            
             system_prompt = """You are a research data aggregator. Your task is to analyze multiple research sources and combine them into a comprehensive, well-organized summary. 
             Synthesize the information from all sources, identify common themes, key findings, and important insights. 
             Present the aggregated data in a clear, structured format that combines all relevant information.
-            IMPORTANT: When referencing research sources, always use the actual research title/name provided, NOT generic labels like "Research #1"."""
+            
+            CRITICAL RULE: When referencing research sources in your summary, you MUST use the exact research title/name provided in the "Research Title:" field. 
+            NEVER use generic labels like "Research #1", "Research #2", "The first research", "Research number one", etc.
+            ALWAYS use the actual title exactly as provided (e.g., if the title is "The test", say "The test", not "Research #1" or "The first research")."""
             
             user_prompt = f"""Please aggregate and synthesize the following research data related to the query: "{query}"
 
@@ -3122,7 +3128,10 @@ def search_research_data():
             3. Highlights key findings and insights
             4. Organizes the information in a clear, structured manner
             5. Preserves important details from each source
-            6. When referencing sources, use the actual research title/name (e.g., "{research_data[0]['title'] if research_data else 'Research Title'}"), NOT generic labels like "Research #1"
+            6. CRITICAL: When referencing sources, you MUST use the exact research title from the "Research Title:" field above. 
+               Example titles to use: {example_titles}
+               DO NOT use "Research #1", "Research #2", "The first research", or any generic labels.
+               Use the actual titles like "{research_data[0]['title'] if research_data else 'The test'}" exactly as shown.
             
             Format your response as a well-structured document with clear sections."""
             

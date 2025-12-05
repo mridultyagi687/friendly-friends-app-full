@@ -17,7 +17,15 @@ function ResearchData() {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!searchQuery.trim() || searching) return;
+    const trimmedQuery = searchQuery.trim();
+    
+    if (!trimmedQuery || searching) return;
+    
+    // Frontend validation: require at least 2 characters
+    if (trimmedQuery.length < 2) {
+      setError('Search query must be at least 2 characters long. Single character searches are too broad.');
+      return;
+    }
 
     setSearching(true);
     setError(null);
@@ -26,7 +34,7 @@ function ResearchData() {
 
     try {
       const { data } = await api.post('/api/research/data/search', {
-        query: searchQuery.trim(),
+        query: trimmedQuery,
       });
 
       if (data) {
@@ -34,8 +42,12 @@ function ResearchData() {
         setSources(data.sources || []);
       }
     } catch (err) {
-      const message = err.response?.data?.error || 'Failed to search research data. Please try again.';
+      const message = err.response?.data?.error || err.response?.data?.aggregated_data || 'Failed to search research data. Please try again.';
       setError(message);
+      // If backend returns aggregated_data in error response, show it
+      if (err.response?.data?.aggregated_data) {
+        setAggregatedData(err.response.data.aggregated_data);
+      }
     } finally {
       setSearching(false);
     }
