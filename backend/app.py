@@ -3098,7 +3098,7 @@ def search_research_data():
         else:
             # Create a comprehensive prompt for AI aggregation
             research_summaries = "\n\n".join([
-                f"Research #{i+1}: {r['title']}\n"
+                f"Research Title: {r['title']}\n"
                 f"Description: {r['description']}\n"
                 f"Results: {r['results']}\n"
                 f"Published by: {r['created_by']}\n"
@@ -3108,7 +3108,8 @@ def search_research_data():
             
             system_prompt = """You are a research data aggregator. Your task is to analyze multiple research sources and combine them into a comprehensive, well-organized summary. 
             Synthesize the information from all sources, identify common themes, key findings, and important insights. 
-            Present the aggregated data in a clear, structured format that combines all relevant information."""
+            Present the aggregated data in a clear, structured format that combines all relevant information.
+            IMPORTANT: When referencing research sources, always use the actual research title/name provided, NOT generic labels like "Research #1"."""
             
             user_prompt = f"""Please aggregate and synthesize the following research data related to the query: "{query}"
 
@@ -3121,6 +3122,7 @@ def search_research_data():
             3. Highlights key findings and insights
             4. Organizes the information in a clear, structured manner
             5. Preserves important details from each source
+            6. When referencing sources, use the actual research title/name (e.g., "{research_data[0]['title'] if research_data else 'Research Title'}"), NOT generic labels like "Research #1"
             
             Format your response as a well-structured document with clear sections."""
             
