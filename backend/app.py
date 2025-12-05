@@ -5056,7 +5056,11 @@ def submit_join_request():
     except Exception as e:
         logger.exception(f"Error submitting join request: {e}")
         db.session.rollback()
-        return jsonify({"error": "Failed to submit join request"}), 500
+        # Provide more specific error message
+        error_msg = str(e)
+        if "no such column: email" in error_msg.lower() or "column.*email.*does not exist" in error_msg.lower():
+            return jsonify({"error": "Database migration required. Please contact administrator."}), 500
+        return jsonify({"error": f"Failed to submit join request: {error_msg}"}), 500
 
 
 @app.get("/api/join-requests")
@@ -5072,7 +5076,7 @@ def list_join_requests():
         # Add reviewer info
         requests_with_reviewer = []
         for req in requests:
-            req_dict = req.to_dict()
+            req_dict = req.to_dict(include_email=True)  # Include email for admin view
             if req.reviewed_by:
                 reviewer = db.session.get(User, req.reviewed_by)
                 if reviewer:
@@ -5109,7 +5113,7 @@ def approve_join_request(request_id: int):
         # Create user account
         user = User(
             username=join_request.name,
-            email=f"{join_request.name}@friendlyfriends.local",  # Generate email
+            email=join_request.email,  # Use the actual email from join request
             password_hash=join_request.password,  # Already hashed
             is_admin=False
         )
@@ -5284,6 +5288,26 @@ def init_database():
         db.create_all()
         logger.info("Database tables created/verified")
         
+        # Migration: Ensure email column exists in join_requests table
+        try:
+            from sqlalchemy import inspect, text
+            inspector = inspect(db.engine)
+            if 'join_requests' in inspector.get_table_names():
+                columns = [col['name'] for col in inspector.get_columns('join_requests')]
+                if 'email' not in columns:
+                    logger.info("Adding email column to join_requests table...")
+                    # For SQLite
+                    if 'sqlite' in str(db.engine.url):
+                        db.session.execute(text('ALTER TABLE join_requests ADD COLUMN email VARCHAR(255) NOT NULL DEFAULT ""'))
+                    else:
+                        # For PostgreSQL
+                        db.session.execute(text('ALTER TABLE join_requests ADD COLUMN email VARCHAR(255) NOT NULL DEFAULT \'\''))
+                    db.session.commit()
+                    logger.info("Added email column to join_requests table")
+        except Exception as e:
+            logger.warning(f"Could not check/add email column to join_requests: {e}")
+            db.session.rollback()
+        
         # Ensure admin user exists
         admin = db.session.query(User).filter_by(username='admin').first()
         if not admin:
@@ -5359,6 +5383,26 @@ if __name__ == "__main__":
                         logger.info("Added open_apps column to cloud_pcs table")
             except Exception as e:
                 logger.warning(f"Could not check/add open_apps column: {e}")
+            
+            # Migration: Ensure email column exists in join_requests table
+            try:
+                from sqlalchemy import inspect, text
+                inspector = inspect(db.engine)
+                if 'join_requests' in inspector.get_table_names():
+                    columns = [col['name'] for col in inspector.get_columns('join_requests')]
+                    if 'email' not in columns:
+                        logger.info("Adding email column to join_requests table...")
+                        # For SQLite
+                        if 'sqlite' in str(db.engine.url):
+                            db.session.execute(text('ALTER TABLE join_requests ADD COLUMN email VARCHAR(255) NOT NULL DEFAULT ""'))
+                        else:
+                            # For PostgreSQL
+                            db.session.execute(text('ALTER TABLE join_requests ADD COLUMN email VARCHAR(255) NOT NULL DEFAULT \'\''))
+                        db.session.commit()
+                        logger.info("Added email column to join_requests table")
+            except Exception as e:
+                logger.warning(f"Could not check/add email column to join_requests: {e}")
+                db.session.rollback()
             
             # Ensure admin user exists
             admin = db.session.query(User).filter_by(username='admin').first()
