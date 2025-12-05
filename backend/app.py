@@ -3114,27 +3114,31 @@ def search_research_data():
             
             system_prompt = """You are a research data aggregator. Your task is to analyze research sources based on their ACTUAL CONTENT (description and results), not just titles.
             
-            IMPORTANT RULES:
-            1. Focus on the DESCRIPTION and RESULTS fields - these contain the actual research information
-            2. Only include research that is RELEVANT to the query based on its content, not just title matches
-            3. When referencing sources, use the exact research title from "Research Title:" field
-            4. NEVER use generic labels like "Research #1", "Research #2", etc.
-            5. If a research source doesn't contain relevant information about the query in its description or results, exclude it from the summary even if the title matches."""
+            CRITICAL RULES:
+            1. Focus ONLY on the DESCRIPTION and RESULTS fields - these contain the actual research information
+            2. Only include research that contains MEANINGFUL, RELEVANT information about the query in its description or results
+            3. If a research title contains the query but the description/results have NO relevant information about the query, COMPLETELY EXCLUDE it from the summary
+            4. When summarizing included research, extract ONLY the parts that are relevant to the query - skip unrelated information
+            5. When referencing sources, use the exact research title from "Research Title:" field
+            6. NEVER use generic labels like "Research #1", "Research #2", etc.
+            7. If a research has the query in both title and results, only summarize the parts of the results that relate to the query"""
             
             user_prompt = f"""Analyze the following research sources and create a summary based on the query: "{query}"
 
             Research Sources:
             {research_summaries}
 
-            Instructions:
-            1. Review each research source's DESCRIPTION and RESULTS fields (not just the title)
-            2. Only include research that contains information RELEVANT to "{query}" in its description or results
-            3. If a research title matches but the description/results don't contain relevant information about "{query}", exclude it
-            4. Focus on the actual submitted research information, not just title matches
-            5. Combine relevant information from the included sources
-            6. Identify common themes and patterns in the actual research content
-            7. Highlight key findings from the research results
-            8. When referencing sources, use the exact title (e.g., "{research_data[0]['title'] if research_data else 'The test'}"), NOT "Research #1"
+            STEP-BY-STEP PROCESS:
+            1. For each research source, check the DESCRIPTION and RESULTS fields (ignore the title for relevance checking)
+            2. Determine if the description or results contain MEANINGFUL information about "{query}"
+            3. If a research has "{query}" in the title but NO relevant information about "{query}" in description/results, SKIP IT ENTIRELY
+            4. For research that IS relevant, extract ONLY the information that relates to "{query}" - skip unrelated parts
+            5. If a research contains "{query}" in both title and results, only include the parts of the results that are about "{query}", not everything
+            6. Combine only the relevant extracted information from included sources
+            7. When referencing sources, use the exact title (e.g., "{research_data[0]['title'] if research_data else 'The test'}"), NOT "Research #1"
+            
+            Example: If query is "h" and a research has "h" in title but results say "This is a test about weather patterns", SKIP IT because it has no information about "h".
+            If results say "This research studies the letter h and its usage", include ONLY the parts about "h", not other unrelated details.
             
             Format your response as a well-structured document with clear sections.
             Only include research sources that have actual relevant content about "{query}" in their description or results."""
