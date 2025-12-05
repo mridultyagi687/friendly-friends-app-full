@@ -3040,6 +3040,16 @@ def search_research_data():
         if not query:
             return jsonify({"error": "Search query is required"}), 400
         
+        # Require minimum query length to avoid matching everything
+        # Single character queries like "h" match too broadly
+        if len(query) < 2:
+            return jsonify({
+                "error": "Search query must be at least 2 characters long",
+                "aggregated_data": "Please enter a more specific search query (at least 2 characters). Single character searches are too broad and will match too many results.",
+                "sources": [],
+                "query": query
+            }), 400
+        
         # Search through all research (title, description, results)
         # Get all research that might be relevant
         all_research = db.session.query(Research).filter(
