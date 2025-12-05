@@ -3092,6 +3092,8 @@ def search_research_data():
         
         # Use AI to aggregate the research data
         client = get_openai_client()
+        used_research_titles = []  # Track which research was actually used
+        
         if not client:
             # Fallback: simple aggregation without AI
             aggregated_text = "\n\n".join([
@@ -3136,12 +3138,15 @@ def search_research_data():
             5. If a research contains "{query}" in both title and results, only include the parts of the results that are about "{query}", not everything
             6. Combine only the relevant extracted information from included sources
             7. When referencing sources, use the exact title (e.g., "{research_data[0]['title'] if research_data else 'The test'}"), NOT "Research #1"
+            8. IMPORTANT: At the end of your response, add a line that lists ONLY the research titles you actually used (separated by commas). Format: "USED_RESEARCH: Title1, Title2, Title3"
             
             Example: If query is "h" and a research has "h" in title but results say "This is a test about weather patterns", SKIP IT because it has no information about "h".
             If results say "This research studies the letter h and its usage", include ONLY the parts about "h", not other unrelated details.
             
             Format your response as a well-structured document with clear sections.
-            Only include research sources that have actual relevant content about "{query}" in their description or results."""
+            Only include research sources that have actual relevant content about "{query}" in their description or results.
+            End with: "USED_RESEARCH: [list of actual research titles used]"
+            """
             
             try:
                 response = client.chat.completions.create(
@@ -3154,6 +3159,21 @@ def search_research_data():
                     max_tokens=2000
                 )
                 aggregated_text = response.choices[0].message.content.strip()
+                
+                # Extract which research was actually used from AI response
+                if "USED_RESEARCH:" in aggregated_text:
+                    # Extract the used research titles
+                    used_line = aggregated_text.split("USED_RESEARCH:")[-1].strip()
+                    used_research_titles = [title.strip() for title in used_line.split(",") if title.strip()]
+                    # Remove the USED_RESEARCH line from the aggregated text
+                    aggregated_text = aggregated_text.split("USED_RESEARCH:")[0].strip()
+                else:
+                    # If AI didn't provide used research list, try to infer from the text
+                    # by checking which research titles are mentioned in the summary
+                    used_research_titles = []
+                    for research in research_data:
+                        if research['title'] in aggregated_text:
+                            used_research_titles.append(research['title'])
             except Exception as ai_error:
                 logger.exception(f"Error calling OpenAI for research aggregation: {ai_error}")
                 # Fallback to simple aggregation
@@ -3161,16 +3181,29 @@ def search_research_data():
                     f"Research: {r['title']}\nDescription: {r['description']}\nResults: {r['results']}"
                     for r in research_data
                 ])
+                used_research_titles = []
         
-        # Prepare sources with metadata
+        # Prepare sources with metadata - only include research that was actually used by AI
         sources = []
-        for research in all_research:
-            sources.append({
-                "id": research.id,
-                "title": research.title,
-                "date": research.created_at.isoformat() if research.created_at else None,
-                "published_by": user_map.get(research.created_by, "Unknown")
-            })
+        if used_research_titles:
+            # Filter sources to only those used by AI
+            for research in all_research:
+                if research.title in used_research_titles:
+                    sources.append({
+                        "id": research.id,
+                        "title": research.title,
+                        "date": research.created_at.isoformat() if research.created_at else None,
+                        "published_by": user_map.get(research.created_by, "Unknown")
+                    })
+        else:
+            # If no used research list (fallback or no AI), include all
+            for research in all_research:
+                sources.append({
+                    "id": research.id,
+                    "title": research.title,
+                    "date": research.created_at.isoformat() if research.created_at else None,
+                    "published_by": user_map.get(research.created_by, "Unknown")
+                })
         
         return jsonify({
             "aggregated_data": aggregated_text,
