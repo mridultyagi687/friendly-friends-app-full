@@ -15,6 +15,7 @@ function Login() {
     password: ''
   });
   const [joinRequestStatus, setJoinRequestStatus] = useState(null);
+  const [isSubmittingJoinRequest, setIsSubmittingJoinRequest] = useState(false);
   const navigate = useNavigate();
 
   const handleMemberLogin = async (e) => {
@@ -104,6 +105,8 @@ function Login() {
 
   const handleJoinRequest = async (e) => {
     e.preventDefault();
+    setIsSubmittingJoinRequest(true);
+    setJoinRequestStatus(null);
     try {
       const response = await api.post('/api/join-requests', {
         name: formData.username,
@@ -124,6 +127,8 @@ function Login() {
         type: 'error',
         message: errorMessage
       });
+    } finally {
+      setIsSubmittingJoinRequest(false);
     }
   };
 
@@ -374,6 +379,7 @@ function Login() {
                 onChange={handleChange}
                 style={styles.input}
                 required
+                disabled={isSubmittingJoinRequest}
               />
               
               <input
@@ -384,6 +390,7 @@ function Login() {
                 onChange={handleChange}
                 style={styles.input}
                 required
+                disabled={isSubmittingJoinRequest}
               />
               
               <input
@@ -394,10 +401,18 @@ function Login() {
                 onChange={handleChange}
                 style={styles.input}
                 required
+                disabled={isSubmittingJoinRequest}
               />
               
-              <button type="submit" style={styles.loginButton}>
-                Submit Join Request
+              <button 
+                type="submit" 
+                style={{
+                  ...styles.loginButton,
+                  ...(isSubmittingJoinRequest ? styles.loginButtonDisabled : {})
+                }}
+                disabled={isSubmittingJoinRequest}
+              >
+                {isSubmittingJoinRequest ? 'Submitting...' : 'Submit Join Request'}
               </button>
             </form>
           </>
@@ -509,6 +524,11 @@ const styles = {
     width: '100%',
     marginTop: '0.5rem',
     boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
+    cursor: 'not-allowed',
+    background: 'linear-gradient(135deg, #94a3b8 0%, #757575 100%)',
   },
   error: {
     color: '#f44336',
