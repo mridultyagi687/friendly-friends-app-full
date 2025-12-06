@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
-// Import our custom emulator (will be used in future steps)
-// import CustomEmulator from '../../emulator/core/emulator.js';
+// Import our custom emulator
+import CustomEmulator from '../../emulator/core/emulator.js';
 
 // IndexedDB helper for storing VM state
 const getDB = () => {
@@ -69,30 +69,43 @@ function Windows11Emulator() {
     }
   }, [passwordVerified, pcId]);
 
-  // Load v86.js and initialize emulator
+  // Initialize emulator (custom or v86)
   useEffect(() => {
     if (!passwordVerified || checkingState) return;
 
-    // Load v86.js from CDN
-    if (!window.V86Starter) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/gh/copy/v86@master/build/libv86.js';
-      script.async = true;
-      script.onload = () => {
-        initializeEmulator();
-      };
-      script.onerror = () => {
-        setError('Failed to load v86.js emulator library');
-        setLoading(false);
-      };
-      document.head.appendChild(script);
+    if (useCustomEmulator) {
+      initializeCustomEmulator();
     } else {
-      initializeEmulator();
+      // Load v86.js from CDN (fallback)
+      if (!window.V86Starter) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/gh/copy/v86@master/build/libv86.js';
+        script.async = true;
+        script.onload = () => {
+          initializeEmulator();
+        };
+        script.onerror = () => {
+          setError('Failed to load v86.js emulator library');
+          setLoading(false);
+        };
+        document.head.appendChild(script);
+      } else {
+        initializeEmulator();
+      }
     }
 
     return () => {
       // Cleanup emulator on unmount
-      if (emulatorRef.current) {
+      if (useCustomEmulator && customEmulatorRef.current) {
+        try {
+          // Save state before stopping
+          const state = customEmulatorRef.current.saveState();
+          saveVMState(pcId, state);
+          customEmulatorRef.current.stop();
+        } catch (e) {
+          console.error('Error stopping custom emulator:', e);
+        }
+      } else if (emulatorRef.current) {
         try {
           // Stop observer if it exists
           if (emulatorRef.current._observer) {
@@ -109,7 +122,7 @@ function Windows11Emulator() {
         clearInterval(saveIntervalRef.current);
       }
     };
-  }, [passwordVerified, checkingState, hasSavedState]);
+  }, [passwordVerified, checkingState, hasSavedState, useCustomEmulator, pcId]);
 
   const checkForSavedState = async () => {
     setCheckingState(true);
