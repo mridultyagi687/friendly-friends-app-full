@@ -259,6 +259,8 @@ function Windows11Emulator() {
       fontFamily: 'Arial, sans-serif',
       position: 'relative',
       overflow: 'hidden',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
     },
     passwordScreen: {
       display: 'flex',
@@ -404,9 +406,40 @@ function Windows11Emulator() {
     );
   }
 
+  // Add CSS to constrain v86.js canvas elements
+  useEffect(() => {
+    const styleId = 'v86-screen-constraints';
+    // Remove existing style if any
+    const existingStyle = document.getElementById(styleId);
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+    
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      #v86-screen-container canvas,
+      #v86-screen-container > canvas,
+      #v86-screen-container canvas {
+        max-width: 100% !important;
+        max-height: 100% !important;
+        position: relative !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      const styleToRemove = document.getElementById(styleId);
+      if (styleToRemove) {
+        styleToRemove.remove();
+      }
+    };
+  }, []);
+
   return (
     <div style={styles.container}>
-      <div ref={screenRef} style={styles.screen}></div>
+      <div ref={screenRef} style={styles.screen} id="v86-screen-container"></div>
     </div>
   );
 }
