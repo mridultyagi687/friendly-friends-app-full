@@ -8,13 +8,19 @@ import CPU from './cpu/cpu.js';
 import MemoryManager from './memory/memory.js';
 import TPMEmulator from './tpm/tpm-emulator.js';
 import SecureBoot from './uefi/secure-boot.js';
+import VGADevice from './devices/vga.js';
+import KeyboardDevice from './devices/keyboard.js';
+import MouseDevice from './devices/mouse.js';
 
 class CustomEmulator {
-  constructor() {
+  constructor(canvas = null) {
     this.cpu = new CPU();
     this.memory = new MemoryManager();
     this.tpm = new TPMEmulator();
     this.secureBoot = new SecureBoot();
+    this.vga = new VGADevice(canvas);
+    this.keyboard = new KeyboardDevice();
+    this.mouse = new MouseDevice();
     
     this.initialized = false;
     this.running = false;
@@ -30,6 +36,10 @@ class CustomEmulator {
     this.memory.init();
     this.cpu.memory = this.memory;
     this.cpu.init();
+    
+    this.vga.init();
+    this.keyboard.init();
+    this.mouse.init();
     
     await this.tpm.init();
     await this.secureBoot.init();
@@ -101,8 +111,11 @@ class CustomEmulator {
    * @param {KeyboardEvent} event - Keyboard event
    */
   handleKeyboard(event) {
-    // TODO: Forward to keyboard device emulation
-    console.log('Emulator: Keyboard input', event);
+    if (event.type === 'keydown') {
+      this.keyboard.handleKeyDown(event);
+    } else if (event.type === 'keyup') {
+      this.keyboard.handleKeyUp(event);
+    }
   }
 
   /**
@@ -110,8 +123,27 @@ class CustomEmulator {
    * @param {MouseEvent} event - Mouse event
    */
   handleMouse(event) {
-    // TODO: Forward to mouse device emulation
-    console.log('Emulator: Mouse input', event);
+    if (event.type === 'mousemove') {
+      const rect = this.vga.canvas?.getBoundingClientRect();
+      if (rect) {
+        const deltaX = event.movementX || 0;
+        const deltaY = event.movementY || 0;
+        this.mouse.handleMove(deltaX, deltaY);
+      }
+    } else if (event.type === 'mousedown') {
+      const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : 'middle';
+      this.mouse.handleButtonDown(button);
+    } else if (event.type === 'mouseup') {
+      const button = event.button === 0 ? 'left' : event.button === 2 ? 'right' : 'middle';
+      this.mouse.handleButtonUp(button);
+    }
+  }
+
+  /**
+   * Render VGA output
+   */
+  render() {
+    this.vga.render();
   }
 }
 
