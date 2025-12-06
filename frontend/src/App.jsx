@@ -522,12 +522,12 @@ function AppRoutesContent() {
             />
           </Routes>
         </div>
-        {user && (
+        {user2 && (
           <Suspense fallback={null}>
             <AppTour />
           </Suspense>
         )}
-        {user && bugNotifications.length > 0 && (() => {
+        {user2 && bugNotifications.length > 0 && (() => {
           const notificationStyles = {
             overlay: {
               position: 'fixed',
