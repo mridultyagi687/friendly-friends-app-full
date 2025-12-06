@@ -91,6 +91,16 @@ class InstructionExecutor {
           return this.executeLOOP(instruction);
         case 'MUL':
           return this.executeMUL(instruction);
+        case 'CPUID':
+          return this.executeCPUID(instruction);
+        case 'RDTSC':
+          return this.executeRDTSC(instruction);
+        case 'INC':
+          return this.executeINC(instruction);
+        case 'NEG':
+          return this.executeNEG(instruction);
+        case 'FXSAVE':
+          return this.executeFXSAVE(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -1161,6 +1171,211 @@ class InstructionExecutor {
       remainder = dividend % divisor;
       this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFFFF00n) | (quotient & 0xFFn);
       this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFF00FFn) | ((remainder & 0xFFn) << 8n);
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute CPUID instruction (Get CPU Information)
+   */
+  executeCPUID(instruction) {
+    // CPUID reads EAX (input), writes to EAX, EBX, ECX, EDX (output)
+    const input = Number(this.cpu.registers.rax & 0xFFFFFFFFn);
+
+    let eax, ebx, ecx, edx;
+
+    switch (input) {
+      case 0: // Get vendor string
+        // Return "GenuineIntel" (common for compatibility)
+        eax = 0x0000000D; // Maximum input value
+        ebx = 0x756E6547; // "Genu"
+        ecx = 0x6C65746E; // "ntel"
+        edx = 0x49656E69; // "ineI"
+        break;
+      case 1: // Get processor info and feature bits
+        eax = 0x000306A9; // Family 6, Model 58, Stepping 9 (Ivy Bridge-like)
+        ebx = 0x00020800; // Brand ID, etc.
+        ecx = 0x7FFEFBFF; // Feature flags (SSE, SSE2, etc.)
+        edx = 0xBFEBFBFF; // Feature flags (FPU, MMX, SSE, etc.)
+        break;
+      case 0x80000000: // Extended function info
+        eax = 0x80000008; // Maximum extended function
+        ebx = 0;
+        ecx = 0;
+        edx = 0;
+        break;
+      case 0x80000001: // Extended processor info
+        eax = 0;
+        ebx = 0;
+        ecx = 0x00000001; // LAHF/SAHF support
+        edx = 0x20000000; // Extended feature flags
+        break;
+      case 0x80000004: // Processor brand string (part 1-3)
+        eax = 0x20202020; // Spaces
+        ebx = 0x20202020;
+        ecx = 0x20202020;
+        edx = 0x20202020;
+        break;
+      default:
+        // Unknown CPUID leaf - return zeros
+        eax = 0;
+        ebx = 0;
+        ecx = 0;
+        edx = 0;
+    }
+
+    // Write results to registers (32-bit, preserve upper bits)
+    this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | BigInt(eax);
+    this.cpu.registers.rbx = (this.cpu.registers.rbx & 0xFFFFFFFF00000000n) | BigInt(ebx);
+    this.cpu.registers.rcx = (this.cpu.registers.rcx & 0xFFFFFFFF00000000n) | BigInt(ecx);
+    this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | BigInt(edx);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute RDTSC instruction (Read Time Stamp Counter)
+   */
+  executeRDTSC(instruction) {
+    // RDTSC returns 64-bit timestamp in EDX:EAX
+    // Use high-resolution time for emulation
+    const timestamp = BigInt(Math.floor(performance.now() * 1000000)); // Microseconds
+    
+    const low = timestamp & 0xFFFFFFFFn;
+    const high = (timestamp >> 32n) & 0xFFFFFFFFn;
+
+    // Write to EDX:EAX (32-bit, preserve upper bits)
+    this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | low;
+    this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | high;
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute INC instruction (Increment)
+   */
+  executeINC(instruction) {
+    const { opcode, modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    let value, result;
+
+    // INC reg (direct register increment)
+    if (opcode.reg) {
+      value = this.cpu.registers[opcode.reg];
+      result = value + 1n;
+      this.cpu.registers[opcode.reg] = result & this.getMask(operandSize);
+    }
+    // INC r/m (memory or register via ModR/M)
+    else if (modrm) {
+      if (modrm.mod === 3) {
+        // Register mode
+        const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+        value = this.cpu.registers[reg];
+        result = value + 1n;
+        this.cpu.registers[reg] = result & this.getMask(operandSize);
+      } else {
+        // Memory mode
+        const memAddr = this.calculateAddress(instruction);
+        if (memAddr === null) {
+          return false;
+        }
+        value = this.readMemory(memAddr, operandSize);
+        result = value + 1n;
+        this.writeMemory(memAddr, result, operandSize);
+      }
+    } else {
+      return false;
+    }
+
+    // Update flags
+    this.updateFlags(result, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute NEG instruction (Negate - Two's Complement)
+   */
+  executeNEG(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm || modrm.reg !== 3) {
+      return false; // NEG uses reg field = 3
+    }
+
+    let value, result;
+
+    if (modrm.mod === 3) {
+      // Register mode
+      const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+      value = this.cpu.registers[reg];
+      result = -value; // Two's complement negation
+      this.cpu.registers[reg] = result & this.getMask(operandSize);
+    } else {
+      // Memory mode
+      const memAddr = this.calculateAddress(instruction);
+      if (memAddr === null) {
+        return false;
+      }
+      value = this.readMemory(memAddr, operandSize);
+      result = -value;
+      this.writeMemory(memAddr, result, operandSize);
+    }
+
+    // Update flags
+    this.updateFlags(result, operandSize);
+    
+    // Set carry flag if original value was not zero
+    if (value !== 0n) {
+      this.cpu.registers.rflags |= 0x01n; // CF
+    } else {
+      this.cpu.registers.rflags &= ~0x01n; // CF
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute FXSAVE/FXRSTOR instruction (Save/Restore FPU State)
+   */
+  executeFXSAVE(instruction) {
+    const { modrm } = instruction;
+
+    if (!modrm) {
+      return false;
+    }
+
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    if (modrm.reg === 0) {
+      // FXSAVE - Save FPU/MMX/SSE state
+      // For now, just write zeros (512 bytes for FXSAVE)
+      // TODO: Implement actual FPU state saving
+      for (let i = 0; i < 512; i++) {
+        this.memory.writeByte(memAddr + i, 0);
+      }
+      console.log('CPU: FXSAVE executed (simplified - zeros written)');
+    } else if (modrm.reg === 1) {
+      // FXRSTOR - Restore FPU/MMX/SSE state
+      // For now, just read (do nothing with data)
+      // TODO: Implement actual FPU state restoration
+      for (let i = 0; i < 512; i++) {
+        this.memory.readByte(memAddr + i);
+      }
+      console.log('CPU: FXRSTOR executed (simplified - data read but not used)');
+    } else {
+      return false;
     }
 
     this.cpu.registers.rip += BigInt(instruction.length);

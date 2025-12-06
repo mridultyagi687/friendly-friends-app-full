@@ -241,6 +241,16 @@ class InstructionDecoder {
       // Multiplication and division
       0xF6: { mnemonic: 'MUL', length: 1, needsModRM: true, hasImmediate: false }, // MUL/DIV/IMUL/IDIV (reg field selects)
       0xF7: { mnemonic: 'MUL', length: 1, needsModRM: true, hasImmediate: false }, // MUL/DIV/IMUL/IDIV (word/dword/qword)
+      // Increment and decrement
+      0x40: { mnemonic: 'INC', length: 1, needsModRM: false, hasImmediate: false, reg: 'rax' }, // INC RAX (REX prefix)
+      0x41: { mnemonic: 'INC', length: 1, needsModRM: false, hasImmediate: false, reg: 'rcx' }, // INC RCX
+      0x42: { mnemonic: 'INC', length: 1, needsModRM: false, hasImmediate: false, reg: 'rdx' }, // INC RDX
+      0x43: { mnemonic: 'INC', length: 1, needsModRM: false, hasImmediate: false, reg: 'rbx' }, // INC RBX
+      0xFE: { mnemonic: 'INC', length: 1, needsModRM: true, hasImmediate: false }, // INC r/m8
+      0xFF: { mnemonic: 'INC', length: 1, needsModRM: true, hasImmediate: false }, // INC r/m (word/dword/qword)
+      // NEG instruction
+      0xF6: { mnemonic: 'NEG', length: 1, needsModRM: true, hasImmediate: false, negOpcode: true }, // NEG r/m8 (reg field = 3)
+      0xF7: { mnemonic: 'NEG', length: 1, needsModRM: true, hasImmediate: false, negOpcode: true }, // NEG r/m (reg field = 3)
     };
 
     const opcode = opcodes[byte];
