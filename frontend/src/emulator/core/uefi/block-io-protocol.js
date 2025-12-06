@@ -87,8 +87,9 @@ class BlockIOProtocol {
       const data = await this.storage.readData(offset, bufferSize);
       
       // Write to memory at buffer address
+      const bufferAddr = typeof buffer === 'bigint' ? Number(buffer) : buffer;
       for (let i = 0; i < data.length; i++) {
-        this.memory.writeByte(buffer + i, data[i]);
+        this.memory.writeByte(bufferAddr + i, data[i]);
       }
       
       console.log(`BlockIO: Read ${data.length} bytes from LBA ${lba} (${numBlocks} blocks)`);
@@ -127,9 +128,10 @@ class BlockIOProtocol {
     
     try {
       // Read data from memory
+      const bufferAddr = typeof buffer === 'bigint' ? Number(buffer) : buffer;
       const data = new Uint8Array(bufferSize);
       for (let i = 0; i < bufferSize; i++) {
-        data[i] = this.memory.readByte(buffer + i);
+        data[i] = this.memory.readByte(bufferAddr + i);
       }
       
       // Write to storage

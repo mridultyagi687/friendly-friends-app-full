@@ -64,8 +64,9 @@ class DiskController {
       const data = await this.storage.readData(offset, size);
       
       // Write to memory
+      const bufferAddr = typeof bufferAddress === 'bigint' ? Number(bufferAddress) : bufferAddress;
       for (let i = 0; i < data.length; i++) {
-        this.memory.writeByte(bufferAddress + i, data[i]);
+        this.memory.writeByte(bufferAddr + i, data[i]);
       }
       
       console.log(`DiskController: Read ${sectorCount} sector(s) from LBA ${lba} on port ${portNumber}`);
@@ -96,9 +97,10 @@ class DiskController {
     
     try {
       // Read from memory
+      const bufferAddr = typeof bufferAddress === 'bigint' ? Number(bufferAddress) : bufferAddress;
       const data = new Uint8Array(size);
       for (let i = 0; i < size; i++) {
-        data[i] = this.memory.readByte(bufferAddress + i);
+        data[i] = this.memory.readByte(bufferAddr + i);
       }
       
       // Write to storage
