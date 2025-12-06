@@ -23,16 +23,29 @@ function VideoGallery() {
   });
 
   const getVideoUrl = useCallback((videoId) => {
+    // Get session token from localStorage for authentication
+    const sessionToken = typeof window !== 'undefined' ? localStorage.getItem('session_token') : null;
+    
     // Use absolute URL in production, relative in development
     const baseURL = import.meta.env.VITE_API_URL || 
                     import.meta.env.REACT_APP_API_URL || 
                     (import.meta.env.PROD ? 'https://friendly-friends-app-full.onrender.com' : '');
     
+    // Build the URL with session token as query parameter (video element can't send headers)
+    let url;
     if (baseURL) {
-      return `${baseURL}/api/videos/${videoId}/stream`;
+      url = `${baseURL}/api/videos/${videoId}/stream`;
+    } else {
+      // Fallback to relative URL for dev server with proxy
+      url = `/api/videos/${videoId}/stream`;
     }
-    // Fallback to relative URL for dev server with proxy
-    return `/api/videos/${videoId}/stream`;
+    
+    // Append session token as query parameter for authentication
+    if (sessionToken) {
+      url += `?session_token=${encodeURIComponent(sessionToken)}`;
+    }
+    
+    return url;
   }, []);
 
   useEffect(() => {
@@ -511,6 +524,7 @@ function VideoGallery() {
               <video
                 ref={videoPlayerRef}
                 key={`video-${playingVideo.id}`}
+                src={getVideoUrl(playingVideo.id)}
                 controls
                 autoPlay
                 playsInline
