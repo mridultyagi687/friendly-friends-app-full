@@ -319,8 +319,7 @@ function Windows11Emulator() {
   const styles = {
     container: {
       width: '100%',
-      height: '100%',
-      minHeight: 'calc(100vh - 0px)',
+      height: '100vh',
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: '#000',
@@ -328,16 +327,14 @@ function Windows11Emulator() {
       fontFamily: 'Arial, sans-serif',
       position: 'relative',
       overflow: 'hidden',
-      maxWidth: '100%',
       boxSizing: 'border-box',
-      zIndex: 1,
     },
     passwordScreen: {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 'calc(100vh - 0px)',
+      height: '100vh',
       backgroundColor: '#1a1a1a',
       padding: '2rem',
     },
@@ -376,7 +373,7 @@ function Windows11Emulator() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 'calc(100vh - 0px)',
+      height: '100vh',
       backgroundColor: '#000',
       gap: '1rem',
       padding: '2rem',
@@ -387,13 +384,14 @@ function Windows11Emulator() {
       flex: 1,
       backgroundColor: '#000',
       overflow: 'hidden',
+      position: 'relative',
     },
     booting: {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: 'calc(100vh - 0px)',
+      height: '100vh',
       backgroundColor: '#000',
       gap: '1rem',
       padding: '2rem',
@@ -488,7 +486,17 @@ function Windows11Emulator() {
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* Constrain the container and all its children */
+      /* Constrain the container and all its children - CRITICAL for layout */
+      .windows11-emulator-container {
+        position: relative !important;
+        width: 100% !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        /* Ensure it stays within parent, not viewport */
+        max-width: 100% !important;
+      }
+      
       #v86-screen-container {
         position: relative !important;
         width: 100% !important;
@@ -514,6 +522,10 @@ function Windows11Emulator() {
         height: 100% !important;
         display: block !important;
         box-sizing: border-box !important;
+        left: auto !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
       }
       
       /* Prevent v86 from creating fixed/absolute positioned elements outside container */
@@ -523,11 +535,13 @@ function Windows11Emulator() {
         display: none !important;
       }
       
-      /* Ensure no element breaks out of the container */
-      .windows11-emulator-container {
+      /* Force all v86 elements to stay within container */
+      #v86-screen-container > * {
         position: relative !important;
-        overflow: hidden !important;
-        max-width: 100% !important;
+        left: auto !important;
+        top: auto !important;
+        right: auto !important;
+        bottom: auto !important;
       }
     `;
     document.head.appendChild(style);

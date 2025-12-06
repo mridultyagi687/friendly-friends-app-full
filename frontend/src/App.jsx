@@ -21,7 +21,7 @@ const Blog = lazy(() => import('./components/blog/Blog'));
 const Roles = lazy(() => import('./components/roles/Roles'));
 const RoleAssignment = lazy(() => import('./components/roles/RoleAssignment'));
 const CloudPCs = lazy(() => import('./components/cloudpc/CloudPCs'));
-const CloudPCViewer = lazy(() => import('./components/cloudpc/CloudPCViewer'));
+const CloudPCViewer = lazy(() => import('./components/cloudpc/Windows11Emulator'));
 const AppTour = lazy(() => import('./components/AppTour'));
 const BugReporter = lazy(() => import('./components/bugs/BugReporter'));
 const ResearchList = lazy(() => import('./components/research/ResearchList'));
@@ -258,7 +258,7 @@ function AppRoutesContent() {
   if (loading) return <div>Loading...</div>;
 
   return (
-    <div className="app">
+      <div className="app">
         {user && (isMobile ? <MobileNavBar /> : <NavBar />)}
         <div style={{ 
           marginLeft: user && !isMobile ? '250px' : '0', 
@@ -520,14 +520,14 @@ function AppRoutesContent() {
                 </ProtectedRoute>
               }
             />
-        </Routes>
-      </div>
-      {user && (
-        <Suspense fallback={null}>
-          <AppTour />
-        </Suspense>
-      )}
-      {user && bugNotifications.length > 0 && (() => {
+          </Routes>
+        </div>
+        {user && (
+          <Suspense fallback={null}>
+            <AppTour />
+          </Suspense>
+        )}
+        {user && bugNotifications.length > 0 && (() => {
           const notificationStyles = {
             overlay: {
               position: 'fixed',
@@ -611,7 +611,7 @@ function AppRoutesContent() {
             </div>
           );
         })()}
-    </div>
+      </div>
   );
 }
 
