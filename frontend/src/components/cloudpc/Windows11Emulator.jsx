@@ -273,6 +273,7 @@ function Windows11Emulator() {
       overflow: 'hidden',
       maxWidth: '100%',
       boxSizing: 'border-box',
+      zIndex: 1,
     },
     passwordScreen: {
       display: 'flex',
@@ -460,7 +461,7 @@ function Windows11Emulator() {
   }, []);
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} className="windows11-emulator-container">
       <div ref={screenRef} style={styles.screen} id="v86-screen-container"></div>
     </div>
   );
