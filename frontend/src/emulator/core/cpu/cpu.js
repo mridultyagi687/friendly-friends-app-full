@@ -24,6 +24,10 @@ class CPU {
 
     this.running = false;
     this.memory = null; // Will be set by memory manager
+    this.decoder = null; // Will be initialized
+    this.executor = null; // Will be initialized
+    this.instructionCount = 0;
+    this.maxInstructions = 1000000; // Safety limit
   }
 
   /**
@@ -35,6 +39,13 @@ class CPU {
     this.registers.rip = 0x1000n; // Start address
     this.registers.rsp = 0x7FFF0n; // Stack pointer
     this.running = false;
+    this.instructionCount = 0;
+    
+    // Initialize decoder and executor
+    if (this.memory) {
+      this.decoder = new InstructionDecoder(this, this.memory);
+      this.executor = new InstructionExecutor(this, this.memory);
+    }
   }
 
   /**
@@ -46,37 +57,41 @@ class CPU {
       throw new Error('Memory not initialized');
     }
 
-    // TODO: Step 2 - Implement instruction fetch and decode
-    // For now, just a placeholder
-    const instruction = this.fetchInstruction();
-    if (!instruction) {
+    if (!this.decoder || !this.executor) {
+      // Initialize if not done yet
+      this.decoder = new InstructionDecoder(this, this.memory);
+      this.executor = new InstructionExecutor(this, this.memory);
+    }
+
+    // Safety check
+    if (this.instructionCount >= this.maxInstructions) {
+      console.warn('CPU: Instruction limit reached');
+      this.running = false;
       return false;
     }
 
-    // TODO: Decode and execute instruction
-    this.decodeAndExecute(instruction);
-    
-    return true;
-  }
+    try {
+      // Decode instruction at current RIP
+      const instruction = this.decoder.decode();
+      if (!instruction) {
+        console.warn(`CPU: Failed to decode instruction at 0x${this.registers.rip.toString(16)}`);
+        return false;
+      }
 
-  /**
-   * Fetch instruction from memory
-   * @returns {Uint8Array|null} - Instruction bytes or null if invalid
-   */
-  fetchInstruction() {
-    // TODO: Read instruction bytes from memory at RIP
-    // For now, return placeholder
-    return null;
-  }
+      // Execute instruction
+      const success = this.executor.execute(instruction);
+      if (!success) {
+        console.warn(`CPU: Failed to execute ${instruction.opcode.mnemonic}`);
+        // Still advance RIP to avoid infinite loop
+        this.registers.rip += BigInt(instruction.length);
+      }
 
-  /**
-   * Decode and execute instruction
-   * @param {Uint8Array} instruction - Instruction bytes
-   */
-  decodeAndExecute(instruction) {
-    // TODO: Step 2 - Implement instruction decoder
-    // This will decode x86-64 instructions and execute them
-    console.log('CPU: Decoding instruction...');
+      this.instructionCount++;
+      return success;
+    } catch (error) {
+      console.error('CPU: Error executing instruction:', error);
+      return false;
+    }
   }
 
   /**
@@ -84,15 +99,32 @@ class CPU {
    */
   run() {
     this.running = true;
+    this.instructionCount = 0;
     console.log('CPU: Starting execution...');
     
-    // TODO: Implement proper execution loop
-    // For now, just a placeholder
-    while (this.running) {
-      if (!this.executeInstruction()) {
-        break;
+    // Use requestAnimationFrame for non-blocking execution
+    const executeLoop = () => {
+      if (!this.running) {
+        return;
       }
-    }
+
+      // Execute a batch of instructions per frame
+      const instructionsPerFrame = 1000;
+      for (let i = 0; i < instructionsPerFrame && this.running; i++) {
+        if (!this.executeInstruction()) {
+          this.running = false;
+          break;
+        }
+      }
+
+      if (this.running) {
+        requestAnimationFrame(executeLoop);
+      } else {
+        console.log('CPU: Execution stopped');
+      }
+    };
+
+    executeLoop();
   }
 
   /**
