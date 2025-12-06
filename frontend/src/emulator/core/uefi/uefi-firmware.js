@@ -164,12 +164,35 @@ class UEFIFirmware {
     
     // TODO: Read boot manager (EFI/BOOT/BOOTX64.EFI for x86-64)
     // For Windows 11, this would be the Windows Boot Manager
+    // Path: EFI/Microsoft/Boot/bootmgfw.efi
+    
+    // Try to load Windows Boot Manager
+    const bootManagerPaths = [
+      'EFI/Microsoft/Boot/bootmgfw.efi',
+      'EFI/BOOT/BOOTX64.EFI',
+      'EFI/boot/bootx64.efi',
+    ];
+
+    let bootManagerLoaded = false;
+    for (const path of bootManagerPaths) {
+      console.log(`UEFI: Attempting to load ${path}`);
+      // TODO: Actually read from ISO/disk
+      // For now, we'll simulate loading
+      bootManagerLoaded = true;
+      break;
+    }
+
+    if (!bootManagerLoaded) {
+      console.warn('UEFI: Boot manager not found');
+      return;
+    }
     
     // Set up boot parameters
     const bootParams = {
       device: device.path,
       secureBoot: true, // Enable Secure Boot
       tpmAvailable: true, // TPM is available
+      bootManagerPath: bootManagerPaths[0],
     };
     
     // Hand off to boot manager

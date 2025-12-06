@@ -202,6 +202,17 @@ class InstructionDecoder {
       0xE8: { mnemonic: 'CALL', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
       0x03: { mnemonic: 'ADD', length: 1, needsModRM: true, hasImmediate: false, mToR: true },
       0x29: { mnemonic: 'SUB', length: 1, needsModRM: true, hasImmediate: false, rToM: true },
+      0x3B: { mnemonic: 'CMP', length: 1, needsModRM: true, hasImmediate: false, mToR: true },
+      0x85: { mnemonic: 'TEST', length: 1, needsModRM: true, hasImmediate: false, mToR: true },
+      0x8D: { mnemonic: 'LEA', length: 1, needsModRM: true, hasImmediate: false, mToR: true },
+      0x31: { mnemonic: 'XOR', length: 1, needsModRM: true, hasImmediate: false, rToM: true },
+      0x21: { mnemonic: 'AND', length: 1, needsModRM: true, hasImmediate: false, rToM: true },
+      0x09: { mnemonic: 'OR', length: 1, needsModRM: true, hasImmediate: false, rToM: true },
+      0x83: { mnemonic: 'ADD', length: 1, needsModRM: true, hasImmediate: true, immediateSize: 1, rToM: true }, // ADD with 8-bit immediate
+      0x81: { mnemonic: 'ADD', length: 1, needsModRM: true, hasImmediate: true, immediateSize: 4, rToM: true }, // ADD with 32-bit immediate
+      0x84: { mnemonic: 'TEST', length: 1, needsModRM: true, hasImmediate: false, mToR: true }, // TEST reg, reg
+      0xA8: { mnemonic: 'TEST', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, reg: 'al' }, // TEST AL, imm8
+      0xA9: { mnemonic: 'TEST', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 4, reg: 'rax' }, // TEST RAX, imm32
     };
 
     const opcode = opcodes[byte];

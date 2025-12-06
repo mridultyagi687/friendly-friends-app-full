@@ -45,6 +45,18 @@ class InstructionExecutor {
         case 'JZ':
         case 'JNZ':
           return this.executeJCC(instruction);
+        case 'CMP':
+          return this.executeCMP(instruction);
+        case 'TEST':
+          return this.executeTEST(instruction);
+        case 'LEA':
+          return this.executeLEA(instruction);
+        case 'XOR':
+          return this.executeXOR(instruction);
+        case 'AND':
+          return this.executeAND(instruction);
+        case 'OR':
+          return this.executeOR(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -414,19 +426,190 @@ class InstructionExecutor {
   }
 
   /**
+   * Execute CMP instruction
+   */
+  executeCMP(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm || !instruction.opcode.mToR) {
+      return false;
+    }
+
+    const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+    const memAddr = this.calculateAddress(instruction);
+    const memValue = this.readMemory(memAddr, operandSize);
+    const regValue = this.cpu.registers[reg];
+
+    // Perform comparison (subtract but don't store result)
+    const result = regValue - memValue;
+
+    // Update flags based on comparison
+    this.updateFlags(result, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute TEST instruction
+   */
+  executeTEST(instruction) {
+    const { opcode, modrm, rex, immediate } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    let result;
+
+    // TEST reg, imm
+    if (opcode.reg && immediate !== null) {
+      const regValue = this.cpu.registers[opcode.reg];
+      const immValue = BigInt(immediate);
+      result = regValue & immValue;
+    }
+    // TEST reg, reg or TEST reg, mem
+    else if (modrm) {
+      const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+      const regValue = this.cpu.registers[reg];
+      
+      if (instruction.opcode.mToR) {
+        const memAddr = this.calculateAddress(instruction);
+        const memValue = this.readMemory(memAddr, operandSize);
+        result = regValue & memValue;
+      } else {
+        // TEST reg, reg (not fully implemented)
+        return false;
+      }
+    } else {
+      return false;
+    }
+
+    // Update flags (TEST sets flags but doesn't store result)
+    this.updateFlags(result, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute LEA instruction (Load Effective Address)
+   */
+  executeLEA(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm || !instruction.opcode.mToR) {
+      return false;
+    }
+
+    // Calculate address (but don't read from it)
+    const address = this.calculateAddress(instruction);
+    if (address === null) {
+      return false;
+    }
+
+    // Load address into register
+    const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+    this.cpu.registers[reg] = BigInt(address);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute XOR instruction
+   */
+  executeXOR(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm || !instruction.opcode.rToM) {
+      return false;
+    }
+
+    const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+    const memAddr = this.calculateAddress(instruction);
+    const memValue = this.readMemory(memAddr, operandSize);
+    const regValue = this.cpu.registers[reg];
+
+    // Perform XOR
+    const result = regValue ^ memValue;
+    this.writeMemory(memAddr, result, operandSize);
+
+    // Update flags
+    this.updateFlags(result, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute AND instruction
+   */
+  executeAND(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm || !instruction.opcode.rToM) {
+      return false;
+    }
+
+    const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+    const memAddr = this.calculateAddress(instruction);
+    const memValue = this.readMemory(memAddr, operandSize);
+    const regValue = this.cpu.registers[reg];
+
+    // Perform AND
+    const result = regValue & memValue;
+    this.writeMemory(memAddr, result, operandSize);
+
+    // Update flags
+    this.updateFlags(result, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute OR instruction
+   */
+  executeOR(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm || !instruction.opcode.rToM) {
+      return false;
+    }
+
+    const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+    const memAddr = this.calculateAddress(instruction);
+    const memValue = this.readMemory(memAddr, operandSize);
+    const regValue = this.cpu.registers[reg];
+
+    // Perform OR
+    const result = regValue | memValue;
+    this.writeMemory(memAddr, result, operandSize);
+
+    // Update flags
+    this.updateFlags(result, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
    * Update CPU flags
    */
   updateFlags(result, operandSize) {
     let flags = this.cpu.registers.rflags;
 
-    // Zero flag (ZF)
+    // Zero flag (ZF) - bit 6
     if (result === 0n) {
       flags |= 0x40n;
     } else {
       flags &= ~0x40n;
     }
 
-    // Sign flag (SF) - most significant bit
+    // Sign flag (SF) - bit 7 (most significant bit)
     const mask = operandSize === 64 ? 0x8000000000000000n : 0x80000000n;
     if (result & mask) {
       flags |= 0x80n;
@@ -434,8 +617,21 @@ class InstructionExecutor {
       flags &= ~0x80n;
     }
 
-    // Carry flag (CF) - simplified
-    // Overflow flag (OF) - simplified
+    // Parity flag (PF) - bit 2 (even parity of low 8 bits)
+    const lowByte = Number(result & 0xFFn);
+    let parity = 0;
+    for (let i = 0; i < 8; i++) {
+      if (lowByte & (1 << i)) parity++;
+    }
+    if ((parity % 2) === 0) {
+      flags |= 0x04n;
+    } else {
+      flags &= ~0x04n;
+    }
+
+    // Carry flag (CF) - bit 0 (simplified, set on unsigned overflow)
+    // Overflow flag (OF) - bit 11 (simplified, set on signed overflow)
+    // These would need more complex logic based on the operation
 
     this.cpu.registers.rflags = flags;
   }

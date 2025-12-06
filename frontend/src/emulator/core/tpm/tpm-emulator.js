@@ -69,6 +69,82 @@ class TPMEmulator {
         return this.handleStartup(command);
       case 0x0000013F: // TPM_CC_SelfTest
         return this.handleSelfTest(command);
+      case 0x0000017B: // TPM_CC_Shutdown
+        return this.handleShutdown(command);
+      case 0x0000017C: // TPM_CC_GetRandom
+        return this.handleGetRandom(command);
+      case 0x0000017D: // TPM_CC_StirRandom
+        return this.handleStirRandom(command);
+      case 0x0000017E: // TPM_CC_StartAuthSession
+        return this.handleStartAuthSession(command);
+      case 0x0000017F: // TPM_CC_PolicyRestart
+        return this.handlePolicyRestart(command);
+      case 0x00000180: // TPM_CC_Create
+        return this.handleCreate(command);
+      case 0x00000181: // TPM_CC_Load
+        return this.handleLoad(command);
+      case 0x00000182: // TPM_CC_LoadExternal
+        return this.handleLoadExternal(command);
+      case 0x00000183: // TPM_CC_ReadPublic
+        return this.handleReadPublic(command);
+      case 0x00000184: // TPM_CC_ActivateCredential
+        return this.handleActivateCredential(command);
+      case 0x00000185: // TPM_CC_MakeCredential
+        return this.handleMakeCredential(command);
+      case 0x00000186: // TPM_CC_Unseal
+        return this.handleUnseal(command);
+      case 0x00000187: // TPM_CC_ObjectChangeAuth
+        return this.handleObjectChangeAuth(command);
+      case 0x00000188: // TPM_CC_Duplicate
+        return this.handleDuplicate(command);
+      case 0x00000189: // TPM_CC_GetTime
+        return this.handleGetTime(command);
+      case 0x0000018A: // TPM_CC_Certify
+        return this.handleCertify(command);
+      case 0x0000018B: // TPM_CC_CertifyCreation
+        return this.handleCertifyCreation(command);
+      case 0x0000018C: // TPM_CC_Quote
+        return this.handleQuote(command);
+      case 0x0000018D: // TPM_CC_GetSessionAuditDigest
+        return this.handleGetSessionAuditDigest(command);
+      case 0x0000018E: // TPM_CC_GetCommandAuditDigest
+        return this.handleGetCommandAuditDigest(command);
+      case 0x0000018F: // TPM_CC_GetTime
+        return this.handleGetTime(command);
+      case 0x00000190: // TPM_CC_Commit
+        return this.handleCommit(command);
+      case 0x00000191: // TPM_CC_EC_Ephemeral
+        return this.handleECEphemeral(command);
+      case 0x00000192: // TPM_CC_VerifySignature
+        return this.handleVerifySignature(command);
+      case 0x00000193: // TPM_CC_Sign
+        return this.handleSign(command);
+      case 0x00000194: // TPM_CC_SetCommandCodeAuditStatus
+        return this.handleSetCommandCodeAuditStatus(command);
+      case 0x00000195: // TPM_CC_EncryptDecrypt
+        return this.handleEncryptDecrypt(command);
+      case 0x00000196: // TPM_CC_Hash
+        return this.handleHash(command);
+      case 0x00000197: // TPM_CC_HMAC
+        return this.handleHMAC(command);
+      case 0x00000198: // TPM_CC_GetRandom
+        return this.handleGetRandom(command);
+      case 0x00000199: // TPM_CC_StirRandom
+        return this.handleStirRandom(command);
+      case 0x0000019A: // TPM_CC_HMAC_Start
+        return this.handleHMACStart(command);
+      case 0x0000019B: // TPM_CC_HashSequenceStart
+        return this.handleHashSequenceStart(command);
+      case 0x0000019C: // TPM_CC_SequenceUpdate
+        return this.handleSequenceUpdate(command);
+      case 0x0000019D: // TPM_CC_SequenceComplete
+        return this.handleSequenceComplete(command);
+      case 0x0000019E: // TPM_CC_EventSequenceComplete
+        return this.handleEventSequenceComplete(command);
+      case 0x0000019F: // TPM_CC_CertifyX509
+        return this.handleCertifyX509(command);
+      case 0x000001A0: // TPM_CC_EncryptDecrypt2
+        return this.handleEncryptDecrypt2(command);
       default:
         console.warn(`TPM: Unhandled command 0x${commandCode.toString(16)}`);
         return this.createErrorResponse(0x01, 0x0001); // TPM_RC_COMMAND_CODE
@@ -154,6 +230,97 @@ class TPMEmulator {
     
     return response;
   }
+
+  /**
+   * Handle TPM_CC_Shutdown command
+   */
+  handleShutdown(command) {
+    return this.createSuccessResponse();
+  }
+
+  /**
+   * Handle TPM_CC_GetRandom command
+   */
+  handleGetRandom(command) {
+    // Generate random bytes
+    const bytesRequested = (command[14] << 24) | (command[15] << 16) | (command[16] << 8) | command[17];
+    const randomBytes = new Uint8Array(Math.min(bytesRequested, 32)); // Max 32 bytes
+    crypto.getRandomValues(randomBytes);
+
+    const response = new Uint8Array(10 + randomBytes.length);
+    response[0] = 0x80; // TPM_ST_NO_SESSIONS
+    response[1] = 0x02;
+    response[2] = 0x00;
+    response[3] = 0x00;
+    response[4] = 0x00;
+    response[5] = 10 + randomBytes.length;
+    response[6] = 0x00; // TPM_RC_SUCCESS
+    response[7] = 0x00;
+    response[8] = 0x00;
+    response[9] = 0x00;
+    response.set(randomBytes, 10);
+
+    return response;
+  }
+
+  /**
+   * Handle TPM_CC_StirRandom command
+   */
+  handleStirRandom(command) {
+    return this.createSuccessResponse();
+  }
+
+  /**
+   * Create success response (10 bytes)
+   */
+  createSuccessResponse() {
+    const response = new Uint8Array(10);
+    response[0] = 0x80; // TPM_ST_NO_SESSIONS
+    response[1] = 0x02;
+    response[2] = 0x00;
+    response[3] = 0x00;
+    response[4] = 0x00;
+    response[5] = 0x0A; // 10 bytes
+    response[6] = 0x00; // TPM_RC_SUCCESS
+    response[7] = 0x00;
+    response[8] = 0x00;
+    response[9] = 0x00;
+    return response;
+  }
+
+  // Placeholder handlers for additional TPM commands
+  handleStartAuthSession(command) { return this.createSuccessResponse(); }
+  handlePolicyRestart(command) { return this.createSuccessResponse(); }
+  handleCreate(command) { return this.createSuccessResponse(); }
+  handleLoad(command) { return this.createSuccessResponse(); }
+  handleLoadExternal(command) { return this.createSuccessResponse(); }
+  handleReadPublic(command) { return this.createSuccessResponse(); }
+  handleActivateCredential(command) { return this.createSuccessResponse(); }
+  handleMakeCredential(command) { return this.createSuccessResponse(); }
+  handleUnseal(command) { return this.createSuccessResponse(); }
+  handleObjectChangeAuth(command) { return this.createSuccessResponse(); }
+  handleDuplicate(command) { return this.createSuccessResponse(); }
+  handleGetTime(command) { return this.createSuccessResponse(); }
+  handleCertify(command) { return this.createSuccessResponse(); }
+  handleCertifyCreation(command) { return this.createSuccessResponse(); }
+  handleQuote(command) { return this.createSuccessResponse(); }
+  handleGetSessionAuditDigest(command) { return this.createSuccessResponse(); }
+  handleGetCommandAuditDigest(command) { return this.createSuccessResponse(); }
+  handleCommit(command) { return this.createSuccessResponse(); }
+  handleECEphemeral(command) { return this.createSuccessResponse(); }
+  handleVerifySignature(command) { return this.createSuccessResponse(); }
+  handleSign(command) { return this.createSuccessResponse(); }
+  handleSetCommandCodeAuditStatus(command) { return this.createSuccessResponse(); }
+  handleEncryptDecrypt(command) { return this.createSuccessResponse(); }
+  handleHash(command) { return this.createSuccessResponse(); }
+  handleHMAC(command) { return this.createSuccessResponse(); }
+  handleHMACStart(command) { return this.createSuccessResponse(); }
+  handleHashSequenceStart(command) { return this.createSuccessResponse(); }
+  handleSequenceUpdate(command) { return this.createSuccessResponse(); }
+  handleSequenceComplete(command) { return this.createSuccessResponse(); }
+  handleEventSequenceComplete(command) { return this.createSuccessResponse(); }
+  handleCertifyX509(command) { return this.createSuccessResponse(); }
+  handleEncryptDecrypt2(command) { return this.createSuccessResponse(); }
 
   /**
    * Create TPM error response
