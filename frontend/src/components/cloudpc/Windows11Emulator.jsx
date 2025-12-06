@@ -3,6 +3,48 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
+// IndexedDB helper for storing VM state
+const getDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('CloudPCsDB', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('vmStates')) {
+        db.createObjectStore('vmStates', { keyPath: 'pcId' });
+      }
+    };
+  });
+};
+
+const saveVMState = async (pcId, state) => {
+  try {
+    const db = await getDB();
+    const transaction = db.transaction(['vmStates'], 'readwrite');
+    const store = transaction.objectStore('vmStates');
+    await store.put({ pcId, state, timestamp: Date.now() });
+  } catch (err) {
+    console.error('Failed to save VM state:', err);
+  }
+};
+
+const loadVMState = async (pcId) => {
+  try {
+    const db = await getDB();
+    const transaction = db.transaction(['vmStates'], 'readonly');
+    const store = transaction.objectStore('vmStates');
+    return new Promise((resolve, reject) => {
+      const request = store.get(pcId);
+      request.onsuccess = () => resolve(request.result?.state || null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (err) {
+    console.error('Failed to load VM state:', err);
+    return null;
+  }
+};
+
 function Windows11Emulator() {
   const { pcId } = useParams();
   const { user } = useAuth();
@@ -13,25 +55,36 @@ function Windows11Emulator() {
   const [passwordVerified, setPasswordVerified] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [hasSavedState, setHasSavedState] = useState(false);
+  const [checkingState, setCheckingState] = useState(true);
   const emulatorRef = useRef(null);
+  const saveIntervalRef = useRef(null);
 
+  // Check for saved state when password is verified
   useEffect(() => {
+    if (passwordVerified && pcId) {
+      checkForSavedState();
+    }
+  }, [passwordVerified, pcId]);
+
+  // Load v86.js and initialize emulator
+  useEffect(() => {
+    if (!passwordVerified || checkingState) return;
+
     // Load v86.js from CDN
     if (!window.V86Starter) {
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/gh/copy/v86@master/build/libv86.js';
       script.async = true;
       script.onload = () => {
-        if (passwordVerified) {
-          initializeEmulator();
-        }
+        initializeEmulator();
       };
       script.onerror = () => {
         setError('Failed to load v86.js emulator library');
         setLoading(false);
       };
       document.head.appendChild(script);
-    } else if (passwordVerified) {
+    } else {
       initializeEmulator();
     }
 
@@ -39,13 +92,46 @@ function Windows11Emulator() {
       // Cleanup emulator on unmount
       if (emulatorRef.current) {
         try {
+          // Save state before destroying
+          saveCurrentState();
           emulatorRef.current.destroy();
         } catch (e) {
           console.error('Error destroying emulator:', e);
         }
       }
+      if (saveIntervalRef.current) {
+        clearInterval(saveIntervalRef.current);
+      }
     };
-  }, [passwordVerified]);
+  }, [passwordVerified, checkingState, hasSavedState]);
+
+  const checkForSavedState = async () => {
+    setCheckingState(true);
+    try {
+      const savedState = await loadVMState(pcId);
+      if (savedState) {
+        setHasSavedState(true);
+      } else {
+        setHasSavedState(false);
+      }
+    } catch (err) {
+      console.error('Error checking for saved state:', err);
+      setHasSavedState(false);
+    } finally {
+      setCheckingState(false);
+    }
+  };
+
+  const saveCurrentState = async () => {
+    if (!emulatorRef.current || !pcId) return;
+    try {
+      const state = emulatorRef.current.save_state();
+      await saveVMState(pcId, state);
+      console.log('VM state saved');
+    } catch (err) {
+      console.error('Failed to save VM state:', err);
+    }
+  };
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
@@ -59,7 +145,7 @@ function Windows11Emulator() {
     }
   };
 
-  const initializeEmulator = () => {
+  const initializeEmulator = async () => {
     if (!window.V86Starter || !screenRef.current) {
       setError('Emulator library not loaded');
       setLoading(false);
@@ -73,15 +159,17 @@ function Windows11Emulator() {
       // Windows 11 ISO URL from archive.org
       const windows11IsoUrl = 'https://archive.org/download/windows-11-24h2-iso_202501/Win11_24H2_English_x64.iso';
 
+      // Try to load saved state first
+      let savedState = null;
+      if (hasSavedState) {
+        savedState = await loadVMState(pcId);
+      }
+
       // Create v86 emulator instance
-      emulatorRef.current = new window.V86Starter({
+      const emulatorConfig = {
         screen_container: screenRef.current,
         memory_size: 512 * 1024 * 1024, // 512 MB RAM
         vga_memory_size: 8 * 1024 * 1024, // 8 MB VGA memory
-        cdrom: {
-          url: windows11IsoUrl,
-          async: true,
-        },
         autostart: true,
         bios: {
           url: 'https://cdn.jsdelivr.net/gh/copy/v86@master/bios/seabios.bin',
@@ -90,11 +178,47 @@ function Windows11Emulator() {
           url: 'https://cdn.jsdelivr.net/gh/copy/v86@master/bios/vgabios.bin',
         },
         network_relay_url: 'wss://relay.widgetry.org/',
-      });
+      };
+
+      // Only add CDROM if we don't have a saved state
+      if (!savedState) {
+        emulatorConfig.cdrom = {
+          url: windows11IsoUrl,
+          async: true,
+        };
+      }
+
+      emulatorRef.current = new window.V86Starter(emulatorConfig);
+
+      // Restore saved state if available
+      if (savedState) {
+        try {
+          emulatorRef.current.restore_state(savedState);
+          console.log('Restored VM state from previous session');
+          setBooting(false);
+          setLoading(false);
+        } catch (restoreErr) {
+          console.error('Failed to restore state, booting from ISO:', restoreErr);
+          // If restore fails, boot from ISO
+          if (!emulatorConfig.cdrom) {
+            emulatorConfig.cdrom = {
+              url: windows11IsoUrl,
+              async: true,
+            };
+            emulatorRef.current.destroy();
+            emulatorRef.current = new window.V86Starter(emulatorConfig);
+          }
+        }
+      }
 
       emulatorRef.current.add_listener('emulator-ready', () => {
         setBooting(false);
         setLoading(false);
+        
+        // Start auto-saving state every 30 seconds
+        saveIntervalRef.current = setInterval(() => {
+          saveCurrentState();
+        }, 30000);
       });
 
       emulatorRef.current.add_listener('screen-update', () => {
@@ -112,6 +236,9 @@ function Windows11Emulator() {
         setLoading(false);
         setBooting(false);
       });
+
+      // Save state before page unload
+      window.addEventListener('beforeunload', saveCurrentState);
     } catch (err) {
       console.error('Failed to initialize emulator:', err);
       setError(`Failed to initialize emulator: ${err.message}`);
@@ -242,14 +369,29 @@ function Windows11Emulator() {
     );
   }
 
+  if (checkingState) {
+    return (
+      <div style={styles.booting}>
+        <h2>Checking for saved state...</h2>
+        <p>Looking for previous session...</p>
+      </div>
+    );
+  }
+
   if (booting || loading) {
     return (
       <div style={styles.booting}>
-        <h2>Booting Windows 11...</h2>
-        <p>Downloading and initializing Windows 11 ISO...</p>
-        <p style={{ fontSize: '0.9rem', color: '#888' }}>
-          This may take a few minutes. Please be patient.
+        <h2>{hasSavedState ? 'Resuming Windows 11...' : 'Booting Windows 11...'}</h2>
+        <p>
+          {hasSavedState
+            ? 'Loading your previous session...'
+            : 'Downloading and initializing Windows 11 ISO...'}
         </p>
+        {!hasSavedState && (
+          <p style={{ fontSize: '0.9rem', color: '#888' }}>
+            This may take a few minutes. Please be patient.
+          </p>
+        )}
       </div>
     );
   }
