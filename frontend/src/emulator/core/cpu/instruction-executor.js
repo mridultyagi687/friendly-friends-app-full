@@ -235,6 +235,11 @@ class InstructionExecutor {
       return false;
     }
 
+    // Check if register exists in CPU
+    if (!(opcode.reg in this.cpu.registers)) {
+      return false;
+    }
+
     // Read value from stack
     const stackAddr = Number(this.cpu.registers.rsp);
     const value = this.readMemory(stackAddr, operandSize);
