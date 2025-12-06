@@ -169,6 +169,18 @@ function Windows11Emulator() {
         savedState = await loadVMState(pcId);
       }
 
+      // Ensure container is properly sized and constrained before creating emulator
+      if (screenRef.current) {
+        const container = screenRef.current;
+        container.style.width = '100%';
+        container.style.height = '100%';
+        container.style.position = 'relative';
+        container.style.overflow = 'hidden';
+        container.style.maxWidth = '100%';
+        container.style.maxHeight = '100%';
+        container.style.boxSizing = 'border-box';
+      }
+
       // Create v86 emulator instance
       const emulatorConfig = {
         screen_container: screenRef.current,
