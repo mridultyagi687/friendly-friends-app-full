@@ -48,7 +48,6 @@ class ACPITables {
     
     // RSDP structure (36 bytes for ACPI 1.0, 8 more for 2.0+)
     const signature = 'RSD PTR '; // 8 bytes
-    const checksum = 0; // Will be calculated
     const oemId = 'FRIEND '; // 6 bytes
     const revision = 2; // ACPI 2.0+
     const rsdtAddress = rsdpAddress + 36; // RSDT follows RSDP
