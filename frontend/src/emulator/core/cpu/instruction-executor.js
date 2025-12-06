@@ -118,6 +118,16 @@ class InstructionExecutor {
           return this.executePAND(instruction);
         case 'POR':
           return this.executePOR(instruction);
+        case 'SYSTEM':
+          return this.executeSYSTEM(instruction);
+        case 'MOV_CR':
+          return this.executeMOV_CR(instruction);
+        case 'MOV_DR':
+          return this.executeMOV_DR(instruction);
+        case 'WRMSR':
+          return this.executeWRMSR(instruction);
+        case 'RDMSR':
+          return this.executeRDMSR(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -1729,6 +1739,225 @@ class InstructionExecutor {
       }
     }
 
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute SYSTEM instruction (0x0F 0x01 - LGDT/LIDT/INVLPG)
+   */
+  executeSYSTEM(instruction) {
+    const { modrm } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    const operation = modrm.reg;
+
+    switch (operation) {
+      case 2: // LGDT - Load Global Descriptor Table
+        return this.executeLGDT(instruction);
+      case 3: // LIDT - Load Interrupt Descriptor Table
+        return this.executeLIDT(instruction);
+      case 7: // INVLPG - Invalidate TLB Entry
+        return this.executeINVLPG(instruction);
+      default:
+        console.warn(`CPU: Unhandled SYSTEM operation ${operation}`);
+        return false;
+    }
+  }
+
+  /**
+   * Execute LGDT instruction (Load Global Descriptor Table)
+   */
+  executeLGDT(instruction) {
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    // LGDT loads 6 bytes (limit: 2 bytes, base: 4 bytes in 32-bit, 8 bytes in 64-bit)
+    // For now, just read the memory (simplified - don't actually set up GDT)
+    const limit = this.readMemory(memAddr, 16); // 16-bit limit
+    const base = this.readMemory(memAddr + 2, 64); // 64-bit base in long mode
+    
+    console.log(`CPU: LGDT executed (limit: ${limit.toString(16)}, base: ${base.toString(16)}) - simplified`);
+    
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute LIDT instruction (Load Interrupt Descriptor Table)
+   */
+  executeLIDT(instruction) {
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    // LIDT loads 6 bytes (limit: 2 bytes, base: 4 bytes in 32-bit, 8 bytes in 64-bit)
+    // For now, just read the memory (simplified - don't actually set up IDT)
+    const limit = this.readMemory(memAddr, 16); // 16-bit limit
+    const base = this.readMemory(memAddr + 2, 64); // 64-bit base in long mode
+    
+    console.log(`CPU: LIDT executed (limit: ${limit.toString(16)}, base: ${base.toString(16)}) - simplified`);
+    
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute INVLPG instruction (Invalidate TLB Entry)
+   */
+  executeINVLPG(instruction) {
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    // INVLPG invalidates a TLB entry for the specified address
+    // For now, just acknowledge it (simplified - no actual TLB)
+    console.log(`CPU: INVLPG executed (address: ${memAddr.toString(16)}) - simplified`);
+    
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute MOV CR instruction (Move to/from Control Registers)
+   */
+  executeMOV_CR(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    const crNumber = modrm.reg;
+    const isStore = (instruction.opcode.offset && instruction.opcode.offset + 1 < 256) 
+      ? (instruction.opcode.offset + 1) === 0x22 
+      : false; // 0x0F 0x22 = MOV to CR, 0x0F 0x20 = MOV from CR
+
+    if (modrm.mod === 3) {
+      // Register mode
+      const reg = this.getRegisterFromModRM(modrm, rex, 64);
+      
+      if (isStore) {
+        // MOV CR, reg - Store register to control register
+        const value = this.cpu.registers[reg];
+        // Store in a simplified control register storage
+        if (!this.cpu.controlRegisters) {
+          this.cpu.controlRegisters = {};
+        }
+        this.cpu.controlRegisters[`cr${crNumber}`] = value;
+        console.log(`CPU: MOV CR${crNumber}, ${reg} (value: ${value.toString(16)}) - simplified`);
+      } else {
+        // MOV reg, CR - Load register from control register
+        if (!this.cpu.controlRegisters) {
+          this.cpu.controlRegisters = {};
+        }
+        const crValue = this.cpu.controlRegisters[`cr${crNumber}`] || 0n;
+        this.cpu.registers[reg] = crValue;
+        console.log(`CPU: MOV ${reg}, CR${crNumber} (value: ${crValue.toString(16)}) - simplified`);
+      }
+    } else {
+      return false; // Memory mode not supported for MOV CR
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute MOV DR instruction (Move to/from Debug Registers)
+   */
+  executeMOV_DR(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    const drNumber = modrm.reg;
+    const isStore = (instruction.opcode.offset && instruction.opcode.offset + 1 < 256) 
+      ? (instruction.opcode.offset + 1) === 0x23 
+      : false; // 0x0F 0x23 = MOV to DR, 0x0F 0x21 = MOV from DR
+
+    if (modrm.mod === 3) {
+      // Register mode
+      const reg = this.getRegisterFromModRM(modrm, rex, 64);
+      
+      if (isStore) {
+        // MOV DR, reg - Store register to debug register
+        const value = this.cpu.registers[reg];
+        if (!this.cpu.debugRegisters) {
+          this.cpu.debugRegisters = {};
+        }
+        this.cpu.debugRegisters[`dr${drNumber}`] = value;
+        console.log(`CPU: MOV DR${drNumber}, ${reg} (value: ${value.toString(16)}) - simplified`);
+      } else {
+        // MOV reg, DR - Load register from debug register
+        if (!this.cpu.debugRegisters) {
+          this.cpu.debugRegisters = {};
+        }
+        const drValue = this.cpu.debugRegisters[`dr${drNumber}`] || 0n;
+        this.cpu.registers[reg] = drValue;
+        console.log(`CPU: MOV ${reg}, DR${drNumber} (value: ${drValue.toString(16)}) - simplified`);
+      }
+    } else {
+      return false; // Memory mode not supported for MOV DR
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute WRMSR instruction (Write Model-Specific Register)
+   */
+  executeWRMSR(instruction) {
+    // WRMSR writes ECX:EAX to the MSR specified in EDX
+    const ecx = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
+    const eax = this.cpu.registers.rax & 0xFFFFFFFFn;
+    const edx = this.cpu.registers.rdx & 0xFFFFFFFFn;
+    
+    // Combine EDX:EAX into 64-bit value
+    const value = (edx << 32n) | eax;
+    
+    // Store MSR (simplified - just log it)
+    if (!this.cpu.msrRegisters) {
+      this.cpu.msrRegisters = {};
+    }
+    this.cpu.msrRegisters[ecx] = value;
+    
+    console.log(`CPU: WRMSR executed (MSR ${ecx.toString(16)} = ${value.toString(16)}) - simplified`);
+    
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute RDMSR instruction (Read Model-Specific Register)
+   */
+  executeRDMSR(instruction) {
+    // RDMSR reads the MSR specified in ECX and returns it in EDX:EAX
+    const ecx = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
+    
+    // Get MSR value (simplified - return 0 if not set)
+    if (!this.cpu.msrRegisters) {
+      this.cpu.msrRegisters = {};
+    }
+    const value = this.cpu.msrRegisters[ecx] || 0n;
+    
+    // Split into EDX:EAX
+    const eax = value & 0xFFFFFFFFn;
+    const edx = (value >> 32n) & 0xFFFFFFFFn;
+    
+    // Write to registers (32-bit, preserve upper bits)
+    this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | eax;
+    this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | edx;
+    
+    console.log(`CPU: RDMSR executed (MSR ${ecx.toString(16)} = ${value.toString(16)}) - simplified`);
+    
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
   }
