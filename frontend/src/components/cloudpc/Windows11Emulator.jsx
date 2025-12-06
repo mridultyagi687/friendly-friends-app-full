@@ -51,6 +51,7 @@ function Windows11Emulator() {
   const { pcId } = useParams();
   const { user } = useAuth();
   const screenRef = useRef(null);
+  const canvasRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [booting, setBooting] = useState(false);
@@ -59,7 +60,9 @@ function Windows11Emulator() {
   const [passwordError, setPasswordError] = useState('');
   const [hasSavedState, setHasSavedState] = useState(false);
   const [checkingState, setCheckingState] = useState(true);
+  const [useCustomEmulator, setUseCustomEmulator] = useState(true); // Use custom emulator by default
   const emulatorRef = useRef(null);
+  const customEmulatorRef = useRef(null);
   const saveIntervalRef = useRef(null);
 
   // Check for saved state when password is verified
