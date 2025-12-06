@@ -34,11 +34,14 @@ class BlockIOProtocol {
    * Update media information based on storage size
    */
   updateMediaInfo() {
-    if (this.storage) {
+    if (this.storage && typeof this.storage.getStats === 'function') {
       const stats = this.storage.getStats();
       // Calculate number of blocks (sectors)
       this.media.lastBlock = Math.floor(stats.totalSize / this.media.blockSize) - 1;
       console.log(`BlockIO: Media initialized - ${this.media.lastBlock + 1} blocks (${stats.totalSizeTB}TB)`);
+    } else {
+      // Fallback if storage not initialized yet
+      this.media.lastBlock = Math.floor(this.storage.size / this.media.blockSize) - 1;
     }
   }
 
