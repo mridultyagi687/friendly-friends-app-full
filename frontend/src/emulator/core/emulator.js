@@ -16,6 +16,7 @@ import MouseDevice from './devices/mouse.js';
 import ISOParser from './boot/iso-parser.js';
 import EFIParser from './boot/efi-parser.js';
 import ACPITables from './acpi/acpi-tables.js';
+import GraphicsOutputProtocol from './uefi/graphics-output-protocol.js';
 
 class CustomEmulator {
   constructor(canvas = null) {
@@ -31,6 +32,7 @@ class CustomEmulator {
     this.isoParser = new ISOParser(this.memory);
     this.efiParser = new EFIParser(this.memory);
     this.acpi = new ACPITables(this.memory);
+    this.gop = null; // Will be initialized after VGA
     
     this.initialized = false;
     this.running = false;
@@ -54,6 +56,10 @@ class CustomEmulator {
     this.vga.init();
     this.keyboard.init();
     this.mouse.init();
+    
+    // Initialize Graphics Output Protocol (needs VGA)
+    this.gop = new GraphicsOutputProtocol(this.memory, this.vga);
+    this.gop.init();
     
     await this.tpm.init();
     this.tpmDevice.init();
@@ -92,6 +98,21 @@ class CustomEmulator {
     console.log('Emulator: Stopping...');
     this.running = false;
     this.cpu.stop();
+    if (this.blitInterval) {
+      clearInterval(this.blitInterval);
+    }
+  }
+
+  /**
+   * Set up periodic framebuffer blit (copy from memory to VGA)
+   */
+  setupFramebufferBlit() {
+    // Blit framebuffer every frame (60 FPS = ~16ms)
+    this.blitInterval = setInterval(() => {
+      if (this.gop && this.running) {
+        this.gop.blit();
+      }
+    }, 16);
   }
 
   /**
