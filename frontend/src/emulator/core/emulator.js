@@ -63,8 +63,8 @@ class CustomEmulator {
     // Initialize ACPI tables (needs memory)
     this.acpi.init();
     
-    // Initialize UEFI firmware (needs memory, CPU, GOP, ACPI)
-    this.uefi = new UEFIFirmware(this.memory, this.cpu, this.gop, this.acpi);
+    // Initialize UEFI firmware (needs memory, CPU, GOP, ACPI, storage)
+    this.uefi = new UEFIFirmware(this.memory, this.cpu, this.gop, this.acpi, this.storage);
     await this.uefi.init();
     
     await this.tpm.init();

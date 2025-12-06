@@ -7,13 +7,21 @@
  * compiled to WebAssembly. This is a simplified UEFI implementation.
  */
 
+import FileIOProtocol from './file-io-protocol.js';
+import BlockIOProtocol from './block-io-protocol.js';
+
 class UEFIFirmware {
-  constructor(memory, cpu, gop, acpi) {
+  constructor(memory, cpu, gop, acpi, storage) {
     this.memory = memory;
     this.cpu = cpu;
     this.gop = gop; // Graphics Output Protocol
     this.acpi = acpi; // ACPI tables
+    this.storage = storage; // Storage device
     this.initialized = false;
+    
+    // Protocols
+    this.fileIO = null;
+    this.blockIO = null;
     this.bootServices = {
       // UEFI Boot Services (simplified)
       allocatePool: this.allocatePool.bind(this),
@@ -35,6 +43,13 @@ class UEFIFirmware {
    */
   async init() {
     console.log('UEFI: Initializing firmware...');
+    
+    // Initialize File I/O Protocol
+    if (this.storage) {
+      this.fileIO = new FileIOProtocol(this.storage, this.memory);
+      this.blockIO = new BlockIOProtocol(this.storage, this.memory);
+      await this.blockIO.init();
+    }
     
     // TODO: Load OVMF firmware binary
     // For now, we set up basic UEFI structures
@@ -116,6 +131,13 @@ class UEFIFirmware {
     if (this.acpi) {
       this.acpi.installRSDP();
     }
+    // Expose File I/O and Block I/O protocols
+    if (this.fileIO) {
+      console.log('UEFI: File I/O Protocol available');
+    }
+    if (this.blockIO) {
+      console.log('UEFI: Block I/O Protocol available');
+    }
   }
 
   /**
@@ -191,6 +213,11 @@ class UEFIFirmware {
    */
   async loadBootManager(device, emulator) {
     console.log(`UEFI: Loading boot manager from ${device.path}`);
+    
+    // Initialize File I/O protocol with ISO parser if available
+    if (this.fileIO && emulator && emulator.isoParser) {
+      this.fileIO.init(emulator.isoParser);
+    }
     
     // Try to load Windows Boot Manager
     const bootManagerPaths = [
@@ -278,9 +305,17 @@ class UEFIFirmware {
    * UEFI Boot Service: Locate Protocol
    */
   locateProtocol(protocolGuid, registration) {
-    // Simplified: return GOP protocol if requested
+    // Return GOP protocol if requested
     if (this.gop && protocolGuid === this.gop.protocolGuid) {
       return this.gop.getProtocolInterface();
+    }
+    // Return File I/O protocol if requested
+    if (this.fileIO && protocolGuid === this.fileIO.guid) {
+      return this.fileIO;
+    }
+    // Return Block I/O protocol if requested
+    if (this.blockIO && protocolGuid === this.blockIO.guid) {
+      return this.blockIO;
     }
     return null;
   }
@@ -297,9 +332,17 @@ class UEFIFirmware {
    * UEFI Boot Service: Handle Protocol
    */
   handleProtocol(handle, protocolGuid) {
-    // Simplified: return GOP protocol if requested
+    // Return GOP protocol if requested
     if (this.gop && protocolGuid === this.gop.protocolGuid) {
       return this.gop.getProtocolInterface();
+    }
+    // Return File I/O protocol if requested
+    if (this.fileIO && protocolGuid === this.fileIO.guid) {
+      return this.fileIO;
+    }
+    // Return Block I/O protocol if requested
+    if (this.blockIO && protocolGuid === this.blockIO.guid) {
+      return this.blockIO;
     }
     return null;
   }
