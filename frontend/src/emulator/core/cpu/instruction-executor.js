@@ -1122,13 +1122,13 @@ class InstructionExecutor {
 
     switch (operation) {
       case 4: // MUL (unsigned multiply)
-        return this.executeMULOperation(value, operandSize, false);
+        return this.executeMULOperation(value, operandSize, false, instruction.length);
       case 5: // IMUL (signed multiply)
-        return this.executeMULOperation(value, operandSize, true);
+        return this.executeMULOperation(value, operandSize, true, instruction.length);
       case 6: // DIV (unsigned divide)
-        return this.executeDIVOperation(value, operandSize, false);
+        return this.executeDIVOperation(value, operandSize, false, instruction.length);
       case 7: // IDIV (signed divide)
-        return this.executeDIVOperation(value, operandSize, true);
+        return this.executeDIVOperation(value, operandSize, true, instruction.length);
       default:
         console.warn(`CPU: Unhandled MULDIV operation ${operation}`);
         return false;
@@ -1215,7 +1215,7 @@ class InstructionExecutor {
   /**
    * Execute MUL operation
    */
-  executeMULOperation(value, operandSize, signed) {
+  executeMULOperation(value, operandSize, signed, instructionLength = 2) {
     let multiplicand;
     if (operandSize === 64) {
       multiplicand = this.cpu.registers.rax;
@@ -1263,14 +1263,14 @@ class InstructionExecutor {
       this.cpu.registers.rflags &= ~0x800n; // OF
     }
 
-    this.cpu.registers.rip += BigInt(instruction.length);
+    this.cpu.registers.rip += BigInt(instructionLength);
     return true;
   }
 
   /**
    * Execute DIV operation
    */
-  executeDIVOperation(divisor, operandSize, signed) {
+  executeDIVOperation(divisor, operandSize, signed, instructionLength = 2) {
     if (divisor === 0n) {
       // Division by zero - trigger interrupt 0
       console.error('CPU: Division by zero');
@@ -1310,7 +1310,7 @@ class InstructionExecutor {
       this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFF00FFn) | ((remainder & 0xFFn) << 8n);
     }
 
-    this.cpu.registers.rip += BigInt(instruction.length);
+    this.cpu.registers.rip += BigInt(instructionLength);
     return true;
   }
 
