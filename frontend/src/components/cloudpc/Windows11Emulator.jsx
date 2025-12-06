@@ -230,9 +230,15 @@ function Windows11Emulator() {
       // Start emulator
       await emulator.start();
 
+      // Ensure canvas is visible
+      if (canvasRef.current) {
+        canvasRef.current.style.backgroundColor = '#000';
+        canvasRef.current.style.display = 'block';
+      }
+
       // Set up rendering loop
       const renderLoop = () => {
-        if (customEmulatorRef.current) {
+        if (customEmulatorRef.current && canvasRef.current) {
           customEmulatorRef.current.render();
           requestAnimationFrame(renderLoop);
         }
@@ -506,6 +512,9 @@ function Windows11Emulator() {
       backgroundColor: '#000',
       overflow: 'hidden',
       position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     booting: {
       display: 'flex',
