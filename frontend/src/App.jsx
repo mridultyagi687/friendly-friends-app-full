@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import NavBar from './components/NavBar';
 import MobileNavBar from './components/MobileNavBar';
 import { useMobile } from './utils/useMobile';
@@ -201,7 +201,80 @@ function AppRoutes() {
 
   return (
     <Router basename={basename} future={{ v7_relativeSplatPath: true }}>
-      <div className="app">
+      <AppRoutesContent />
+    </Router>
+  );
+}
+
+// Inner component that can use useNavigate (must be inside Router)
+function AppRoutesContent() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Handle navigation from new window (GitHub Pages workaround)
+  useEffect(() => {
+    // Check if there's a pending route from sessionStorage (set when opening new window)
+    const pendingRoute = sessionStorage.getItem('pendingVideoRoute');
+    if (pendingRoute && user) {
+      sessionStorage.removeItem('pendingVideoRoute');
+      // Wait a bit for everything to load, then navigate
+      const timer = setTimeout(() => {
+        navigate(pendingRoute, { replace: true });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [user, navigate]);
+
+  const { user: user2, loading } = useAuth();
+  const theme = useTheme();
+  const isMobile = useMobile();
+  const [bugNotifications, setBugNotifications] = useState([]);
+
+  useEffect(() => {
+    if (!user2) {
+      setBugNotifications([]);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchNotifications = async () => {
+      try {
+        const { data } = await api.get('/api/bugs/notifications');
+        if (!isMounted) return;
+        const list = Array.isArray(data?.notifications) ? data.notifications : [];
+        if (list.length > 0) {
+          setBugNotifications(list);
+        }
+      } catch (err) {
+        console.error('Failed to load bug notifications:', err.response?.data || err.message);
+      } finally {
+        // no-op
+      }
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60_000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user2]);
+
+  const handleDismissNotification = async (bugId) => {
+    const remaining = bugNotifications.filter((bug) => bug.id !== bugId);
+    setBugNotifications(remaining);
+    try {
+      await api.post('/api/bugs/notifications/ack', { ids: [bugId] });
+    } catch (err) {
+      console.error('Failed to acknowledge bug notification:', err.response?.data || err.message);
+    }
+  };
+
+  if (loading) return <div>Loading...</div>;
+
+  return (
+    <div className="app">
         {user && (isMobile ? <MobileNavBar /> : <NavBar />)}
         <div style={{ 
           marginLeft: user && !isMobile ? '250px' : '0', 
@@ -463,14 +536,14 @@ function AppRoutes() {
                 </ProtectedRoute>
               }
             />
-          </Routes>
-        </div>
-        {user && (
-          <Suspense fallback={null}>
-            <AppTour />
-          </Suspense>
-        )}
-        {user && bugNotifications.length > 0 && (() => {
+        </Routes>
+      </div>
+      {user && (
+        <Suspense fallback={null}>
+          <AppTour />
+        </Suspense>
+      )}
+      {user && bugNotifications.length > 0 && (() => {
           const notificationStyles = {
             overlay: {
               position: 'fixed',
@@ -554,8 +627,7 @@ function AppRoutes() {
             </div>
           );
         })()}
-      </div>
-    </Router>
+    </div>
   );
 }
 
