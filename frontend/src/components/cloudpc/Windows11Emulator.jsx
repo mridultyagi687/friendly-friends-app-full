@@ -221,14 +221,67 @@ function Windows11Emulator() {
         
         // Constrain any canvas elements created by v86
         if (screenRef.current) {
-          const canvases = screenRef.current.querySelectorAll('canvas');
-          canvases.forEach(canvas => {
-            canvas.style.position = 'relative';
-            canvas.style.maxWidth = '100%';
-            canvas.style.maxHeight = '100%';
-            canvas.style.width = '100%';
-            canvas.style.height = '100%';
+          const constrainElements = () => {
+            // Constrain all canvases
+            const canvases = screenRef.current.querySelectorAll('canvas');
+            canvases.forEach(canvas => {
+              canvas.style.position = 'relative';
+              canvas.style.maxWidth = '100%';
+              canvas.style.maxHeight = '100%';
+              canvas.style.width = '100%';
+              canvas.style.height = '100%';
+              canvas.style.display = 'block';
+              canvas.style.left = 'auto';
+              canvas.style.top = 'auto';
+              canvas.style.right = 'auto';
+              canvas.style.bottom = 'auto';
+            });
+            
+            // Constrain all divs
+            const divs = screenRef.current.querySelectorAll('div');
+            divs.forEach(div => {
+              if (div.style.position === 'fixed' || div.style.position === 'absolute') {
+                div.style.position = 'relative';
+                div.style.left = 'auto';
+                div.style.top = 'auto';
+                div.style.right = 'auto';
+                div.style.bottom = 'auto';
+              }
+            });
+            
+            // Check for any elements outside the container that might be from v86
+            const allCanvases = document.querySelectorAll('canvas');
+            allCanvases.forEach(canvas => {
+              if (!screenRef.current.contains(canvas)) {
+                const style = window.getComputedStyle(canvas);
+                if (style.position === 'fixed' || style.position === 'absolute') {
+                  canvas.style.display = 'none';
+                }
+              }
+            });
+          };
+          
+          constrainElements();
+          // Re-constrain after delays in case v86 creates elements asynchronously
+          setTimeout(constrainElements, 100);
+          setTimeout(constrainElements, 500);
+          setTimeout(constrainElements, 1000);
+          
+          // Use MutationObserver to catch elements as they're created
+          const observer = new MutationObserver(() => {
+            constrainElements();
           });
+          observer.observe(screenRef.current, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class']
+          });
+          
+          // Store observer for cleanup
+          if (!emulatorRef.current._observer) {
+            emulatorRef.current._observer = observer;
+          }
         }
         
         // Start auto-saving state every 30 seconds
