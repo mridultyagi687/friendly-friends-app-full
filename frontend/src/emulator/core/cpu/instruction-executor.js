@@ -684,9 +684,12 @@ class InstructionExecutor {
    */
   updateFlags(result, operandSize) {
     let flags = this.cpu.registers.rflags;
+    
+    // Convert result to BigInt if it's a Number
+    const resultBigInt = typeof result === 'bigint' ? result : BigInt(result);
 
     // Zero flag (ZF) - bit 6
-    if (result === 0n) {
+    if (resultBigInt === 0n) {
       flags |= 0x40n;
     } else {
       flags &= ~0x40n;
@@ -694,14 +697,14 @@ class InstructionExecutor {
 
     // Sign flag (SF) - bit 7 (most significant bit)
     const mask = operandSize === 64 ? 0x8000000000000000n : 0x80000000n;
-    if (result & mask) {
+    if ((resultBigInt & mask) !== 0n) {
       flags |= 0x80n;
     } else {
       flags &= ~0x80n;
     }
 
     // Parity flag (PF) - bit 2 (even parity of low 8 bits)
-    const lowByte = Number(result & 0xFFn);
+    const lowByte = Number(resultBigInt & 0xFFn);
     let parity = 0;
     for (let i = 0; i < 8; i++) {
       if (lowByte & (1 << i)) parity++;

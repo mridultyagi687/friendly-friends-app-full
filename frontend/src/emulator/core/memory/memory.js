@@ -153,8 +153,8 @@ class MemoryManager {
    * @returns {number} - 16-bit value
    */
   readWord(address) {
-    const addr = typeof address === 'bigint' ? address : BigInt(address);
-    return this.readByte(addr) | (this.readByte(addr + 1n) << 8);
+    const addr = typeof address === 'bigint' ? Number(address) : address;
+    return this.readByte(addr) | (this.readByte(addr + 1) << 8);
   }
 
   /**
@@ -163,9 +163,9 @@ class MemoryManager {
    * @param {number} value - 16-bit value
    */
   writeWord(address, value) {
-    const addr = typeof address === 'bigint' ? address : BigInt(address);
+    const addr = typeof address === 'bigint' ? Number(address) : address;
     this.writeByte(addr, value & 0xFF);
-    this.writeByte(addr + 1n, (value >> 8) & 0xFF);
+    this.writeByte(addr + 1, (value >> 8) & 0xFF);
   }
 
   /**
@@ -174,8 +174,8 @@ class MemoryManager {
    * @returns {number} - 32-bit value
    */
   readDword(address) {
-    const addr = typeof address === 'bigint' ? address : BigInt(address);
-    return this.readWord(addr) | (this.readWord(addr + 2n) << 16);
+    const addr = typeof address === 'bigint' ? Number(address) : address;
+    return this.readWord(addr) | (this.readWord(addr + 2) << 16);
   }
 
   /**
@@ -184,9 +184,9 @@ class MemoryManager {
    * @param {number} value - 32-bit value
    */
   writeDword(address, value) {
-    const addr = typeof address === 'bigint' ? address : BigInt(address);
+    const addr = typeof address === 'bigint' ? Number(address) : address;
     this.writeWord(addr, value & 0xFFFF);
-    this.writeWord(addr + 2n, (value >> 16) & 0xFFFF);
+    this.writeWord(addr + 2, (value >> 16) & 0xFFFF);
   }
 
   /**
@@ -195,9 +195,9 @@ class MemoryManager {
    * @returns {bigint} - 64-bit value
    */
   readQword(address) {
-    const addr = typeof address === 'bigint' ? address : BigInt(address);
+    const addr = typeof address === 'bigint' ? Number(address) : address;
     const low = BigInt(this.readDword(addr));
-    const high = BigInt(this.readDword(addr + 4n));
+    const high = BigInt(this.readDword(addr + 4));
     return low | (high << 32n);
   }
 
@@ -207,9 +207,9 @@ class MemoryManager {
    * @param {bigint} value - 64-bit value
    */
   writeQword(address, value) {
-    const addr = typeof address === 'bigint' ? address : BigInt(address);
+    const addr = typeof address === 'bigint' ? Number(address) : address;
     this.writeDword(addr, Number(value & 0xFFFFFFFFn));
-    this.writeDword(addr + 4n, Number((value >> 32n) & 0xFFFFFFFFn));
+    this.writeDword(addr + 4, Number((value >> 32n) & 0xFFFFFFFFn));
   }
 
   /**
