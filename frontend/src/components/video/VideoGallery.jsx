@@ -432,8 +432,7 @@ function VideoGallery() {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    // For GitHub Pages, we need to open index.html directly with hash routing
-                    // since GitHub Pages doesn't handle direct paths like /video-player/123
+                    // For GitHub Pages, use hash routing which works without server-side routing
                     const currentPath = window.location.pathname;
                     const baseURL = window.location.origin;
                     
@@ -448,35 +447,18 @@ function VideoGallery() {
                       basePath = basename.endsWith('/') ? basename.slice(0, -1) : basename;
                     }
                     
-                    // Open index.html with hash - GitHub Pages will serve index.html
-                    // Then we'll use JavaScript to navigate to the route after the app loads
-                    const indexUrl = `${baseURL}${basePath}/index.html`;
-                    const routePath = `/video-player/${video.id}`;
+                    // Use hash routing - this works with GitHub Pages
+                    // The hash will be preserved and React Router can read it
+                    const videoUrl = `${baseURL}${basePath}/index.html#/video-player/${video.id}`;
                     
                     // Open in a new window (not tab) with specific features
                     // Note: Modern browsers may still open tabs, but we try to force a window
                     const windowFeatures = 'width=1200,height=800,resizable=yes,scrollbars=yes,menubar=no,toolbar=no,location=no,status=no';
-                    const newWindow = window.open(indexUrl, 'Friendly Friends Video Player', windowFeatures);
+                    const newWindow = window.open(videoUrl, 'Friendly Friends Video Player', windowFeatures);
                     
                     if (!newWindow) {
                       alert('Please allow popups for this site to open the video player in a new window.');
                     } else {
-                      // Wait for the window to load, then navigate to the route
-                      // Store the route in sessionStorage so the new window can read it
-                      sessionStorage.setItem('pendingVideoRoute', routePath);
-                      
-                      // Also try to navigate directly after a short delay
-                      setTimeout(() => {
-                        try {
-                          // Try to access the new window and navigate
-                          if (newWindow.location.href.includes('index.html')) {
-                            // The window is loading, we'll use sessionStorage approach
-                          }
-                        } catch (e) {
-                          // Cross-origin or not ready yet, use sessionStorage
-                        }
-                      }, 100);
-                      
                       // Focus the window if it was opened
                       newWindow.focus();
                     }

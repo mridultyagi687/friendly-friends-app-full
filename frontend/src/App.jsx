@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import NavBar from './components/NavBar';
 import MobileNavBar from './components/MobileNavBar';
 import { useMobile } from './utils/useMobile';
@@ -210,20 +210,23 @@ function AppRoutes() {
 function AppRoutesContent() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Handle navigation from new window (GitHub Pages workaround)
+  // Handle hash routing from new window (GitHub Pages workaround)
   useEffect(() => {
-    // Check if there's a pending route from sessionStorage (set when opening new window)
-    const pendingRoute = sessionStorage.getItem('pendingVideoRoute');
-    if (pendingRoute && user) {
-      sessionStorage.removeItem('pendingVideoRoute');
-      // Wait a bit for everything to load, then navigate
-      const timer = setTimeout(() => {
-        navigate(pendingRoute, { replace: true });
-      }, 1000);
-      return () => clearTimeout(timer);
+    // Check if we have a hash route (from opening new window with hash)
+    if (location.hash && location.hash.startsWith('#/')) {
+      const hashRoute = location.hash.substring(1); // Remove the #
+      // Only navigate if we're not already on that route
+      if (location.pathname !== hashRoute && user) {
+        // Wait a bit for everything to load, then navigate
+        const timer = setTimeout(() => {
+          navigate(hashRoute, { replace: true });
+        }, 500);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [user, navigate]);
+  }, [location, user, navigate]);
 
   const { user: user2, loading } = useAuth();
   const theme = useTheme();
