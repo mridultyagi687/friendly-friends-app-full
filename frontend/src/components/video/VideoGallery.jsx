@@ -437,9 +437,9 @@ function VideoGallery() {
                     window.open(videoUrl, 'Friendly Friends Video Player', 'width=1200,height=800,resizable=yes,scrollbars=yes');
                   }}
                   style={styles.playButtonSmall}
-                  title="Open in new window"
+                  title="Open in Friendly Friends Video Player"
                 >
-                  🪟 New Window
+                  Open in Friendly Friends Video Player
                 </button>
                 {canDeleteVideo(video) && (
                   <button
