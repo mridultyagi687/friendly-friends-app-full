@@ -53,7 +53,7 @@ function CloudPCs() {
       });
 
       setSuccess(data?.message || 'Cloud PC created successfully!');
-      setFormData({ name: '', os_version: '1.0 beta' });
+      setFormData({ name: '', os_version: 'Windows 11' });
       setShowCreateForm(false);
       await fetchCloudPCs();
       setTimeout(() => setSuccess(null), 3000);
