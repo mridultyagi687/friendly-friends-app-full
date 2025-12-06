@@ -311,19 +311,17 @@ class InstructionDecoder {
     
     // Standard SSE instructions (no prefix or with 0xF2)
     const twoByteOpcodes = {
+      0x01: { mnemonic: 'SYSTEM', length: 2, needsModRM: true, hasImmediate: false }, // LGDT/LIDT/INVLPG (0x0F 0x01, reg field selects)
       0x10: { mnemonic: 'MOVUPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVUPS (0x0F 0x10)
       0x11: { mnemonic: 'MOVUPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVUPS store (0x0F 0x11)
+      0x20: { mnemonic: 'MOV_CR', length: 2, needsModRM: true, hasImmediate: false }, // MOV CR (0x0F 0x20)
+      0x21: { mnemonic: 'MOV_DR', length: 2, needsModRM: true, hasImmediate: false }, // MOV DR (0x0F 0x21)
+      0x22: { mnemonic: 'MOV_CR', length: 2, needsModRM: true, hasImmediate: false }, // MOV CR (0x0F 0x22)
+      0x23: { mnemonic: 'MOV_DR', length: 2, needsModRM: true, hasImmediate: false }, // MOV DR (0x0F 0x23)
       0x28: { mnemonic: 'MOVAPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVAPS (0x0F 0x28)
       0x29: { mnemonic: 'MOVAPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVAPS store (0x0F 0x29)
-      0x01: { mnemonic: 'LGDT', length: 2, needsModRM: true, hasImmediate: false }, // LGDT (0x0F 0x01, reg field = 2)
-      0x18: { mnemonic: 'LIDT', length: 2, needsModRM: true, hasImmediate: false }, // LIDT (0x0F 0x01, reg field = 3)
-      0x20: { mnemonic: 'MOV_CR', length: 2, needsModRM: true, hasImmediate: false }, // MOV CR (0x0F 0x20)
-      0x22: { mnemonic: 'MOV_CR', length: 2, needsModRM: true, hasImmediate: false }, // MOV CR (0x0F 0x22)
-      0x21: { mnemonic: 'MOV_DR', length: 2, needsModRM: true, hasImmediate: false }, // MOV DR (0x0F 0x21)
-      0x23: { mnemonic: 'MOV_DR', length: 2, needsModRM: true, hasImmediate: false }, // MOV DR (0x0F 0x23)
       0x30: { mnemonic: 'WRMSR', length: 2, needsModRM: false, hasImmediate: false }, // WRMSR (0x0F 0x30)
       0x32: { mnemonic: 'RDMSR', length: 2, needsModRM: false, hasImmediate: false }, // RDMSR (0x0F 0x32)
-      0x01: { mnemonic: 'INVLPG', length: 2, needsModRM: true, hasImmediate: false }, // INVLPG (0x0F 0x01, reg field = 7)
       0x84: { mnemonic: 'JZ', length: 2, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
       0x85: { mnemonic: 'JNZ', length: 2, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
       0xA2: { mnemonic: 'CPUID', length: 2, needsModRM: false, hasImmediate: false }, // CPUID
