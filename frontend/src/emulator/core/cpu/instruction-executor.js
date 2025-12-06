@@ -71,6 +71,24 @@ class InstructionExecutor {
           return this.executePUSHF(instruction);
         case 'POPF':
           return this.executePOPF(instruction);
+        case 'SHIFT':
+          return this.executeSHIFT(instruction);
+        case 'MOVSB':
+        case 'MOVSW':
+          return this.executeMOVS(instruction);
+        case 'STOSB':
+        case 'STOSW':
+          return this.executeSTOS(instruction);
+        case 'CMPSB':
+        case 'CMPSW':
+          return this.executeCMPS(instruction);
+        case 'SCASB':
+        case 'SCASW':
+          return this.executeSCAS(instruction);
+        case 'LOOP':
+        case 'LOOPE':
+        case 'LOOPNE':
+          return this.executeLOOP(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -759,6 +777,256 @@ class InstructionExecutor {
 
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
+  }
+
+  /**
+   * Execute SHIFT instruction (SHL, SHR, SAR, ROL, ROR, RCL, RCR)
+   */
+  executeSHIFT(instruction) {
+    const { modrm, rex, immediate, opcode } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm) {
+      return false;
+    }
+
+    // Get shift count
+    let shiftCount;
+    if (opcode.shiftOpcode === 0xC1 && immediate !== null) {
+      shiftCount = immediate & 0xFF;
+    } else if (opcode.shiftOpcode === 0xD3) {
+      shiftCount = Number(this.cpu.registers.rcx & 0xFFn);
+    } else if (opcode.shiftOpcode === 0xD1) {
+      shiftCount = 1;
+    } else {
+      return false;
+    }
+
+    // Get operation type from ModR/M reg field
+    const shiftType = modrm.reg;
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    let value = this.readMemory(memAddr, operandSize);
+    let result;
+
+    switch (shiftType) {
+      case 0: // ROL (Rotate Left)
+        shiftCount = shiftCount % operandSize;
+        result = ((value << BigInt(shiftCount)) | (value >> BigInt(operandSize - shiftCount))) & this.getMask(operandSize);
+        break;
+      case 1: // ROR (Rotate Right)
+        shiftCount = shiftCount % operandSize;
+        result = ((value >> BigInt(shiftCount)) | (value << BigInt(operandSize - shiftCount))) & this.getMask(operandSize);
+        break;
+      case 4: // SHL (Shift Left)
+        result = (value << BigInt(shiftCount)) & this.getMask(operandSize);
+        break;
+      case 5: // SHR (Shift Right, logical)
+        result = (value >> BigInt(shiftCount)) & this.getMask(operandSize);
+        break;
+      case 7: // SAR (Shift Right, arithmetic)
+        const signBit = value & (1n << BigInt(operandSize - 1));
+        result = value >> BigInt(shiftCount);
+        if (signBit) {
+          // Sign extend
+          result |= this.getSignExtendMask(operandSize, shiftCount);
+        }
+        result &= this.getMask(operandSize);
+        break;
+      default:
+        console.warn(`CPU: Unhandled shift type ${shiftType}`);
+        return false;
+    }
+
+    this.writeMemory(memAddr, result, operandSize);
+    this.updateFlags(result, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute MOVS instruction (Move String)
+   */
+  executeMOVS(instruction) {
+    const { opcode, rex } = instruction;
+    const operandSize = opcode.mnemonic === 'MOVSB' ? 8 : (rex && rex.w) ? 64 : 32;
+
+    // Source: [RSI], Destination: [RDI]
+    const srcAddr = Number(this.cpu.registers.rsi);
+    const dstAddr = Number(this.cpu.registers.rdi);
+
+    // Read from source
+    const value = this.readMemory(srcAddr, operandSize);
+
+    // Write to destination
+    this.writeMemory(dstAddr, value, operandSize);
+
+    // Update pointers (direction flag determines direction)
+    const df = (this.cpu.registers.rflags & 0x400n) !== 0n; // Direction flag
+    const increment = BigInt(operandSize / 8);
+    
+    if (df) {
+      this.cpu.registers.rsi -= increment;
+      this.cpu.registers.rdi -= increment;
+    } else {
+      this.cpu.registers.rsi += increment;
+      this.cpu.registers.rdi += increment;
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute STOS instruction (Store String)
+   */
+  executeSTOS(instruction) {
+    const { opcode, rex } = instruction;
+    const operandSize = opcode.mnemonic === 'STOSB' ? 8 : (rex && rex.w) ? 64 : 32;
+
+    // Source: RAX, Destination: [RDI]
+    const dstAddr = Number(this.cpu.registers.rdi);
+    const value = this.cpu.registers.rax & this.getMask(operandSize);
+
+    // Write to destination
+    this.writeMemory(dstAddr, value, operandSize);
+
+    // Update pointer
+    const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+    const increment = BigInt(operandSize / 8);
+    
+    if (df) {
+      this.cpu.registers.rdi -= increment;
+    } else {
+      this.cpu.registers.rdi += increment;
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute CMPS instruction (Compare String)
+   */
+  executeCMPS(instruction) {
+    const { opcode, rex } = instruction;
+    const operandSize = opcode.mnemonic === 'CMPSB' ? 8 : (rex && rex.w) ? 64 : 32;
+
+    // Source: [RSI], Destination: [RDI]
+    const srcAddr = Number(this.cpu.registers.rsi);
+    const dstAddr = Number(this.cpu.registers.rdi);
+
+    const srcValue = this.readMemory(srcAddr, operandSize);
+    const dstValue = this.readMemory(dstAddr, operandSize);
+
+    // Compare (subtract)
+    const result = dstValue - srcValue;
+    this.updateFlags(result, operandSize);
+
+    // Update pointers
+    const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+    const increment = BigInt(operandSize / 8);
+    
+    if (df) {
+      this.cpu.registers.rsi -= increment;
+      this.cpu.registers.rdi -= increment;
+    } else {
+      this.cpu.registers.rsi += increment;
+      this.cpu.registers.rdi += increment;
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute SCAS instruction (Scan String)
+   */
+  executeSCAS(instruction) {
+    const { opcode, rex } = instruction;
+    const operandSize = opcode.mnemonic === 'SCASB' ? 8 : (rex && rex.w) ? 64 : 32;
+
+    // Source: RAX, Destination: [RDI]
+    const dstAddr = Number(this.cpu.registers.rdi);
+    const dstValue = this.readMemory(dstAddr, operandSize);
+    const srcValue = this.cpu.registers.rax & this.getMask(operandSize);
+
+    // Compare
+    const result = dstValue - srcValue;
+    this.updateFlags(result, operandSize);
+
+    // Update pointer
+    const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+    const increment = BigInt(operandSize / 8);
+    
+    if (df) {
+      this.cpu.registers.rdi -= increment;
+    } else {
+      this.cpu.registers.rdi += increment;
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute LOOP instruction
+   */
+  executeLOOP(instruction) {
+    const { immediate, opcode } = instruction;
+
+    if (immediate === null || !opcode.relative) {
+      return false;
+    }
+
+    // Decrement RCX
+    this.cpu.registers.rcx -= 1n;
+
+    let shouldLoop = false;
+    if (opcode.mnemonic === 'LOOP') {
+      shouldLoop = this.cpu.registers.rcx !== 0n;
+    } else if (opcode.mnemonic === 'LOOPE') {
+      const zf = (this.cpu.registers.rflags & 0x40n) !== 0n;
+      shouldLoop = (this.cpu.registers.rcx !== 0n) && zf;
+    } else if (opcode.mnemonic === 'LOOPNE') {
+      const zf = (this.cpu.registers.rflags & 0x40n) !== 0n;
+      shouldLoop = (this.cpu.registers.rcx !== 0n) && !zf;
+    }
+
+    if (shouldLoop) {
+      const offset = BigInt(immediate);
+      this.cpu.registers.rip += offset;
+    } else {
+      this.cpu.registers.rip += BigInt(instruction.length);
+    }
+
+    return true;
+  }
+
+  /**
+   * Helper: Get bit mask for operand size
+   */
+  getMask(operandSize) {
+    switch (operandSize) {
+      case 8: return 0xFFn;
+      case 16: return 0xFFFFn;
+      case 32: return 0xFFFFFFFFn;
+      case 64: return 0xFFFFFFFFFFFFFFFFn;
+      default: return 0xFFFFFFFFFFFFFFFFn;
+    }
+  }
+
+  /**
+   * Helper: Get sign extension mask
+   */
+  getSignExtendMask(operandSize, shiftCount) {
+    const mask = this.getMask(operandSize);
+    const shiftMask = (1n << BigInt(operandSize - shiftCount)) - 1n;
+    return (mask ^ shiftMask) & mask;
   }
 }
 

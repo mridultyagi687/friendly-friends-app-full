@@ -221,6 +221,23 @@ class InstructionDecoder {
       0x84: { mnemonic: 'TEST', length: 1, needsModRM: true, hasImmediate: false, mToR: true }, // TEST reg, reg
       0xA8: { mnemonic: 'TEST', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, reg: 'al' }, // TEST AL, imm8
       0xA9: { mnemonic: 'TEST', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 4, reg: 'rax' }, // TEST RAX, imm32
+      // Shift instructions
+      0xD1: { mnemonic: 'SHL', length: 1, needsModRM: true, hasImmediate: false, shiftBy: 1 }, // SHL/SHR/SAR by 1
+      0xD3: { mnemonic: 'SHL', length: 1, needsModRM: true, hasImmediate: false, shiftBy: 'cl' }, // SHL/SHR/SAR by CL
+      0xC1: { mnemonic: 'SHL', length: 1, needsModRM: true, hasImmediate: true, immediateSize: 1 }, // SHL/SHR/SAR by imm8
+      // String instructions
+      0xA4: { mnemonic: 'MOVSB', length: 1, needsModRM: false, hasImmediate: false }, // MOVS byte
+      0xA5: { mnemonic: 'MOVSW', length: 1, needsModRM: false, hasImmediate: false }, // MOVS word/dword/qword
+      0xAA: { mnemonic: 'STOSB', length: 1, needsModRM: false, hasImmediate: false }, // STOS byte
+      0xAB: { mnemonic: 'STOSW', length: 1, needsModRM: false, hasImmediate: false }, // STOS word/dword/qword
+      0xA6: { mnemonic: 'CMPSB', length: 1, needsModRM: false, hasImmediate: false }, // CMPS byte
+      0xA7: { mnemonic: 'CMPSW', length: 1, needsModRM: false, hasImmediate: false }, // CMPS word/dword/qword
+      0xAE: { mnemonic: 'SCASB', length: 1, needsModRM: false, hasImmediate: false }, // SCAS byte
+      0xAF: { mnemonic: 'SCASW', length: 1, needsModRM: false, hasImmediate: false }, // SCAS word/dword/qword
+      // Loop instructions
+      0xE2: { mnemonic: 'LOOP', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
+      0xE1: { mnemonic: 'LOOPE', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
+      0xE0: { mnemonic: 'LOOPNE', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
     };
 
     const opcode = opcodes[byte];

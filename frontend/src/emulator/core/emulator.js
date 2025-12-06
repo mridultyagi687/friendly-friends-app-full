@@ -13,6 +13,7 @@ import SecureBoot from './uefi/secure-boot.js';
 import VGADevice from './devices/vga.js';
 import KeyboardDevice from './devices/keyboard.js';
 import MouseDevice from './devices/mouse.js';
+import ISOParser from './boot/iso-parser.js';
 
 class CustomEmulator {
   constructor(canvas = null) {
@@ -25,6 +26,7 @@ class CustomEmulator {
     this.vga = new VGADevice(canvas);
     this.keyboard = new KeyboardDevice();
     this.mouse = new MouseDevice();
+    this.isoParser = new ISOParser(this.memory);
     
     this.initialized = false;
     this.running = false;
@@ -117,9 +119,31 @@ class CustomEmulator {
    * Load ISO file
    * @param {ArrayBuffer} isoData - ISO file data
    */
-  loadISO(isoData) {
-    // TODO: Parse ISO and load into memory/emulated CD-ROM
+  async loadISO(isoData) {
     console.log('Emulator: Loading ISO...');
+    
+    // Parse ISO file system
+    this.isoParser.loadISO(isoData);
+    
+    // Try to find and load boot files
+    const bootFiles = [
+      'EFI/BOOT/BOOTX64.EFI',
+      'EFI/Microsoft/Boot/bootmgfw.efi',
+      'EFI/boot/bootx64.efi',
+    ];
+
+    for (const bootPath of bootFiles) {
+      const bootFile = this.isoParser.readFile(bootPath);
+      if (bootFile) {
+        console.log(`Emulator: Found boot file: ${bootPath}`);
+        // TODO: Load boot file into memory and execute
+        // This would involve parsing PE/COFF format for EFI executables
+        return bootFile;
+      }
+    }
+
+    console.warn('Emulator: No boot file found in ISO');
+    return null;
   }
 
   /**
