@@ -15,6 +15,7 @@ import KeyboardDevice from './devices/keyboard.js';
 import MouseDevice from './devices/mouse.js';
 import ISOParser from './boot/iso-parser.js';
 import EFIParser from './boot/efi-parser.js';
+import ACPITables from './acpi/acpi-tables.js';
 
 class CustomEmulator {
   constructor(canvas = null) {
@@ -29,6 +30,7 @@ class CustomEmulator {
     this.mouse = new MouseDevice();
     this.isoParser = new ISOParser(this.memory);
     this.efiParser = new EFIParser(this.memory);
+    this.acpi = new ACPITables(this.memory);
     
     this.initialized = false;
     this.running = false;
@@ -56,6 +58,9 @@ class CustomEmulator {
     await this.tpm.init();
     this.tpmDevice.init();
     await this.secureBoot.init();
+    
+    // Initialize ACPI tables (needs memory)
+    this.acpi.init();
     
     this.initialized = true;
     console.log('Emulator: Initialized successfully');
