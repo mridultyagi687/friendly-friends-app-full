@@ -90,13 +90,16 @@ class InstructionExecutor {
         case 'LOOPNE':
           return this.executeLOOP(instruction);
         case 'MUL':
-          return this.executeMUL(instruction);
+        case 'MULDIV':
+          return this.executeMULDIV(instruction);
         case 'CPUID':
           return this.executeCPUID(instruction);
         case 'RDTSC':
           return this.executeRDTSC(instruction);
         case 'INC':
           return this.executeINC(instruction);
+        case 'INCDEC':
+          return this.executeINCDEC(instruction);
         case 'NEG':
           return this.executeNEG(instruction);
         case 'FXSAVE':
@@ -1042,9 +1045,122 @@ class InstructionExecutor {
   }
 
   /**
-   * Execute MUL/DIV/IMUL/IDIV instruction
+   * Execute MUL/DIV/IMUL/IDIV/NEG instruction (0xF6/0xF7)
+   */
+  executeMULDIV(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm) {
+      return false;
+    }
+
+    const operation = modrm.reg;
+
+    // Handle NEG (reg field = 3)
+    if (operation === 3) {
+      return this.executeNEG(instruction);
+    }
+
+    // Handle MUL/DIV/IMUL/IDIV (reg fields 4, 5, 6, 7)
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    const value = this.readMemory(memAddr, operandSize);
+
+    switch (operation) {
+      case 4: // MUL (unsigned multiply)
+        return this.executeMULOperation(value, operandSize, false);
+      case 5: // IMUL (signed multiply)
+        return this.executeMULOperation(value, operandSize, true);
+      case 6: // DIV (unsigned divide)
+        return this.executeDIVOperation(value, operandSize, false);
+      case 7: // IDIV (signed divide)
+        return this.executeDIVOperation(value, operandSize, true);
+      default:
+        console.warn(`CPU: Unhandled MULDIV operation ${operation}`);
+        return false;
+    }
+  }
+
+  /**
+   * Execute INCDEC instruction (0xFE/0xFF)
+   */
+  executeINCDEC(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm) {
+      return false;
+    }
+
+    const operation = modrm.reg;
+
+    if (operation === 0) {
+      // INC
+      return this.executeINC(instruction);
+    } else if (operation === 1) {
+      // DEC
+      return this.executeDEC(instruction);
+    } else {
+      // Other operations (CALL, JMP, etc.) not implemented yet
+      console.warn(`CPU: Unhandled INCDEC operation ${operation}`);
+      return false;
+    }
+  }
+
+  /**
+   * Execute DEC instruction (Decrement)
+   */
+  executeDEC(instruction) {
+    const { opcode, modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    let value, result;
+
+    // DEC reg (direct register decrement)
+    if (opcode && opcode.reg) {
+      value = this.cpu.registers[opcode.reg];
+      result = value - 1n;
+      this.cpu.registers[opcode.reg] = result & this.getMask(operandSize);
+    }
+    // DEC r/m (memory or register via ModR/M)
+    else if (modrm) {
+      if (modrm.mod === 3) {
+        // Register mode
+        const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+        value = this.cpu.registers[reg];
+        result = value - 1n;
+        this.cpu.registers[reg] = result & this.getMask(operandSize);
+      } else {
+        // Memory mode
+        const memAddr = this.calculateAddress(instruction);
+        if (memAddr === null) {
+          return false;
+        }
+        value = this.readMemory(memAddr, operandSize);
+        result = value - 1n;
+        this.writeMemory(memAddr, result, operandSize);
+      }
+    } else {
+      return false;
+    }
+
+    // Update flags
+    this.updateFlags(result, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute MUL/DIV/IMUL/IDIV instruction (legacy - now handled by executeMULDIV)
    */
   executeMUL(instruction) {
+    return this.executeMULDIV(instruction);
+  }
     const { modrm, rex } = instruction;
     const operandSize = (rex && rex.w) ? 64 : 32;
 
