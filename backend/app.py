@@ -18,6 +18,7 @@ from flask import (
     send_file,
     send_from_directory,
     session,
+    Response,
 )
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -1741,29 +1742,104 @@ def get_video(video_id: int):
 @app.get("/api/videos/<int:video_id>/stream")
 @login_required
 def stream_video(video_id: int):
-    video = db.session.get(Video, video_id)
-    if not video:
-        return jsonify({"error": "Video not found"}), 404
-    filepath = os.path.join(VIDEO_DIR, video.filename)
-    if not os.path.exists(filepath):
-        logger.warning(f"Video file missing: {filepath} for video ID {video_id}")
-        return jsonify({"error": "Video file missing"}), 404
-    
-    # Set proper headers for video streaming
-    response = send_file(
-        filepath,
-        mimetype="video/mp4",
-        conditional=True,
-        as_attachment=False
-    )
-    # Add CORS headers for video streaming
-    origin = request.headers.get('Origin')
-    if origin and cors_origin_check(origin):
-        response.headers['Access-Control-Allow-Origin'] = origin
-    response.headers['Accept-Ranges'] = 'bytes'
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    response.headers['Access-Control-Expose-Headers'] = 'Content-Range, Accept-Ranges, Content-Length, Content-Type'
-    return response
+    """Stream video file with proper range request support."""
+    try:
+        user = current_user()
+        if not user:
+            return jsonify({"error": "Authentication required"}), 401
+        
+        video = db.session.get(Video, video_id)
+        if not video:
+            logger.warning(f"Video not found: ID {video_id}")
+            return jsonify({"error": "Video not found"}), 404
+        
+        filepath = os.path.join(VIDEO_DIR, video.filename)
+        
+        # Check if file exists
+        if not os.path.exists(filepath):
+            logger.error(f"Video file missing: {filepath} for video ID {video_id}, filename: {video.filename}")
+            return jsonify({"error": "Video file not found on server"}), 404
+        
+        # Check if it's actually a file (not a directory)
+        if not os.path.isfile(filepath):
+            logger.error(f"Video path is not a file: {filepath}")
+            return jsonify({"error": "Invalid video file"}), 500
+        
+        # Get file size for range requests
+        file_size = os.path.getsize(filepath)
+        
+        # Handle range requests for video seeking
+        range_header = request.headers.get('Range', None)
+        if range_header:
+            # Parse range header
+            byte_start = 0
+            byte_end = file_size - 1
+            
+            match = re.match(r'bytes=(\d*)-(\d*)', range_header)
+            if match:
+                start = match.group(1)
+                end = match.group(2)
+                
+                if start:
+                    byte_start = int(start)
+                if end:
+                    byte_end = int(end)
+                else:
+                    byte_end = file_size - 1
+            
+            # Ensure valid range
+            if byte_start >= file_size or byte_end >= file_size or byte_start > byte_end:
+                return jsonify({"error": "Invalid range"}), 416
+            
+            # Read the requested byte range
+            content_length = byte_end - byte_start + 1
+            
+            def generate():
+                with open(filepath, 'rb') as f:
+                    f.seek(byte_start)
+                    remaining = content_length
+                    while remaining:
+                        chunk_size = min(8192, remaining)
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        yield chunk
+            
+            response = Response(
+                generate(),
+                206,  # Partial Content
+                {
+                    'Content-Type': 'video/mp4',
+                    'Content-Range': f'bytes {byte_start}-{byte_end}/{file_size}',
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': str(content_length),
+                },
+                direct_passthrough=True
+            )
+        else:
+            # No range request - send full file
+            response = send_file(
+                filepath,
+                mimetype="video/mp4",
+                conditional=True,
+                as_attachment=False
+            )
+            response.headers['Accept-Ranges'] = 'bytes'
+            response.headers['Content-Length'] = str(file_size)
+        
+        # Add CORS headers for video streaming
+        origin = request.headers.get('Origin')
+        if origin and cors_origin_check(origin):
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Expose-Headers'] = 'Content-Range, Accept-Ranges, Content-Length, Content-Type'
+        
+        return response
+        
+    except Exception as e:
+        logger.exception(f"Error streaming video {video_id}: {e}")
+        return jsonify({"error": f"Failed to stream video: {str(e)}"}), 500
 
 
 @app.delete("/api/videos/<int:video_id>")

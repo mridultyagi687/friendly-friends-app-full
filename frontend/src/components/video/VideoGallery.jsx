@@ -23,8 +23,15 @@ function VideoGallery() {
   });
 
   const getVideoUrl = useCallback((videoId) => {
-    // Always use relative URL to go through Vite proxy or current origin
-    // This ensures it works with both dev server (proxy) and production (same origin)
+    // Use absolute URL in production, relative in development
+    const baseURL = import.meta.env.VITE_API_URL || 
+                    import.meta.env.REACT_APP_API_URL || 
+                    (import.meta.env.PROD ? 'https://friendly-friends-app-full.onrender.com' : '');
+    
+    if (baseURL) {
+      return `${baseURL}/api/videos/${videoId}/stream`;
+    }
+    // Fallback to relative URL for dev server with proxy
     return `/api/videos/${videoId}/stream`;
   }, []);
 
