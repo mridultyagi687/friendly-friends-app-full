@@ -14,6 +14,7 @@ import VGADevice from './devices/vga.js';
 import KeyboardDevice from './devices/keyboard.js';
 import MouseDevice from './devices/mouse.js';
 import StorageDevice from './devices/storage.js';
+import DiskController from './devices/disk-controller.js';
 import ISOParser from './boot/iso-parser.js';
 import EFIParser from './boot/efi-parser.js';
 import ACPITables from './acpi/acpi-tables.js';
@@ -31,6 +32,7 @@ class CustomEmulator {
     this.keyboard = new KeyboardDevice();
     this.mouse = new MouseDevice();
     this.storage = new StorageDevice(); // 55TB storage device
+    this.diskController = new DiskController(this.storage, this.memory);
     this.isoParser = new ISOParser(this.memory);
     this.efiParser = new EFIParser(this.memory);
     this.acpi = new ACPITables(this.memory);
@@ -55,6 +57,7 @@ class CustomEmulator {
     this.keyboard.init();
     this.mouse.init();
     await this.storage.init(); // Initialize 55TB storage device
+    this.diskController.init(); // Initialize disk controller
     
     // Initialize Graphics Output Protocol (needs VGA)
     this.gop = new GraphicsOutputProtocol(this.memory, this.vga);
