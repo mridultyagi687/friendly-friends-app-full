@@ -431,12 +431,24 @@ function Windows11Emulator() {
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      #v86-screen-container,
+      /* Constrain the container and all its children */
+      #v86-screen-container {
+        position: relative !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+      }
+      
       #v86-screen-container * {
         position: relative !important;
         max-width: 100% !important;
         max-height: 100% !important;
+        box-sizing: border-box !important;
       }
+      
       #v86-screen-container canvas {
         position: relative !important;
         max-width: 100% !important;
@@ -444,11 +456,21 @@ function Windows11Emulator() {
         width: 100% !important;
         height: 100% !important;
         display: block !important;
+        box-sizing: border-box !important;
       }
-      /* Prevent v86 from creating fixed positioned elements */
+      
+      /* Prevent v86 from creating fixed/absolute positioned elements outside container */
       body > canvas[style*="position: fixed"],
-      body > canvas[style*="position:absolute"] {
+      body > canvas[style*="position:absolute"],
+      body > div[style*="position: fixed"] {
         display: none !important;
+      }
+      
+      /* Ensure no element breaks out of the container */
+      .windows11-emulator-container {
+        position: relative !important;
+        overflow: hidden !important;
+        max-width: 100% !important;
       }
     `;
     document.head.appendChild(style);
