@@ -86,9 +86,19 @@ class CustomEmulator {
     // Start UEFI boot process
     await this.uefi.boot();
     
+    // Initialize graphics early (before boot manager)
+    if (this.gop) {
+      this.gop.setMode(0, 640, 480);
+      // Draw initial screen (not just black)
+      this.gop.drawTestPattern();
+    }
+    
     // After UEFI hands off to boot manager, start CPU execution
     // TODO: Run in Web Worker for better performance
     this.cpu.run();
+    
+    // Set up periodic framebuffer blit
+    this.setupFramebufferBlit();
   }
 
   /**
