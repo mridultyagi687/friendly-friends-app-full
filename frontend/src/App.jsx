@@ -259,11 +259,11 @@ function AppRoutesContent() {
 
   return (
       <div className="app">
-        {user && (isMobile ? <MobileNavBar /> : <NavBar />)}
+        {user2 && (isMobile ? <MobileNavBar /> : <NavBar />)}
         <div style={{ 
-          marginLeft: user && !isMobile ? '250px' : '0', 
-          marginTop: user && isMobile ? '60px' : '0',
-          marginBottom: user && isMobile ? '70px' : '0',
+          marginLeft: user2 && !isMobile ? '250px' : '0', 
+          marginTop: user2 && isMobile ? '60px' : '0',
+          marginBottom: user2 && isMobile ? '70px' : '0',
           minHeight: '100vh',
           padding: isMobile ? '0.5rem' : '0',
         }}>
@@ -271,10 +271,10 @@ function AppRoutesContent() {
             <Route
               path="/"
               element={
-                user
-                  ? (canAccessFeature(user, 'blog') && !canAccessFeature(user, 'members')
+                user2
+                  ? (canAccessFeature(user2, 'blog') && !canAccessFeature(user2, 'members')
                       ? <Navigate to="/blog" replace />
-                      : (user.is_admin ? <Navigate to="/admin" replace /> : <Navigate to="/members" replace />))
+                      : (user2.is_admin ? <Navigate to="/admin" replace /> : <Navigate to="/members" replace />))
                   : <Login />
               }
             />

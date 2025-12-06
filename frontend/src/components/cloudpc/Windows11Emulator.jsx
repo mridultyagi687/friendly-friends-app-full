@@ -75,9 +75,15 @@ function Windows11Emulator() {
 
   // Initialize emulator (custom or v86)
   useEffect(() => {
-    if (!passwordVerified || checkingState) return;
+    if (!passwordVerified || checkingState) {
+      console.log('Emulator init skipped:', { passwordVerified, checkingState });
+      return;
+    }
+
+    console.log('Initializing emulator, useCustomEmulator:', useCustomEmulator);
 
     if (useCustomEmulator) {
+      console.log('Calling initializeCustomEmulator...');
       initializeCustomEmulator();
     } else {
       // Load v86.js from CDN (fallback)
@@ -715,18 +721,33 @@ function Windows11Emulator() {
         id="v86-screen-container"
         data-testid="emulator-screen"
       >
-        {!canvasRef.current && (
+        {!canvasRef.current && !loading && !booting && (
           <div style={{
             position: 'absolute',
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
             color: '#fff',
-            zIndex: 10
+            zIndex: 10,
+            textAlign: 'center'
           }}>
-            Initializing canvas...
+            <p>Canvas not initialized</p>
+            <p style={{ fontSize: '0.8rem', color: '#888' }}>
+              Check console for errors
+            </p>
           </div>
         )}
+        {/* Always show a background color so we know the container is there */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#001122',
+          zIndex: 0,
+          pointerEvents: 'none'
+        }}></div>
       </div>
     </div>
   );
