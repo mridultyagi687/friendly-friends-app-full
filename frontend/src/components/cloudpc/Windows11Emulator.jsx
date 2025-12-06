@@ -312,8 +312,9 @@ function Windows11Emulator() {
     screen: {
       width: '100%',
       height: '100%',
+      flex: 1,
       backgroundColor: '#000',
-      minHeight: 'calc(100vh - 0px)',
+      overflow: 'hidden',
     },
     booting: {
       display: 'flex',
