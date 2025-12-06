@@ -381,7 +381,7 @@ function Windows11Emulator() {
   if (booting || loading) {
     return (
       <div style={styles.booting}>
-        <h2>{hasSavedState ? 'Resuming Windows 11...' : 'Booting Windows 11...'}</h2>
+        <h2>{hasSavedState ? 'Resuming Windows 11...' : 'Booting To Install Recovery'}</h2>
         <p>
           {hasSavedState
             ? 'Loading your previous session...'
