@@ -163,7 +163,7 @@ class InstructionDecoder {
   /**
    * Parse opcode
    */
-  parseOpcode(bytes, offset) {
+  parseOpcode(bytes, offset, prefixes = {}) {
     if (offset >= bytes.length) {
       return { mnemonic: 'UNKNOWN', length: 0, needsModRM: false, hasImmediate: false };
     }
@@ -172,7 +172,7 @@ class InstructionDecoder {
     
     // Handle multi-byte opcodes (0x0F prefix)
     if (firstByte === 0x0F && offset + 1 < bytes.length) {
-      return this.parseTwoByteOpcode(bytes, offset);
+      return this.parseTwoByteOpcode(bytes, offset, prefixes);
     }
 
     // Single-byte opcodes
@@ -269,20 +269,62 @@ class InstructionDecoder {
   /**
    * Parse two-byte opcode (0x0F prefix)
    */
-  parseTwoByteOpcode(bytes, offset) {
+  parseTwoByteOpcode(bytes, offset, prefixes = {}) {
     if (offset + 1 >= bytes.length) {
       return { mnemonic: 'UNKNOWN', length: 2, needsModRM: false, hasImmediate: false };
     }
 
     const secondByte = bytes[offset + 1];
+    
+    // SSE instructions (with 0x66, 0xF3, 0xF2 prefixes)
+    // Check if we have operand size prefix (0x66) or other SSE prefixes
+    const has66Prefix = prefixes.operandSize === true;
+    const hasF3Prefix = prefixes.rep === 'rep';
+    const hasF2Prefix = prefixes.rep === 'repne';
+    
+    // SSE2 instructions (0x66 0x0F)
+    if (has66Prefix) {
+      const sse2Opcodes = {
+        0x6F: { mnemonic: 'MOVDQA', length: 2, needsModRM: true, hasImmediate: false }, // MOVDQA (0x66 0x0F 0x6F)
+        0x7F: { mnemonic: 'MOVDQA', length: 2, needsModRM: true, hasImmediate: false }, // MOVDQA store (0x66 0x0F 0x7F)
+        0xEF: { mnemonic: 'PXOR', length: 2, needsModRM: true, hasImmediate: false }, // PXOR (0x66 0x0F 0xEF)
+        0xDB: { mnemonic: 'PAND', length: 2, needsModRM: true, hasImmediate: false }, // PAND (0x66 0x0F 0xDB)
+        0xEB: { mnemonic: 'POR', length: 2, needsModRM: true, hasImmediate: false }, // POR (0x66 0x0F 0xEB)
+      };
+      const sse2Opcode = sse2Opcodes[secondByte];
+      if (sse2Opcode) {
+        return { ...sse2Opcode, offset, sse: true };
+      }
+    }
+    
+    // SSE instructions (0xF3 0x0F)
+    if (hasF3Prefix) {
+      const sseOpcodes = {
+        0x6F: { mnemonic: 'MOVDQU', length: 2, needsModRM: true, hasImmediate: false }, // MOVDQU (0xF3 0x0F 0x6F)
+        0x7F: { mnemonic: 'MOVDQU', length: 2, needsModRM: true, hasImmediate: false }, // MOVDQU store (0xF3 0x0F 0x7F)
+      };
+      const sseOpcode = sseOpcodes[secondByte];
+      if (sseOpcode) {
+        return { ...sseOpcode, offset, sse: true };
+      }
+    }
+    
+    // Standard SSE instructions (no prefix or with 0xF2)
     const twoByteOpcodes = {
+      0x10: { mnemonic: 'MOVUPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVUPS (0x0F 0x10)
+      0x11: { mnemonic: 'MOVUPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVUPS store (0x0F 0x11)
+      0x28: { mnemonic: 'MOVAPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVAPS (0x0F 0x28)
+      0x29: { mnemonic: 'MOVAPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVAPS store (0x0F 0x29)
       0x84: { mnemonic: 'JZ', length: 2, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
       0x85: { mnemonic: 'JNZ', length: 2, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
+      0xA2: { mnemonic: 'CPUID', length: 2, needsModRM: false, hasImmediate: false }, // CPUID
+      0x31: { mnemonic: 'RDTSC', length: 2, needsModRM: false, hasImmediate: false }, // RDTSC
+      0xAE: { mnemonic: 'FXSAVE', length: 2, needsModRM: true, hasImmediate: false }, // FXSAVE/FXRSTOR (reg field selects)
     };
 
     const opcode = twoByteOpcodes[secondByte];
     if (opcode) {
-      return { ...opcode, offset };
+      return { ...opcode, offset, sse: (secondByte === 0x10 || secondByte === 0x11 || secondByte === 0x28 || secondByte === 0x29) };
     }
 
     return { mnemonic: 'UNKNOWN', length: 2, needsModRM: false, hasImmediate: false, offset };

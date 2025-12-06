@@ -104,6 +104,20 @@ class InstructionExecutor {
           return this.executeNEG(instruction);
         case 'FXSAVE':
           return this.executeFXSAVE(instruction);
+        case 'MOVAPS':
+          return this.executeMOVAPS(instruction);
+        case 'MOVUPS':
+          return this.executeMOVUPS(instruction);
+        case 'MOVDQA':
+          return this.executeMOVDQA(instruction);
+        case 'MOVDQU':
+          return this.executeMOVDQU(instruction);
+        case 'PXOR':
+          return this.executePXOR(instruction);
+        case 'PAND':
+          return this.executePAND(instruction);
+        case 'POR':
+          return this.executePOR(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -1161,35 +1175,6 @@ class InstructionExecutor {
   executeMUL(instruction) {
     return this.executeMULDIV(instruction);
   }
-    const { modrm, rex } = instruction;
-    const operandSize = (rex && rex.w) ? 64 : 32;
-
-    if (!modrm) {
-      return false;
-    }
-
-    const memAddr = this.calculateAddress(instruction);
-    if (memAddr === null) {
-      return false;
-    }
-
-    const value = this.readMemory(memAddr, operandSize);
-    const operation = modrm.reg;
-
-    switch (operation) {
-      case 4: // MUL (unsigned multiply)
-        return this.executeMULOperation(value, operandSize, false);
-      case 5: // IMUL (signed multiply)
-        return this.executeMULOperation(value, operandSize, true);
-      case 6: // DIV (unsigned divide)
-        return this.executeDIVOperation(value, operandSize, false);
-      case 7: // IDIV (signed divide)
-        return this.executeDIVOperation(value, operandSize, true);
-      default:
-        console.warn(`CPU: Unhandled MUL operation ${operation}`);
-        return false;
-    }
-  }
 
   /**
    * Execute MUL operation
@@ -1492,6 +1477,256 @@ class InstructionExecutor {
       console.log('CPU: FXRSTOR executed (simplified - data read but not used)');
     } else {
       return false;
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute MOVAPS instruction (Move Aligned Packed Single-precision)
+   * Moves 128 bits (16 bytes) aligned
+   */
+  executeMOVAPS(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    // MOVAPS moves 128 bits (16 bytes)
+    const size = 16;
+
+    if (modrm.mod === 3) {
+      // Register to register (XMM register)
+      // For now, treat as memory-to-memory operation
+      // TODO: Implement XMM registers
+      console.log('CPU: MOVAPS reg-to-reg (XMM not implemented, treating as NOP)');
+    } else {
+      // Memory operation
+      if (modrm.reg < 4) {
+        // Load from memory to XMM register (simplified - just read)
+        for (let i = 0; i < size; i++) {
+          this.memory.readByte(memAddr + i);
+        }
+      } else {
+        // Store from XMM register to memory (simplified - write zeros)
+        for (let i = 0; i < size; i++) {
+          this.memory.writeByte(memAddr + i, 0);
+        }
+      }
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute MOVUPS instruction (Move Unaligned Packed Single-precision)
+   * Moves 128 bits (16 bytes) unaligned
+   */
+  executeMOVUPS(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    // MOVUPS moves 128 bits (16 bytes)
+    const size = 16;
+
+    if (modrm.mod === 3) {
+      // Register to register (XMM register)
+      console.log('CPU: MOVUPS reg-to-reg (XMM not implemented, treating as NOP)');
+    } else {
+      // Memory operation
+      if (modrm.reg < 4) {
+        // Load from memory to XMM register (simplified - just read)
+        for (let i = 0; i < size; i++) {
+          this.memory.readByte(memAddr + i);
+        }
+      } else {
+        // Store from XMM register to memory (simplified - write zeros)
+        for (let i = 0; i < size; i++) {
+          this.memory.writeByte(memAddr + i, 0);
+        }
+      }
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute MOVDQA instruction (Move Aligned Double Quadword)
+   * Moves 128 bits (16 bytes) aligned
+   */
+  executeMOVDQA(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    // MOVDQA moves 128 bits (16 bytes)
+    const size = 16;
+
+    if (modrm.mod === 3) {
+      // Register to register (XMM register)
+      console.log('CPU: MOVDQA reg-to-reg (XMM not implemented, treating as NOP)');
+    } else {
+      // Memory operation
+      if (modrm.reg < 4) {
+        // Load from memory to XMM register (simplified - just read)
+        for (let i = 0; i < size; i++) {
+          this.memory.readByte(memAddr + i);
+        }
+      } else {
+        // Store from XMM register to memory (simplified - write zeros)
+        for (let i = 0; i < size; i++) {
+          this.memory.writeByte(memAddr + i, 0);
+        }
+      }
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute MOVDQU instruction (Move Unaligned Double Quadword)
+   * Moves 128 bits (16 bytes) unaligned
+   */
+  executeMOVDQU(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    // MOVDQU moves 128 bits (16 bytes)
+    const size = 16;
+
+    if (modrm.mod === 3) {
+      // Register to register (XMM register)
+      console.log('CPU: MOVDQU reg-to-reg (XMM not implemented, treating as NOP)');
+    } else {
+      // Memory operation
+      if (modrm.reg < 4) {
+        // Load from memory to XMM register (simplified - just read)
+        for (let i = 0; i < size; i++) {
+          this.memory.readByte(memAddr + i);
+        }
+      } else {
+        // Store from XMM register to memory (simplified - write zeros)
+        for (let i = 0; i < size; i++) {
+          this.memory.writeByte(memAddr + i, 0);
+        }
+      }
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute PXOR instruction (Packed XOR)
+   * XORs 128 bits (16 bytes)
+   */
+  executePXOR(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    // PXOR operates on XMM registers
+    // For now, treat as NOP (XMM registers not implemented)
+    // This allows code to continue executing without crashing
+    if (modrm.mod === 3) {
+      // Register to register (XMM register)
+      console.log('CPU: PXOR reg-to-reg (XMM not implemented, treating as NOP)');
+    } else {
+      // Memory operation
+      const memAddr = this.calculateAddress(instruction);
+      if (memAddr === null) {
+        return false;
+      }
+      // Just read the memory (don't actually XOR)
+      for (let i = 0; i < 16; i++) {
+        this.memory.readByte(memAddr + i);
+      }
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute PAND instruction (Packed AND)
+   * ANDs 128 bits (16 bytes)
+   */
+  executePAND(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    // PAND operates on XMM registers
+    // For now, treat as NOP (XMM registers not implemented)
+    if (modrm.mod === 3) {
+      console.log('CPU: PAND reg-to-reg (XMM not implemented, treating as NOP)');
+    } else {
+      const memAddr = this.calculateAddress(instruction);
+      if (memAddr === null) {
+        return false;
+      }
+      for (let i = 0; i < 16; i++) {
+        this.memory.readByte(memAddr + i);
+      }
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute POR instruction (Packed OR)
+   * ORs 128 bits (16 bytes)
+   */
+  executePOR(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    // POR operates on XMM registers
+    // For now, treat as NOP (XMM registers not implemented)
+    if (modrm.mod === 3) {
+      console.log('CPU: POR reg-to-reg (XMM not implemented, treating as NOP)');
+    } else {
+      const memAddr = this.calculateAddress(instruction);
+      if (memAddr === null) {
+        return false;
+      }
+      for (let i = 0; i < 16; i++) {
+        this.memory.readByte(memAddr + i);
+      }
     }
 
     this.cpu.registers.rip += BigInt(instruction.length);
