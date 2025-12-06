@@ -432,9 +432,18 @@ function VideoGallery() {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    // Get base path from environment (same as App.jsx)
+                    const basename = import.meta.env.BASE_URL || '/';
                     const baseURL = window.location.origin;
-                    const videoUrl = `${baseURL}/video-player/${video.id}`;
-                    window.open(videoUrl, 'Friendly Friends Video Player', 'width=1200,height=800,resizable=yes,scrollbars=yes');
+                    // Remove trailing slash from basename if present, then add video-player path
+                    const cleanBasename = basename.endsWith('/') ? basename.slice(0, -1) : basename;
+                    const videoUrl = `${baseURL}${cleanBasename}/video-player/${video.id}`;
+                    // Open in a new window (not tab) with specific features
+                    const windowFeatures = 'width=1200,height=800,resizable=yes,scrollbars=yes,menubar=no,toolbar=no,location=no,status=no';
+                    const newWindow = window.open(videoUrl, 'Friendly Friends Video Player', windowFeatures);
+                    if (!newWindow) {
+                      alert('Please allow popups for this site to open the video player in a new window.');
+                    }
                   }}
                   style={styles.playButtonSmall}
                   title="Open in Friendly Friends Video Player"
