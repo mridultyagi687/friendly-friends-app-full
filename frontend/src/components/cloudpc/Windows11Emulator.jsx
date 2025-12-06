@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+// Import our custom emulator (will be used in future steps)
+// import CustomEmulator from '../../emulator/core/emulator.js';
 
 // IndexedDB helper for storing VM state
 const getDB = () => {
@@ -25,7 +27,7 @@ const saveVMState = async (pcId, state) => {
     const store = transaction.objectStore('vmStates');
     await store.put({ pcId, state, timestamp: Date.now() });
   } catch (err) {
-    console.error('Failed to save VM state:', err);
+    console.error('Sorry,Failed to save VM state:', err);
   }
 };
 

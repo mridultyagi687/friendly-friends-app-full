@@ -23,7 +23,9 @@ function AdminDashboard() {
   });
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const theme = useTheme();
+  const theme = useTheme(
+    
+  );
 
   useEffect(() => {
     // Wait for auth to finish loading before checking user
