@@ -32,5 +32,14 @@
     "terser": "^5.44.1",
     "vite": "^5.0.0",
     "vitest": "^1.6.0"
+  },
+  "emulator": {
+    "note": "Custom emulator with TPM 2.0 and Secure Boot support",
+    "components": [
+      "x86-64 CPU emulation",
+      "TPM 2.0 emulation (libtpms)",
+      "UEFI firmware with Secure Boot (OVMF)",
+      "WebAssembly integration"
+    ]
   }
 }
