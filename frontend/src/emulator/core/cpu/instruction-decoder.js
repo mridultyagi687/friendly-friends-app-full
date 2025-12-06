@@ -315,6 +315,32 @@ class InstructionDecoder {
       }
     }
     
+    // Conditional move instructions (0x0F 0x40-0x4F)
+    if (secondByte >= 0x40 && secondByte <= 0x4F) {
+      const cmovOpcodes = {
+        0x40: { mnemonic: 'CMOVO', length: 2, needsModRM: true, hasImmediate: false, condition: 'OF' }, // CMOVO (overflow)
+        0x41: { mnemonic: 'CMOVNO', length: 2, needsModRM: true, hasImmediate: false, condition: '!OF' }, // CMOVNO
+        0x42: { mnemonic: 'CMOVB', length: 2, needsModRM: true, hasImmediate: false, condition: 'CF' }, // CMOVB/CMOVC/CMOVNAE (below/carry)
+        0x43: { mnemonic: 'CMOVAE', length: 2, needsModRM: true, hasImmediate: false, condition: '!CF' }, // CMOVAE/CMOVNB/CMOVNC (above or equal)
+        0x44: { mnemonic: 'CMOVE', length: 2, needsModRM: true, hasImmediate: false, condition: 'ZF' }, // CMOVE/CMOVZ (equal/zero)
+        0x45: { mnemonic: 'CMOVNE', length: 2, needsModRM: true, hasImmediate: false, condition: '!ZF' }, // CMOVNE/CMOVNZ (not equal/not zero)
+        0x46: { mnemonic: 'CMOVBE', length: 2, needsModRM: true, hasImmediate: false, condition: 'CF|ZF' }, // CMOVBE/CMOVNA (below or equal)
+        0x47: { mnemonic: 'CMOVA', length: 2, needsModRM: true, hasImmediate: false, condition: '!CF&!ZF' }, // CMOVA/CMOVNBE (above)
+        0x48: { mnemonic: 'CMOVS', length: 2, needsModRM: true, hasImmediate: false, condition: 'SF' }, // CMOVS (sign)
+        0x49: { mnemonic: 'CMOVNS', length: 2, needsModRM: true, hasImmediate: false, condition: '!SF' }, // CMOVNS (not sign)
+        0x4A: { mnemonic: 'CMOVP', length: 2, needsModRM: true, hasImmediate: false, condition: 'PF' }, // CMOVP/CMOVPE (parity/parity even)
+        0x4B: { mnemonic: 'CMOVNP', length: 2, needsModRM: true, hasImmediate: false, condition: '!PF' }, // CMOVNP/CMOVPO (not parity/parity odd)
+        0x4C: { mnemonic: 'CMOVL', length: 2, needsModRM: true, hasImmediate: false, condition: 'SF!=OF' }, // CMOVL/CMOVNGE (less/not greater or equal)
+        0x4D: { mnemonic: 'CMOVGE', length: 2, needsModRM: true, hasImmediate: false, condition: 'SF==OF' }, // CMOVGE/CMOVNL (greater or equal/not less)
+        0x4E: { mnemonic: 'CMOVLE', length: 2, needsModRM: true, hasImmediate: false, condition: 'ZF|SF!=OF' }, // CMOVLE/CMOVNG (less or equal/not greater)
+        0x4F: { mnemonic: 'CMOVG', length: 2, needsModRM: true, hasImmediate: false, condition: '!ZF&SF==OF' }, // CMOVG/CMOVNLE (greater/not less or equal)
+      };
+      const cmovOpcode = cmovOpcodes[secondByte];
+      if (cmovOpcode) {
+        return { ...cmovOpcode, offset };
+      }
+    }
+
     // Standard SSE instructions (no prefix or with 0xF2)
     const twoByteOpcodes = {
       0x01: { mnemonic: 'SYSTEM', length: 2, needsModRM: true, hasImmediate: false }, // LGDT/LIDT/INVLPG (0x0F 0x01, reg field selects)

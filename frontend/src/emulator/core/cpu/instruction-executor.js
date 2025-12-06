@@ -2127,6 +2127,104 @@ class InstructionExecutor {
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
   }
+
+  /**
+   * Execute CMOV instruction (Conditional Move)
+   */
+  executeCMOV(instruction) {
+    const { opcode, modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    const operandSize = (rex && rex.w) ? 64 : 32;
+    const condition = opcode.condition;
+
+    // Check condition
+    let conditionMet = false;
+    const flags = this.cpu.registers.rflags;
+    const CF = (flags & 0x01n) ? true : false;
+    const PF = (flags & 0x04n) ? true : false;
+    const ZF = (flags & 0x40n) ? true : false;
+    const SF = (flags & 0x80n) ? true : false;
+    const OF = (flags & 0x800n) ? true : false;
+
+    switch (condition) {
+      case 'OF':
+        conditionMet = OF;
+        break;
+      case '!OF':
+        conditionMet = !OF;
+        break;
+      case 'CF':
+        conditionMet = CF;
+        break;
+      case '!CF':
+        conditionMet = !CF;
+        break;
+      case 'ZF':
+        conditionMet = ZF;
+        break;
+      case '!ZF':
+        conditionMet = !ZF;
+        break;
+      case 'CF|ZF':
+        conditionMet = CF || ZF;
+        break;
+      case '!CF&!ZF':
+        conditionMet = !CF && !ZF;
+        break;
+      case 'SF':
+        conditionMet = SF;
+        break;
+      case '!SF':
+        conditionMet = !SF;
+        break;
+      case 'PF':
+        conditionMet = PF;
+        break;
+      case '!PF':
+        conditionMet = !PF;
+        break;
+      case 'SF!=OF':
+        conditionMet = SF !== OF;
+        break;
+      case 'SF==OF':
+        conditionMet = SF === OF;
+        break;
+      case 'ZF|SF!=OF':
+        conditionMet = ZF || (SF !== OF);
+        break;
+      case '!ZF&SF==OF':
+        conditionMet = !ZF && (SF === OF);
+        break;
+      default:
+        return false;
+    }
+
+    // If condition is met, perform the move
+    if (conditionMet) {
+      if (modrm.mod === 3) {
+        // Register to register
+        const reg1 = this.getRegisterFromModRM(modrm, rex, operandSize);
+        const reg2 = this.getRegisterFromModRM({ ...modrm, reg: modrm.rm }, rex, operandSize);
+        const value = this.cpu.registers[reg2];
+        this.cpu.registers[reg1] = value & this.getMask(operandSize);
+      } else {
+        // Memory to register
+        const memAddr = this.calculateAddress(instruction);
+        if (memAddr === null) {
+          return false;
+        }
+        const memValue = this.readMemory(memAddr, operandSize);
+        const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+        this.cpu.registers[reg] = memValue & this.getMask(operandSize);
+      }
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
 }
 
 export default InstructionExecutor;

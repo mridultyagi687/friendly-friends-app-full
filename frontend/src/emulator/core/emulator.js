@@ -49,10 +49,6 @@ class CustomEmulator {
     this.cpu.memory = this.memory;
     this.cpu.init();
     
-    // Initialize UEFI firmware (needs memory and CPU)
-    this.uefi = new UEFIFirmware(this.memory, this.cpu);
-    await this.uefi.init();
-    
     this.vga.init();
     this.keyboard.init();
     this.mouse.init();
@@ -61,12 +57,16 @@ class CustomEmulator {
     this.gop = new GraphicsOutputProtocol(this.memory, this.vga);
     this.gop.init();
     
+    // Initialize ACPI tables (needs memory)
+    this.acpi.init();
+    
+    // Initialize UEFI firmware (needs memory, CPU, GOP, ACPI)
+    this.uefi = new UEFIFirmware(this.memory, this.cpu, this.gop, this.acpi);
+    await this.uefi.init();
+    
     await this.tpm.init();
     this.tpmDevice.init();
     await this.secureBoot.init();
-    
-    // Initialize ACPI tables (needs memory)
-    this.acpi.init();
     
     this.initialized = true;
     console.log('Emulator: Initialized successfully');
@@ -83,15 +83,15 @@ class CustomEmulator {
     console.log('Emulator: Starting...');
     this.running = true;
     
-    // Start UEFI boot process
-    await this.uefi.boot();
-    
     // Initialize graphics early (before boot manager)
     if (this.gop) {
       this.gop.setMode(0, 640, 480);
       // Draw initial screen (not just black)
       this.gop.drawTestPattern();
     }
+    
+    // Start UEFI boot process (pass emulator instance for ISO/EFI access)
+    await this.uefi.boot(this);
     
     // After UEFI hands off to boot manager, start CPU execution
     // TODO: Run in Web Worker for better performance

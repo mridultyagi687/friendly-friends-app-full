@@ -8,15 +8,19 @@
  */
 
 class UEFIFirmware {
-  constructor(memory, cpu) {
+  constructor(memory, cpu, gop, acpi) {
     this.memory = memory;
     this.cpu = cpu;
+    this.gop = gop; // Graphics Output Protocol
+    this.acpi = acpi; // ACPI tables
     this.initialized = false;
     this.bootServices = {
       // UEFI Boot Services (simplified)
       allocatePool: this.allocatePool.bind(this),
       freePool: this.freePool.bind(this),
       locateProtocol: this.locateProtocol.bind(this),
+      locateHandleBuffer: this.locateHandleBuffer.bind(this),
+      handleProtocol: this.handleProtocol.bind(this),
     };
     this.runtimeServices = {
       // UEFI Runtime Services (simplified)
@@ -57,8 +61,9 @@ class UEFIFirmware {
 
   /**
    * Start UEFI boot process
+   * @param {CustomEmulator} emulator - Emulator instance for ISO/EFI access
    */
-  async boot() {
+  async boot(emulator) {
     if (!this.initialized) {
       await this.init();
     }
@@ -76,7 +81,7 @@ class UEFIFirmware {
     await this.secPhase();
     await this.peiPhase();
     await this.dxePhase();
-    await this.bdsPhase();
+    await this.bdsPhase(emulator);
   }
 
   /**
@@ -103,18 +108,26 @@ class UEFIFirmware {
    */
   async dxePhase() {
     console.log('UEFI: DXE Phase - Driver execution');
-    // TODO: Load UEFI drivers, initialize devices
+    // Expose GOP protocol
+    if (this.gop) {
+      this.gop.installProtocol();
+    }
+    // Expose ACPI tables
+    if (this.acpi) {
+      this.acpi.installRSDP();
+    }
   }
 
   /**
    * BDS (Boot Device Selection) Phase
    * Select boot device and load boot manager
+   * @param {CustomEmulator} emulator - Emulator instance
    */
-  async bdsPhase() {
+  async bdsPhase(emulator) {
     console.log('UEFI: BDS Phase - Boot device selection');
     
     // Look for boot devices (CD-ROM, hard disk, etc.)
-    const bootDevices = await this.enumerateBootDevices();
+    const bootDevices = await this.enumerateBootDevices(emulator);
     
     if (bootDevices.length === 0) {
       console.warn('UEFI: No boot devices found');
@@ -126,31 +139,47 @@ class UEFIFirmware {
     console.log(`UEFI: Attempting to boot from ${bootDevice.type}`);
     
     // Load boot manager
-    await this.loadBootManager(bootDevice);
+    await this.loadBootManager(bootDevice, emulator);
   }
 
   /**
    * Enumerate available boot devices
+   * @param {CustomEmulator} emulator - Emulator instance
    * @returns {Array} - List of boot devices
    */
-  async enumerateBootDevices() {
+  async enumerateBootDevices(emulator) {
     const devices = [];
     
     // Check for CD-ROM (ISO)
-    // TODO: Check if ISO is loaded
-    devices.push({
-      type: 'cdrom',
-      path: 'CDROM0',
-      bootable: true,
-    });
+    if (emulator && emulator.isoParser && emulator.isoParser.isoLoaded) {
+      console.log('UEFI: Found ISO boot device');
+      // Look for EFI boot files
+      const efiPath = '/EFI/BOOT/';
+      try {
+        const efiFiles = emulator.isoParser.readDirectory(efiPath);
+        const bootManagerPath = efiFiles.find(f => f.name.endsWith('.efi'));
+        if (bootManagerPath) {
+          devices.push({
+            type: 'cdrom',
+            path: '/',
+            bootable: true,
+            bootManagerPath: efiPath + bootManagerPath.name,
+          });
+        }
+      } catch (e) {
+        console.warn('UEFI: Could not read EFI directory:', e);
+      }
+    }
     
     // Check for hard disk
     // TODO: Check for virtual hard disk
-    devices.push({
-      type: 'harddisk',
-      path: 'HD0',
-      bootable: true,
-    });
+    if (devices.length === 0) {
+      devices.push({
+        type: 'harddisk',
+        path: 'HD0',
+        bootable: true,
+      });
+    }
     
     return devices;
   }
@@ -211,23 +240,23 @@ class UEFIFirmware {
     };
     
     // Hand off to boot manager
-    await this.handoffToBootManager(bootParams);
+    await this.handoffToBootManager(bootParams, emulator);
   }
 
   /**
    * Hand off control to boot manager
    * @param {Object} bootParams - Boot parameters
+   * @param {CustomEmulator} emulator - Emulator instance
    */
-  async handoffToBootManager(bootParams) {
+  async handoffToBootManager(bootParams, emulator) {
     console.log('UEFI: Handing off to boot manager');
     console.log('Boot parameters:', bootParams);
     
-    // TODO: Load boot manager binary into memory
-    // TODO: Set up boot parameters in memory
-    // TODO: Jump to boot manager entry point
-    
-    // For now, just log
+    // Boot manager should already be loaded by loadBootManager
+    // Entry point should already be set in CPU
+    // Just log that handoff is complete
     console.log('UEFI: Boot manager should now take control');
+    console.log(`UEFI: CPU RIP = 0x${this.cpu.registers.rip.toString(16)}`);
   }
 
   /**
@@ -249,7 +278,29 @@ class UEFIFirmware {
    * UEFI Boot Service: Locate Protocol
    */
   locateProtocol(protocolGuid, registration) {
-    // TODO: Locate UEFI protocol
+    // Simplified: return GOP protocol if requested
+    if (this.gop && protocolGuid === this.gop.protocolGuid) {
+      return this.gop.getProtocolInterface();
+    }
+    return null;
+  }
+
+  /**
+   * UEFI Boot Service: Locate Handle Buffer
+   */
+  locateHandleBuffer(searchType, protocol) {
+    // Simplified: return empty handle buffer
+    return [];
+  }
+
+  /**
+   * UEFI Boot Service: Handle Protocol
+   */
+  handleProtocol(handle, protocolGuid) {
+    // Simplified: return GOP protocol if requested
+    if (this.gop && protocolGuid === this.gop.protocolGuid) {
+      return this.gop.getProtocolInterface();
+    }
     return null;
   }
 
