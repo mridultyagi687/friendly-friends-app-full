@@ -196,8 +196,11 @@ class MemoryManager {
    */
   readQword(address) {
     const addr = typeof address === 'bigint' ? Number(address) : address;
-    const low = BigInt(this.readDword(addr));
-    const high = BigInt(this.readDword(addr + 4));
+    const lowDword = this.readDword(addr);
+    const highDword = this.readDword(addr + 4);
+    // Convert to unsigned 32-bit before combining
+    const low = BigInt(lowDword >>> 0); // Convert to unsigned
+    const high = BigInt(highDword >>> 0); // Convert to unsigned
     return low | (high << 32n);
   }
 

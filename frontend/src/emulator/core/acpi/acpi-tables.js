@@ -373,8 +373,13 @@ class ACPITables {
    * Helper: Write 64-bit unsigned integer (little-endian)
    */
   writeUInt64(address, value) {
-    this.writeUInt32(address, Number(value & 0xFFFFFFFFn));
-    this.writeUInt32(address + 4, Number((value >> 32n) & 0xFFFFFFFFn));
+    // Convert address to Number if it's BigInt
+    const addr = typeof address === 'bigint' ? Number(address) : address;
+    // Convert value to BigInt if it's a Number
+    const val = typeof value === 'bigint' ? value : BigInt(value);
+    
+    this.writeUInt32(addr, Number(val & 0xFFFFFFFFn));
+    this.writeUInt32(addr + 4, Number((val >> 32n) & 0xFFFFFFFFn));
   }
 
   /**

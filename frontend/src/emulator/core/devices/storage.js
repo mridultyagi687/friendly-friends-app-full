@@ -328,9 +328,13 @@ class StorageDevice {
    * @returns {Promise<bigint>} - Qword value
    */
   async readQword(offset) {
-    const low = await this.readDword(offset);
-    const high = await this.readDword(offset + 4);
-    return BigInt(low) | (BigInt(high) << 32n);
+    const off = typeof offset === 'bigint' ? Number(offset) : offset;
+    const low = await this.readDword(off);
+    const high = await this.readDword(off + 4);
+    // Convert to unsigned 32-bit before combining
+    const lowUnsigned = BigInt(low >>> 0); // Convert to unsigned
+    const highUnsigned = BigInt(high >>> 0); // Convert to unsigned
+    return lowUnsigned | (highUnsigned << 32n);
   }
 
   /**
