@@ -184,6 +184,16 @@ function Windows11Emulator() {
       setLoading(true);
       setError(null);
 
+      // Check if CustomEmulator is available
+      if (typeof CustomEmulator === 'undefined' || !CustomEmulator) {
+        const errorMsg = 'Emulator library not loaded. Please refresh the page.';
+        console.error('initializeCustomEmulator:', errorMsg);
+        setError(errorMsg);
+        setLoading(false);
+        setBooting(false);
+        return;
+      }
+
       // Create canvas for VGA output
       if (!canvasRef.current && screenRef.current) {
         console.log('Creating canvas element...');
@@ -220,11 +230,32 @@ function Windows11Emulator() {
       }
 
       // Create custom emulator instance
-      const emulator = new CustomEmulator(canvasRef.current);
-      customEmulatorRef.current = emulator;
+      let emulator;
+      try {
+        emulator = new CustomEmulator(canvasRef.current);
+        customEmulatorRef.current = emulator;
+        console.log('CustomEmulator instance created successfully');
+      } catch (err) {
+        const errorMsg = `Failed to create emulator: ${err.message}`;
+        console.error('initializeCustomEmulator: Failed to create CustomEmulator:', err);
+        setError(errorMsg);
+        setLoading(false);
+        setBooting(false);
+        return;
+      }
 
       // Initialize emulator
-      await emulator.init();
+      try {
+        await emulator.init();
+        console.log('Emulator initialized successfully');
+      } catch (err) {
+        const errorMsg = err.message || 'Failed to initialize emulator';
+        console.error('initializeCustomEmulator: Failed to initialize emulator:', err);
+        setError(errorMsg);
+        setLoading(false);
+        setBooting(false);
+        return;
+      }
 
       // Load saved state if available
       if (hasSavedState) {

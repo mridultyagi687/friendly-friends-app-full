@@ -5,10 +5,26 @@
  */
 
 class MemoryManager {
-  constructor(size = 4 * 1024 * 1024 * 1024) { // 4GB default
+  constructor(size = 512 * 1024 * 1024) { // 512MB default (reduced from 4GB for browser compatibility)
     this.size = size;
-    this.memory = new ArrayBuffer(size);
-    this.view = new Uint8Array(this.memory);
+    try {
+      this.memory = new ArrayBuffer(size);
+      this.view = new Uint8Array(this.memory);
+    } catch (e) {
+      // If allocation fails, try smaller size
+      console.warn(`Memory: Failed to allocate ${size / (1024 * 1024)}MB, trying 256MB...`);
+      this.size = 256 * 1024 * 1024; // 256MB fallback
+      try {
+        this.memory = new ArrayBuffer(this.size);
+        this.view = new Uint8Array(this.memory);
+      } catch (e2) {
+        // Last resort: 128MB
+        console.warn(`Memory: Failed to allocate 256MB, trying 128MB...`);
+        this.size = 128 * 1024 * 1024; // 128MB minimum
+        this.memory = new ArrayBuffer(this.size);
+        this.view = new Uint8Array(this.memory);
+      }
+    }
     this.pageTable = new Map(); // Virtual to physical page mapping
     this.pageSize = 4096; // 4KB pages
   }
