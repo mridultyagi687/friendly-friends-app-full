@@ -92,6 +92,10 @@ function Windows11Emulator() {
       // Cleanup emulator on unmount
       if (emulatorRef.current) {
         try {
+          // Stop observer if it exists
+          if (emulatorRef.current._observer) {
+            emulatorRef.current._observer.disconnect();
+          }
           // Save state before destroying
           saveCurrentState();
           emulatorRef.current.destroy();
