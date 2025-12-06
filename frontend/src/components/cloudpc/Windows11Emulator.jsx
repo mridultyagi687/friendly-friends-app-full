@@ -180,14 +180,37 @@ function Windows11Emulator() {
 
       // Create canvas for VGA output
       if (!canvasRef.current && screenRef.current) {
+        console.log('Creating canvas element...');
         const canvas = document.createElement('canvas');
         canvas.width = 640;
         canvas.height = 480;
         canvas.style.width = '100%';
         canvas.style.height = '100%';
         canvas.style.display = 'block';
+        canvas.style.backgroundColor = '#000';
+        canvas.style.position = 'relative';
+        canvas.style.zIndex = '1';
         screenRef.current.appendChild(canvas);
         canvasRef.current = canvas;
+        console.log('Canvas created and appended to screenRef', canvas);
+        
+        // Force initial render with a test pattern
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // Draw a simple test pattern to verify canvas is working
+          const gradient = ctx.createLinearGradient(0, 0, 640, 480);
+          gradient.addColorStop(0, '#ff0000');
+          gradient.addColorStop(0.5, '#00ff00');
+          gradient.addColorStop(1, '#0000ff');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, 640, 480);
+          console.log('Test pattern drawn on canvas');
+        }
+      } else {
+        console.log('Canvas already exists or screenRef not available', {
+          hasCanvas: !!canvasRef.current,
+          hasScreenRef: !!screenRef.current
+        });
       }
 
       // Create custom emulator instance
@@ -508,9 +531,10 @@ function Windows11Emulator() {
     screen: {
       width: '100%',
       height: '100%',
+      minHeight: '400px',
       flex: 1,
       backgroundColor: '#000',
-      overflow: 'hidden',
+      overflow: 'visible',
       position: 'relative',
       display: 'flex',
       alignItems: 'center',
@@ -685,7 +709,25 @@ function Windows11Emulator() {
 
   return (
     <div style={styles.container} className="windows11-emulator-container">
-      <div ref={screenRef} style={styles.screen} id="v86-screen-container"></div>
+      <div 
+        ref={screenRef} 
+        style={styles.screen} 
+        id="v86-screen-container"
+        data-testid="emulator-screen"
+      >
+        {!canvasRef.current && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            color: '#fff',
+            zIndex: 10
+          }}>
+            Initializing canvas...
+          </div>
+        )}
+      </div>
     </div>
   );
 }
