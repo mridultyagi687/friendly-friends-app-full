@@ -7,6 +7,7 @@
 import CPU from './cpu/cpu.js';
 import MemoryManager from './memory/memory.js';
 import TPMEmulator from './tpm/tpm-emulator.js';
+import TPMDevice from './devices/tpm-device.js';
 import SecureBoot from './uefi/secure-boot.js';
 import VGADevice from './devices/vga.js';
 import KeyboardDevice from './devices/keyboard.js';
@@ -17,6 +18,7 @@ class CustomEmulator {
     this.cpu = new CPU();
     this.memory = new MemoryManager();
     this.tpm = new TPMEmulator();
+    this.tpmDevice = new TPMDevice(this.tpm);
     this.secureBoot = new SecureBoot();
     this.vga = new VGADevice(canvas);
     this.keyboard = new KeyboardDevice();
@@ -42,6 +44,7 @@ class CustomEmulator {
     this.mouse.init();
     
     await this.tpm.init();
+    this.tpmDevice.init();
     await this.secureBoot.init();
     
     this.initialized = true;
@@ -82,6 +85,10 @@ class CustomEmulator {
       cpu: this.cpu.getState(),
       memory: this.memory.getSnapshot(),
       tpm: this.tpm.saveState(),
+      vga: {
+        mode: this.vga.mode,
+        framebuffer: Array.from(this.vga.framebuffer),
+      },
       // TODO: Add other component states
     };
   }
