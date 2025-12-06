@@ -49,7 +49,8 @@ const loadVMState = async (pcId) => {
 
 function Windows11Emulator() {
   const { pcId } = useParams();
-  const { user } = useAuth();
+  const authContext = useAuth();
+  const user = authContext?.user || null; // Safely handle null context
   const screenRef = useRef(null);
   const canvasRef = useRef(null);
   const [loading, setLoading] = useState(true);
