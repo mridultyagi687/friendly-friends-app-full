@@ -213,20 +213,15 @@ function AppRoutesContent() {
   const location = useLocation();
 
   // Handle hash routing from new window (GitHub Pages workaround)
+  // With HashRouter, the hash is already in the pathname, but we need to ensure
+  // it's preserved during authentication redirects
   useEffect(() => {
-    // Check if we have a hash route (from opening new window with hash)
-    if (location.hash && location.hash.startsWith('#/')) {
-      const hashRoute = location.hash.substring(1); // Remove the #
-      // Only navigate if we're not already on that route
-      if (location.pathname !== hashRoute && user) {
-        // Wait a bit for everything to load, then navigate
-        const timer = setTimeout(() => {
-          navigate(hashRoute, { replace: true });
-        }, 500);
-        return () => clearTimeout(timer);
-      }
+    // Store the intended route in sessionStorage if we detect a video player route
+    // This helps preserve it through authentication redirects
+    if (location.pathname.includes('/video-player/')) {
+      sessionStorage.setItem('intendedRoute', location.pathname);
     }
-  }, [location, user, navigate]);
+  }, [location.pathname]);
 
   const { user: user2, loading } = useAuth();
   const theme = useTheme();
