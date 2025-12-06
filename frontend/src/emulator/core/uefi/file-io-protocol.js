@@ -197,6 +197,15 @@ class FileIOProtocol {
    * @returns {Object} - Root handle
    */
   getRoot() {
+    if (!this.rootHandle) {
+      // Initialize root handle if not already done
+      this.rootHandle = {
+        isDirectory: true,
+        isOpen: true,
+        position: 0,
+        size: 0,
+      };
+    }
     return this.rootHandle;
   }
 }
