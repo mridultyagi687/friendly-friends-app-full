@@ -209,13 +209,13 @@ function AppRoutes() {
 // Inner component that can use useNavigate (must be inside Router)
 function AppRoutesContent() {
 
-  const { user: user2, loading } = useAuth();
+  const { user, loading } = useAuth();
   const theme = useTheme();
   const isMobile = useMobile();
   const [bugNotifications, setBugNotifications] = useState([]);
 
   useEffect(() => {
-    if (!user2) {
+    if (!user) {
       setBugNotifications([]);
       return;
     }
@@ -243,7 +243,7 @@ function AppRoutesContent() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [user2]);
+  }, [user]);
 
   const handleDismissNotification = async (bugId) => {
     const remaining = bugNotifications.filter((bug) => bug.id !== bugId);
@@ -259,11 +259,11 @@ function AppRoutesContent() {
 
   return (
       <div className="app">
-        {user2 && (isMobile ? <MobileNavBar /> : <NavBar />)}
+        {user && (isMobile ? <MobileNavBar /> : <NavBar />)}
         <div style={{ 
-          marginLeft: user2 && !isMobile ? '250px' : '0', 
-          marginTop: user2 && isMobile ? '60px' : '0',
-          marginBottom: user2 && isMobile ? '70px' : '0',
+          marginLeft: user && !isMobile ? '250px' : '0', 
+          marginTop: user && isMobile ? '60px' : '0',
+          marginBottom: user && isMobile ? '70px' : '0',
           minHeight: '100vh',
           padding: isMobile ? '0.5rem' : '0',
         }}>
@@ -271,10 +271,10 @@ function AppRoutesContent() {
             <Route
               path="/"
               element={
-                user2
-                  ? (canAccessFeature(user2, 'blog') && !canAccessFeature(user2, 'members')
+                user
+                  ? (canAccessFeature(user, 'blog') && !canAccessFeature(user, 'members')
                       ? <Navigate to="/blog" replace />
-                      : (user2.is_admin ? <Navigate to="/admin" replace /> : <Navigate to="/members" replace />))
+                      : (user.is_admin ? <Navigate to="/admin" replace /> : <Navigate to="/members" replace />))
                   : <Login />
               }
             />
@@ -522,12 +522,12 @@ function AppRoutesContent() {
             />
           </Routes>
         </div>
-        {user2 && (
+        {user && (
           <Suspense fallback={null}>
             <AppTour />
           </Suspense>
         )}
-        {user2 && bugNotifications.length > 0 && (() => {
+        {user && bugNotifications.length > 0 && (() => {
           const notificationStyles = {
             overlay: {
               position: 'fixed',
