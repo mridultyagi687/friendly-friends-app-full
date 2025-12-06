@@ -8,6 +8,7 @@ import CPU from './cpu/cpu.js';
 import MemoryManager from './memory/memory.js';
 import TPMEmulator from './tpm/tpm-emulator.js';
 import TPMDevice from './devices/tpm-device.js';
+import UEFIFirmware from './uefi/uefi-firmware.js';
 import SecureBoot from './uefi/secure-boot.js';
 import VGADevice from './devices/vga.js';
 import KeyboardDevice from './devices/keyboard.js';
@@ -19,6 +20,7 @@ class CustomEmulator {
     this.memory = new MemoryManager();
     this.tpm = new TPMEmulator();
     this.tpmDevice = new TPMDevice(this.tpm);
+    this.uefi = null; // Will be initialized after memory and CPU
     this.secureBoot = new SecureBoot();
     this.vga = new VGADevice(canvas);
     this.keyboard = new KeyboardDevice();
@@ -38,6 +40,10 @@ class CustomEmulator {
     this.memory.init();
     this.cpu.memory = this.memory;
     this.cpu.init();
+    
+    // Initialize UEFI firmware (needs memory and CPU)
+    this.uefi = new UEFIFirmware(this.memory, this.cpu);
+    await this.uefi.init();
     
     this.vga.init();
     this.keyboard.init();
@@ -62,7 +68,10 @@ class CustomEmulator {
     console.log('Emulator: Starting...');
     this.running = true;
     
-    // Start CPU execution
+    // Start UEFI boot process
+    await this.uefi.boot();
+    
+    // After UEFI hands off to boot manager, start CPU execution
     // TODO: Run in Web Worker for better performance
     this.cpu.run();
   }
