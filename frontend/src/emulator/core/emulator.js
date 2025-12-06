@@ -13,6 +13,7 @@ import SecureBoot from './uefi/secure-boot.js';
 import VGADevice from './devices/vga.js';
 import KeyboardDevice from './devices/keyboard.js';
 import MouseDevice from './devices/mouse.js';
+import StorageDevice from './devices/storage.js';
 import ISOParser from './boot/iso-parser.js';
 import EFIParser from './boot/efi-parser.js';
 import ACPITables from './acpi/acpi-tables.js';
@@ -29,6 +30,7 @@ class CustomEmulator {
     this.vga = new VGADevice(canvas);
     this.keyboard = new KeyboardDevice();
     this.mouse = new MouseDevice();
+    this.storage = new StorageDevice(); // 55TB storage device
     this.isoParser = new ISOParser(this.memory);
     this.efiParser = new EFIParser(this.memory);
     this.acpi = new ACPITables(this.memory);
@@ -52,6 +54,7 @@ class CustomEmulator {
     this.vga.init();
     this.keyboard.init();
     this.mouse.init();
+    await this.storage.init(); // Initialize 55TB storage device
     
     // Initialize Graphics Output Protocol (needs VGA)
     this.gop = new GraphicsOutputProtocol(this.memory, this.vga);
@@ -170,6 +173,9 @@ class CustomEmulator {
       vga: {
         mode: this.vga.mode,
         framebuffer: Array.from(this.vga.framebuffer),
+      },
+      storage: {
+        stats: this.storage.getStats(),
       },
       // TODO: Add other component states
     };
