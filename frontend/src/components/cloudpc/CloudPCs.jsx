@@ -16,7 +16,7 @@ function CloudPCs() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    os_version: '1.0 beta'
+    os_version: 'Windows 11'
   });
 
   useEffect(() => {

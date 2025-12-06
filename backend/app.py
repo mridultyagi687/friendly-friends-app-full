@@ -3942,8 +3942,8 @@ def create_cloud_pc():
         if not name:
             return jsonify({"error": "VM name is required"}), 400
         
-        if os_version not in ["1.0 beta"]:
-            return jsonify({"error": "Only '1.0 beta' OS is available"}), 400
+        if os_version not in ["Windows 11", "1.0 beta"]:
+            return jsonify({"error": "Only 'Windows 11' OS is available"}), 400
         
         # Use ORM directly - simpler and more reliable
         try:
