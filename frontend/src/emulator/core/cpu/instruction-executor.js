@@ -1484,12 +1484,13 @@ class InstructionExecutor {
       return false;
     }
 
+    const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
     if (modrm.reg === 0) {
       // FXSAVE - Save FPU/MMX/SSE state
       // For now, just write zeros (512 bytes for FXSAVE)
       // TODO: Implement actual FPU state saving
       for (let i = 0; i < 512; i++) {
-        this.memory.writeByte(memAddr + i, 0);
+        this.memory.writeByte(memAddrNum + i, 0);
       }
       console.log('CPU: FXSAVE executed (simplified - zeros written)');
     } else if (modrm.reg === 1) {
@@ -1497,7 +1498,7 @@ class InstructionExecutor {
       // For now, just read (do nothing with data)
       // TODO: Implement actual FPU state restoration
       for (let i = 0; i < 512; i++) {
-        this.memory.readByte(memAddr + i);
+        this.memory.readByte(memAddrNum + i);
       }
       console.log('CPU: FXRSTOR executed (simplified - data read but not used)');
     } else {
@@ -1525,6 +1526,7 @@ class InstructionExecutor {
 
     // MOVAPS moves 128 bits (16 bytes)
     const size = 16;
+    const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
 
     if (modrm.mod === 3) {
       // Register to register (XMM register)
@@ -1536,12 +1538,12 @@ class InstructionExecutor {
       if (modrm.reg < 4) {
         // Load from memory to XMM register (simplified - just read)
         for (let i = 0; i < size; i++) {
-          this.memory.readByte(memAddr + i);
+          this.memory.readByte(memAddrNum + i);
         }
       } else {
         // Store from XMM register to memory (simplified - write zeros)
         for (let i = 0; i < size; i++) {
-          this.memory.writeByte(memAddr + i, 0);
+          this.memory.writeByte(memAddrNum + i, 0);
         }
       }
     }
@@ -1567,6 +1569,7 @@ class InstructionExecutor {
 
     // MOVUPS moves 128 bits (16 bytes)
     const size = 16;
+    const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
 
     if (modrm.mod === 3) {
       // Register to register (XMM register)
@@ -1576,12 +1579,12 @@ class InstructionExecutor {
       if (modrm.reg < 4) {
         // Load from memory to XMM register (simplified - just read)
         for (let i = 0; i < size; i++) {
-          this.memory.readByte(memAddr + i);
+          this.memory.readByte(memAddrNum + i);
         }
       } else {
         // Store from XMM register to memory (simplified - write zeros)
         for (let i = 0; i < size; i++) {
-          this.memory.writeByte(memAddr + i, 0);
+          this.memory.writeByte(memAddrNum + i, 0);
         }
       }
     }
@@ -1607,6 +1610,7 @@ class InstructionExecutor {
 
     // MOVDQA moves 128 bits (16 bytes)
     const size = 16;
+    const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
 
     if (modrm.mod === 3) {
       // Register to register (XMM register)
@@ -1616,12 +1620,12 @@ class InstructionExecutor {
       if (modrm.reg < 4) {
         // Load from memory to XMM register (simplified - just read)
         for (let i = 0; i < size; i++) {
-          this.memory.readByte(memAddr + i);
+          this.memory.readByte(memAddrNum + i);
         }
       } else {
         // Store from XMM register to memory (simplified - write zeros)
         for (let i = 0; i < size; i++) {
-          this.memory.writeByte(memAddr + i, 0);
+          this.memory.writeByte(memAddrNum + i, 0);
         }
       }
     }
@@ -1647,6 +1651,7 @@ class InstructionExecutor {
 
     // MOVDQU moves 128 bits (16 bytes)
     const size = 16;
+    const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
 
     if (modrm.mod === 3) {
       // Register to register (XMM register)
@@ -1656,12 +1661,12 @@ class InstructionExecutor {
       if (modrm.reg < 4) {
         // Load from memory to XMM register (simplified - just read)
         for (let i = 0; i < size; i++) {
-          this.memory.readByte(memAddr + i);
+          this.memory.readByte(memAddrNum + i);
         }
       } else {
         // Store from XMM register to memory (simplified - write zeros)
         for (let i = 0; i < size; i++) {
-          this.memory.writeByte(memAddr + i, 0);
+          this.memory.writeByte(memAddrNum + i, 0);
         }
       }
     }
@@ -1692,9 +1697,10 @@ class InstructionExecutor {
       if (memAddr === null) {
         return false;
       }
+      const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
       // Just read the memory (don't actually XOR)
       for (let i = 0; i < 16; i++) {
-        this.memory.readByte(memAddr + i);
+        this.memory.readByte(memAddrNum + i);
       }
     }
 
@@ -1721,8 +1727,9 @@ class InstructionExecutor {
       if (memAddr === null) {
         return false;
       }
+      const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
       for (let i = 0; i < 16; i++) {
-        this.memory.readByte(memAddr + i);
+        this.memory.readByte(memAddrNum + i);
       }
     }
 
@@ -1793,8 +1800,9 @@ class InstructionExecutor {
 
     // LGDT loads 6 bytes (limit: 2 bytes, base: 4 bytes in 32-bit, 8 bytes in 64-bit)
     // For now, just read the memory (simplified - don't actually set up GDT)
+    const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
     const limit = this.readMemory(memAddr, 16); // 16-bit limit
-    const base = this.readMemory(memAddr + 2, 64); // 64-bit base in long mode
+    const base = this.readMemory(memAddrNum + 2, 64); // 64-bit base in long mode
     
     console.log(`CPU: LGDT executed (limit: ${limit.toString(16)}, base: ${base.toString(16)}) - simplified`);
     
@@ -1813,8 +1821,9 @@ class InstructionExecutor {
 
     // LIDT loads 6 bytes (limit: 2 bytes, base: 4 bytes in 32-bit, 8 bytes in 64-bit)
     // For now, just read the memory (simplified - don't actually set up IDT)
+    const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
     const limit = this.readMemory(memAddr, 16); // 16-bit limit
-    const base = this.readMemory(memAddr + 2, 64); // 64-bit base in long mode
+    const base = this.readMemory(memAddrNum + 2, 64); // 64-bit base in long mode
     
     console.log(`CPU: LIDT executed (limit: ${limit.toString(16)}, base: ${base.toString(16)}) - simplified`);
     
@@ -2093,9 +2102,10 @@ class InstructionExecutor {
       if (memAddr === null) {
         return false;
       }
+      const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
       // Just read the memory (don't actually add)
       for (let i = 0; i < 16; i++) {
-        this.memory.readByte(memAddr + i);
+        this.memory.readByte(memAddrNum + i);
       }
     }
 
@@ -2121,9 +2131,10 @@ class InstructionExecutor {
       if (memAddr === null) {
         return false;
       }
+      const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
       // Just read the memory (don't actually subtract)
       for (let i = 0; i < 16; i++) {
-        this.memory.readByte(memAddr + i);
+        this.memory.readByte(memAddrNum + i);
       }
     }
 
