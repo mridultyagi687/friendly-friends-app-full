@@ -428,6 +428,19 @@ function VideoGallery() {
                 >
                   ▶ Play
                 </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const baseURL = window.location.origin;
+                    const videoUrl = `${baseURL}/video-player/${video.id}`;
+                    window.open(videoUrl, 'Friendly Friends Video Player', 'width=1200,height=800,resizable=yes,scrollbars=yes');
+                  }}
+                  style={styles.playButtonSmall}
+                  title="Open in new window"
+                >
+                  🪟 New Window
+                </button>
                 {canDeleteVideo(video) && (
                   <button
                     onClick={(e) => {

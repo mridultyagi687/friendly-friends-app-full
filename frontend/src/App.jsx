@@ -12,6 +12,7 @@ const Paint = lazy(() => import('./components/paint/Paint'));
 const Members = lazy(() => import('./components/members/Members'));
 const Messages = lazy(() => import('./components/messages/Messages'));
 const VideoGallery = lazy(() => import('./components/video/VideoGallery'));
+const VideoPlayer = lazy(() => import('./components/video/VideoPlayer'));
 const AiChat = lazy(() => import('./components/ai/AiChat'));
 const AiDocs = lazy(() => import('./components/ai/AiDocs'));
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
@@ -299,6 +300,18 @@ function AppRoutes() {
                   <FeatureGuard feature="videos" fallback="/blog">
                     <Suspense fallback={<LoadingSpinner />}>
                       <VideoGallery />
+                    </Suspense>
+                  </FeatureGuard>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/video-player/:videoId"
+              element={
+                <ProtectedRoute>
+                  <FeatureGuard feature="videos" fallback="/blog">
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <VideoPlayer />
                     </Suspense>
                   </FeatureGuard>
                 </ProtectedRoute>
