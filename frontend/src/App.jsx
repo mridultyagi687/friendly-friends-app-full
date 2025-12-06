@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import NavBar from './components/NavBar';
 import MobileNavBar from './components/MobileNavBar';
 import { useMobile } from './utils/useMobile';
@@ -227,20 +227,6 @@ function AppRoutes() {
 
 // Inner component that can use useNavigate (must be inside Router)
 function AppRoutesContent() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  // Handle hash routing from new window (GitHub Pages workaround)
-  // With HashRouter, the hash is already in the pathname, but we need to ensure
-  // it's preserved during authentication redirects
-  useEffect(() => {
-    // Store the intended route in sessionStorage if we detect a video player route
-    // This helps preserve it through authentication redirects
-    if (location.pathname.includes('/video-player/')) {
-      sessionStorage.setItem('intendedRoute', location.pathname);
-    }
-  }, [location.pathname]);
 
   const { user: user2, loading } = useAuth();
   const theme = useTheme();

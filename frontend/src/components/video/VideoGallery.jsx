@@ -428,46 +428,6 @@ function VideoGallery() {
                 >
                   ▶ Play
                 </button>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    // For GitHub Pages, use hash routing which works without server-side routing
-                    const currentPath = window.location.pathname;
-                    const baseURL = window.location.origin;
-                    
-                    // Extract base path from current location
-                    // If we're at /friendly-friends-app-full/videos, base is /friendly-friends-app-full
-                    let basePath = '';
-                    if (currentPath.includes('/videos')) {
-                      basePath = currentPath.replace('/videos', '').replace(/\/$/, '');
-                    } else {
-                      // Fallback: use environment base URL
-                      const basename = import.meta.env.BASE_URL || '/';
-                      basePath = basename.endsWith('/') ? basename.slice(0, -1) : basename;
-                    }
-                    
-                    // Use hash routing - this works with GitHub Pages
-                    // The hash will be preserved and React Router can read it
-                    const videoUrl = `${baseURL}${basePath}/index.html#/video-player/${video.id}`;
-                    
-                    // Open in a new window (not tab) with specific features
-                    // Note: Modern browsers may still open tabs, but we try to force a window
-                    const windowFeatures = 'width=1200,height=800,resizable=yes,scrollbars=yes,menubar=no,toolbar=no,location=no,status=no';
-                    const newWindow = window.open(videoUrl, 'Friendly Friends Video Player', windowFeatures);
-                    
-                    if (!newWindow) {
-                      alert('Please allow popups for this site to open the video player in a new window.');
-                    } else {
-                      // Focus the window if it was opened
-                      newWindow.focus();
-                    }
-                  }}
-                  style={styles.playButtonSmall}
-                  title="Open in Friendly Friends Video Player"
-                >
-                  Open in Friendly Friends Video Player
-                </button>
                 {canDeleteVideo(video) && (
                   <button
                     onClick={(e) => {
