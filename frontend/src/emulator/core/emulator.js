@@ -14,6 +14,7 @@ import VGADevice from './devices/vga.js';
 import KeyboardDevice from './devices/keyboard.js';
 import MouseDevice from './devices/mouse.js';
 import ISOParser from './boot/iso-parser.js';
+import EFIParser from './boot/efi-parser.js';
 
 class CustomEmulator {
   constructor(canvas = null) {
@@ -27,6 +28,7 @@ class CustomEmulator {
     this.keyboard = new KeyboardDevice();
     this.mouse = new MouseDevice();
     this.isoParser = new ISOParser(this.memory);
+    this.efiParser = new EFIParser(this.memory);
     
     this.initialized = false;
     this.running = false;
@@ -136,14 +138,35 @@ class CustomEmulator {
       const bootFile = this.isoParser.readFile(bootPath);
       if (bootFile) {
         console.log(`Emulator: Found boot file: ${bootPath}`);
-        // TODO: Load boot file into memory and execute
-        // This would involve parsing PE/COFF format for EFI executables
-        return bootFile;
+        
+        try {
+          // Parse and load EFI file
+          const loadInfo = this.efiParser.loadIntoMemory(bootFile, 0x1000000);
+          
+          console.log(`Emulator: EFI file loaded successfully`);
+          console.log(`Emulator: Entry point: 0x${loadInfo.entryPoint.toString(16)}`);
+          
+          // Set CPU entry point
+          if (this.cpu) {
+            this.cpu.registers.rip = BigInt(loadInfo.entryPoint);
+            console.log(`Emulator: CPU entry point set to 0x${loadInfo.entryPoint.toString(16)}`);
+          }
+          
+          return {
+            success: true,
+            loadInfo,
+            bootFile,
+          };
+        } catch (error) {
+          console.error(`Emulator: Failed to parse EFI file:`, error);
+          // Try next boot file
+          continue;
+        }
       }
     }
 
     console.warn('Emulator: No boot file found in ISO');
-    return null;
+    return { success: false, error: 'No boot file found' };
   }
 
   /**

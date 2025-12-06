@@ -158,13 +158,10 @@ class UEFIFirmware {
   /**
    * Load boot manager from device
    * @param {Object} device - Boot device
+   * @param {Object} emulator - Emulator instance (for ISO/EFI parsing)
    */
-  async loadBootManager(device) {
+  async loadBootManager(device, emulator) {
     console.log(`UEFI: Loading boot manager from ${device.path}`);
-    
-    // TODO: Read boot manager (EFI/BOOT/BOOTX64.EFI for x86-64)
-    // For Windows 11, this would be the Windows Boot Manager
-    // Path: EFI/Microsoft/Boot/bootmgfw.efi
     
     // Try to load Windows Boot Manager
     const bootManagerPaths = [
@@ -176,14 +173,32 @@ class UEFIFirmware {
     let bootManagerLoaded = false;
     for (const path of bootManagerPaths) {
       console.log(`UEFI: Attempting to load ${path}`);
-      // TODO: Actually read from ISO/disk
-      // For now, we'll simulate loading
-      bootManagerLoaded = true;
-      break;
+      
+      if (emulator && emulator.isoParser && emulator.efiParser) {
+        // Try to load from ISO
+        const bootFile = emulator.isoParser.readFile(path);
+        if (bootFile) {
+          try {
+            const loadInfo = emulator.efiParser.loadIntoMemory(bootFile, 0x1000000);
+            console.log(`UEFI: Boot manager loaded at 0x${loadInfo.entryPoint.toString(16)}`);
+            
+            // Set CPU entry point
+            if (emulator.cpu) {
+              emulator.cpu.registers.rip = BigInt(loadInfo.entryPoint);
+            }
+            
+            bootManagerLoaded = true;
+            break;
+          } catch (error) {
+            console.warn(`UEFI: Failed to load ${path}:`, error);
+            continue;
+          }
+        }
+      }
     }
 
     if (!bootManagerLoaded) {
-      console.warn('UEFI: Boot manager not found');
+      console.warn('UEFI: Boot manager not found or failed to load');
       return;
     }
     
