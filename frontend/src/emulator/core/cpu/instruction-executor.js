@@ -128,6 +128,18 @@ class InstructionExecutor {
           return this.executeWRMSR(instruction);
         case 'RDMSR':
           return this.executeRDMSR(instruction);
+        case 'ADC':
+          return this.executeADC(instruction);
+        case 'SBB':
+          return this.executeSBB(instruction);
+        case 'PADDB':
+        case 'PADDW':
+        case 'PADDD':
+          return this.executePADD(instruction);
+        case 'PSUBB':
+        case 'PSUBW':
+        case 'PSUBD':
+          return this.executePSUB(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -1958,6 +1970,160 @@ class InstructionExecutor {
     
     console.log(`CPU: RDMSR executed (MSR ${ecx.toString(16)} = ${value.toString(16)}) - simplified`);
     
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute ADC instruction (Add with Carry)
+   */
+  executeADC(instruction) {
+    const { opcode, modrm, rex, immediate } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    // Get carry flag
+    const carry = (this.cpu.registers.rflags & 0x01n) ? 1n : 0n;
+
+    if (opcode.reg) {
+      // ADC reg, imm
+      const reg = opcode.reg;
+      const value = this.cpu.registers[reg];
+      const imm = BigInt(immediate || 0);
+      const result = value + imm + carry;
+      this.cpu.registers[reg] = result & this.getMask(operandSize);
+      this.updateFlags(result, operandSize);
+    } else if (modrm) {
+      if (modrm.mod === 3) {
+        // Register mode
+        const reg1 = this.getRegisterFromModRM(modrm, rex, operandSize);
+        const reg2 = this.getRegisterFromModRM({ ...modrm, reg: modrm.rm }, rex, operandSize);
+        const value1 = this.cpu.registers[reg1];
+        const value2 = this.cpu.registers[reg2];
+        const result = value1 + value2 + carry;
+        this.cpu.registers[reg1] = result & this.getMask(operandSize);
+        this.updateFlags(result, operandSize);
+      } else {
+        // Memory mode
+        const memAddr = this.calculateAddress(instruction);
+        if (memAddr === null) {
+          return false;
+        }
+        const memValue = this.readMemory(memAddr, operandSize);
+        const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+        const regValue = this.cpu.registers[reg];
+        const result = memValue + regValue + carry;
+        this.writeMemory(memAddr, result, operandSize);
+        this.updateFlags(result, operandSize);
+      }
+    } else {
+      return false;
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute SBB instruction (Subtract with Borrow)
+   */
+  executeSBB(instruction) {
+    const { opcode, modrm, rex, immediate } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    // Get carry flag (borrow)
+    const borrow = (this.cpu.registers.rflags & 0x01n) ? 1n : 0n;
+
+    if (opcode.reg) {
+      // SBB reg, imm
+      const reg = opcode.reg;
+      const value = this.cpu.registers[reg];
+      const imm = BigInt(immediate || 0);
+      const result = value - imm - borrow;
+      this.cpu.registers[reg] = result & this.getMask(operandSize);
+      this.updateFlags(result, operandSize);
+    } else if (modrm) {
+      if (modrm.mod === 3) {
+        // Register mode
+        const reg1 = this.getRegisterFromModRM(modrm, rex, operandSize);
+        const reg2 = this.getRegisterFromModRM({ ...modrm, reg: modrm.rm }, rex, operandSize);
+        const value1 = this.cpu.registers[reg1];
+        const value2 = this.cpu.registers[reg2];
+        const result = value1 - value2 - borrow;
+        this.cpu.registers[reg1] = result & this.getMask(operandSize);
+        this.updateFlags(result, operandSize);
+      } else {
+        // Memory mode
+        const memAddr = this.calculateAddress(instruction);
+        if (memAddr === null) {
+          return false;
+        }
+        const memValue = this.readMemory(memAddr, operandSize);
+        const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+        const regValue = this.cpu.registers[reg];
+        const result = regValue - memValue - borrow;
+        this.cpu.registers[reg] = result & this.getMask(operandSize);
+        this.updateFlags(result, operandSize);
+      }
+    } else {
+      return false;
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute PADD instruction (Packed Add)
+   */
+  executePADD(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    // PADD operates on XMM registers
+    // For now, treat as NOP (XMM registers not implemented)
+    if (modrm.mod === 3) {
+      console.log(`CPU: ${instruction.opcode.mnemonic} reg-to-reg (XMM not implemented, treating as NOP)`);
+    } else {
+      const memAddr = this.calculateAddress(instruction);
+      if (memAddr === null) {
+        return false;
+      }
+      // Just read the memory (don't actually add)
+      for (let i = 0; i < 16; i++) {
+        this.memory.readByte(memAddr + i);
+      }
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute PSUB instruction (Packed Subtract)
+   */
+  executePSUB(instruction) {
+    const { modrm, rex } = instruction;
+    if (!modrm) {
+      return false;
+    }
+
+    // PSUB operates on XMM registers
+    // For now, treat as NOP (XMM registers not implemented)
+    if (modrm.mod === 3) {
+      console.log(`CPU: ${instruction.opcode.mnemonic} reg-to-reg (XMM not implemented, treating as NOP)`);
+    } else {
+      const memAddr = this.calculateAddress(instruction);
+      if (memAddr === null) {
+        return false;
+      }
+      // Just read the memory (don't actually subtract)
+      for (let i = 0; i < 16; i++) {
+        this.memory.readByte(memAddr + i);
+      }
+    }
+
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
   }

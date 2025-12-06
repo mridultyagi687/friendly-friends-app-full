@@ -290,6 +290,12 @@ class InstructionDecoder {
         0xEF: { mnemonic: 'PXOR', length: 2, needsModRM: true, hasImmediate: false }, // PXOR (0x66 0x0F 0xEF)
         0xDB: { mnemonic: 'PAND', length: 2, needsModRM: true, hasImmediate: false }, // PAND (0x66 0x0F 0xDB)
         0xEB: { mnemonic: 'POR', length: 2, needsModRM: true, hasImmediate: false }, // POR (0x66 0x0F 0xEB)
+        0xFC: { mnemonic: 'PADDB', length: 2, needsModRM: true, hasImmediate: false }, // PADDB (0x66 0x0F 0xFC)
+        0xFD: { mnemonic: 'PADDW', length: 2, needsModRM: true, hasImmediate: false }, // PADDW (0x66 0x0F 0xFD)
+        0xFE: { mnemonic: 'PADDD', length: 2, needsModRM: true, hasImmediate: false }, // PADDD (0x66 0x0F 0xFE)
+        0xF8: { mnemonic: 'PSUBB', length: 2, needsModRM: true, hasImmediate: false }, // PSUBB (0x66 0x0F 0xF8)
+        0xF9: { mnemonic: 'PSUBW', length: 2, needsModRM: true, hasImmediate: false }, // PSUBW (0x66 0x0F 0xF9)
+        0xFA: { mnemonic: 'PSUBD', length: 2, needsModRM: true, hasImmediate: false }, // PSUBD (0x66 0x0F 0xFA)
       };
       const sse2Opcode = sse2Opcodes[secondByte];
       if (sse2Opcode) {
