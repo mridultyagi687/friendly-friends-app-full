@@ -470,15 +470,18 @@ class InstructionExecutor {
       return 0n;
     }
 
+    // Convert address to Number if it's BigInt
+    const addr = typeof address === 'bigint' ? Number(address) : address;
+
     switch (size) {
       case 8:
-        return BigInt(this.memory.readByte(address));
+        return BigInt(this.memory.readByte(addr));
       case 16:
-        return BigInt(this.memory.readWord(address));
+        return BigInt(this.memory.readWord(addr));
       case 32:
-        return BigInt(this.memory.readDword(address));
+        return BigInt(this.memory.readDword(addr));
       case 64:
-        return this.memory.readQword(address);
+        return this.memory.readQword(addr);
       default:
         return 0n;
     }
@@ -492,18 +495,21 @@ class InstructionExecutor {
       return;
     }
 
+    // Convert address to Number if it's BigInt
+    const addr = typeof address === 'bigint' ? Number(address) : address;
+
     switch (size) {
       case 8:
-        this.memory.writeByte(address, Number(value & 0xFFn));
+        this.memory.writeByte(addr, Number(value & 0xFFn));
         break;
       case 16:
-        this.memory.writeWord(address, Number(value & 0xFFFFn));
+        this.memory.writeWord(addr, Number(value & 0xFFFFn));
         break;
       case 32:
-        this.memory.writeDword(address, Number(value & 0xFFFFFFFFn));
+        this.memory.writeDword(addr, Number(value & 0xFFFFFFFFn));
         break;
       case 64:
-        this.memory.writeQword(address, value);
+        this.memory.writeQword(addr, value);
         break;
     }
   }
