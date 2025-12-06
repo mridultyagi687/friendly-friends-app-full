@@ -302,23 +302,26 @@ function Windows11Emulator() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      height: '100vh',
+      minHeight: 'calc(100vh - 0px)',
       backgroundColor: '#000',
       gap: '1rem',
+      padding: '2rem',
     },
     screen: {
       width: '100%',
       height: '100%',
       backgroundColor: '#000',
+      minHeight: 'calc(100vh - 0px)',
     },
     booting: {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      height: '100vh',
+      minHeight: 'calc(100vh - 0px)',
       backgroundColor: '#000',
       gap: '1rem',
+      padding: '2rem',
     },
   };
 
