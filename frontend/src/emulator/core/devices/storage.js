@@ -6,8 +6,14 @@
  */
 
 class StorageDevice {
-  constructor(size = 55 * 1024 * 1024 * 1024 * 1024) { // 55TB default
-    this.size = size; // Total addressable storage space
+  constructor(size = null) { // 55TB default
+    // Calculate 55TB using BigInt to avoid overflow, then convert to Number
+    // 55TB = 55 * 1024^4 bytes
+    const sizeBigInt = size !== null ? (typeof size === 'bigint' ? size : BigInt(size)) : (55n * 1024n * 1024n * 1024n * 1024n);
+    
+    // Convert to Number (may lose precision for very large values, but 55TB fits in Number.MAX_SAFE_INTEGER)
+    // Number.MAX_SAFE_INTEGER = 2^53 - 1 ≈ 9 PB, so 55TB is safe
+    this.size = Number(sizeBigInt); // Total addressable storage space
     this.blockSize = 512; // Standard disk sector size
     this.blockTable = new Map(); // Sparse block table: blockNumber -> ArrayBuffer
     this.allocatedBlocks = 0; // Track number of allocated blocks
@@ -19,8 +25,10 @@ class StorageDevice {
     this.db = null;
     this.storeName = 'blocks';
     
-    console.log(`Storage: Initialized with ${this.size / (1024 * 1024 * 1024 * 1024)}TB addressable space`);
-    console.log(`Storage: Using sparse allocation (max ${this.maxAllocatedBlocks * this.blockSize / (1024 * 1024 * 1024)}GB physical allocation)`);
+    const sizeTB = Number(sizeBigInt) / (1024 * 1024 * 1024 * 1024);
+    const maxAllocGB = (this.maxAllocatedBlocks * this.blockSize) / (1024 * 1024 * 1024);
+    console.log(`Storage: Initialized with ${sizeTB}TB addressable space`);
+    console.log(`Storage: Using sparse allocation (max ${maxAllocGB}GB physical allocation)`);
   }
 
   /**

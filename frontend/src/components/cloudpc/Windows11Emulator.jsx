@@ -185,9 +185,13 @@ function Windows11Emulator() {
       setError(null);
 
       // Check if CustomEmulator is available
-      if (typeof CustomEmulator === 'undefined' || !CustomEmulator) {
+      if (typeof CustomEmulator === 'undefined' || !CustomEmulator || typeof CustomEmulator !== 'function') {
         const errorMsg = 'Emulator library not loaded. Please refresh the page.';
-        console.error('initializeCustomEmulator:', errorMsg);
+        console.error('initializeCustomEmulator: CustomEmulator check failed', {
+          type: typeof CustomEmulator,
+          value: CustomEmulator,
+          isFunction: typeof CustomEmulator === 'function'
+        });
         setError(errorMsg);
         setLoading(false);
         setBooting(false);
