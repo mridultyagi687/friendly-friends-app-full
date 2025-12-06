@@ -238,6 +238,9 @@ class InstructionDecoder {
       0xE2: { mnemonic: 'LOOP', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
       0xE1: { mnemonic: 'LOOPE', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
       0xE0: { mnemonic: 'LOOPNE', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
+      // Multiplication and division
+      0xF6: { mnemonic: 'MUL', length: 1, needsModRM: true, hasImmediate: false }, // MUL/DIV/IMUL/IDIV (reg field selects)
+      0xF7: { mnemonic: 'MUL', length: 1, needsModRM: true, hasImmediate: false }, // MUL/DIV/IMUL/IDIV (word/dword/qword)
     };
 
     const opcode = opcodes[byte];

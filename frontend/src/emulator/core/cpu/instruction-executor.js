@@ -89,6 +89,8 @@ class InstructionExecutor {
         case 'LOOPE':
         case 'LOOPNE':
           return this.executeLOOP(instruction);
+        case 'MUL':
+          return this.executeMUL(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -1027,6 +1029,142 @@ class InstructionExecutor {
     const mask = this.getMask(operandSize);
     const shiftMask = (1n << BigInt(operandSize - shiftCount)) - 1n;
     return (mask ^ shiftMask) & mask;
+  }
+
+  /**
+   * Execute MUL/DIV/IMUL/IDIV instruction
+   */
+  executeMUL(instruction) {
+    const { modrm, rex } = instruction;
+    const operandSize = (rex && rex.w) ? 64 : 32;
+
+    if (!modrm) {
+      return false;
+    }
+
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+
+    const value = this.readMemory(memAddr, operandSize);
+    const operation = modrm.reg;
+
+    switch (operation) {
+      case 4: // MUL (unsigned multiply)
+        return this.executeMULOperation(value, operandSize, false);
+      case 5: // IMUL (signed multiply)
+        return this.executeMULOperation(value, operandSize, true);
+      case 6: // DIV (unsigned divide)
+        return this.executeDIVOperation(value, operandSize, false);
+      case 7: // IDIV (signed divide)
+        return this.executeDIVOperation(value, operandSize, true);
+      default:
+        console.warn(`CPU: Unhandled MUL operation ${operation}`);
+        return false;
+    }
+  }
+
+  /**
+   * Execute MUL operation
+   */
+  executeMULOperation(value, operandSize, signed) {
+    let multiplicand;
+    if (operandSize === 64) {
+      multiplicand = this.cpu.registers.rax;
+    } else if (operandSize === 32) {
+      multiplicand = this.cpu.registers.eax & 0xFFFFFFFFn;
+    } else if (operandSize === 16) {
+      multiplicand = this.cpu.registers.ax & 0xFFFFn;
+    } else {
+      multiplicand = this.cpu.registers.al & 0xFFn;
+    }
+
+    const result = multiplicand * value;
+    const resultMask = this.getMask(operandSize * 2);
+
+    if (operandSize === 64) {
+      // 64-bit: result in RDX:RAX
+      this.cpu.registers.rax = result & 0xFFFFFFFFFFFFFFFFn;
+      this.cpu.registers.rdx = (result >> 64n) & 0xFFFFFFFFFFFFFFFFn;
+    } else if (operandSize === 32) {
+      // 32-bit: result in EDX:EAX
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | (result & 0xFFFFFFFFn);
+      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | ((result >> 32n) & 0xFFFFFFFFn);
+    } else if (operandSize === 16) {
+      // 16-bit: result in DX:AX
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFF0000n) | (result & 0xFFFFn);
+      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFFFFFF0000n) | ((result >> 16n) & 0xFFFFn);
+    } else {
+      // 8-bit: result in AX
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFFFF00n) | (result & 0xFFn);
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFF00FFn) | ((result >> 8n) & 0xFFn) << 8n;
+    }
+
+    // Update flags
+    const highPart = operandSize === 64 ? this.cpu.registers.rdx : 
+                     operandSize === 32 ? (this.cpu.registers.rdx & 0xFFFFFFFFn) :
+                     operandSize === 16 ? (this.cpu.registers.rdx & 0xFFFFn) :
+                     (this.cpu.registers.rax >> 8n) & 0xFFn;
+
+    // CF and OF are set if high part is non-zero
+    if (highPart !== 0n) {
+      this.cpu.registers.rflags |= 0x01n; // CF
+      this.cpu.registers.rflags |= 0x800n; // OF
+    } else {
+      this.cpu.registers.rflags &= ~0x01n; // CF
+      this.cpu.registers.rflags &= ~0x800n; // OF
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute DIV operation
+   */
+  executeDIVOperation(divisor, operandSize, signed) {
+    if (divisor === 0n) {
+      // Division by zero - trigger interrupt 0
+      console.error('CPU: Division by zero');
+      // TODO: Trigger interrupt 0
+      return false;
+    }
+
+    let dividend, quotient, remainder;
+
+    if (operandSize === 64) {
+      // 64-bit: dividend in RDX:RAX
+      dividend = (this.cpu.registers.rdx << 64n) | this.cpu.registers.rax;
+      quotient = dividend / divisor;
+      remainder = dividend % divisor;
+      this.cpu.registers.rax = quotient & 0xFFFFFFFFFFFFFFFFn;
+      this.cpu.registers.rdx = remainder & 0xFFFFFFFFFFFFFFFFn;
+    } else if (operandSize === 32) {
+      // 32-bit: dividend in EDX:EAX
+      dividend = ((this.cpu.registers.rdx & 0xFFFFFFFFn) << 32n) | (this.cpu.registers.rax & 0xFFFFFFFFn);
+      quotient = dividend / divisor;
+      remainder = dividend % divisor;
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | (quotient & 0xFFFFFFFFn);
+      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | (remainder & 0xFFFFFFFFn);
+    } else if (operandSize === 16) {
+      // 16-bit: dividend in DX:AX
+      dividend = ((this.cpu.registers.rdx & 0xFFFFn) << 16n) | (this.cpu.registers.rax & 0xFFFFn);
+      quotient = dividend / divisor;
+      remainder = dividend % divisor;
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFF0000n) | (quotient & 0xFFFFn);
+      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFFFFFF0000n) | (remainder & 0xFFFFn);
+    } else {
+      // 8-bit: dividend in AX
+      dividend = this.cpu.registers.rax & 0xFFFFn;
+      quotient = dividend / divisor;
+      remainder = dividend % divisor;
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFFFF00n) | (quotient & 0xFFn);
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFFFFFF00FFn) | ((remainder & 0xFFn) << 8n);
+    }
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
   }
 }
 
