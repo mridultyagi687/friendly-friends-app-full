@@ -288,7 +288,17 @@ function Windows11Emulator() {
       }
 
       // Start emulator
-      await emulator.start();
+      try {
+        await emulator.start();
+        console.log('Emulator started successfully');
+      } catch (err) {
+        const errorMsg = `Failed to start emulator: ${err.message}`;
+        console.error('initializeCustomEmulator: Failed to start emulator:', err);
+        setError(errorMsg);
+        setLoading(false);
+        setBooting(false);
+        return;
+      }
 
       // Ensure canvas is visible
       if (canvasRef.current) {
@@ -299,7 +309,13 @@ function Windows11Emulator() {
       // Set up rendering loop
       const renderLoop = () => {
         if (customEmulatorRef.current && canvasRef.current) {
-          customEmulatorRef.current.render();
+          try {
+            if (customEmulatorRef.current.render) {
+              customEmulatorRef.current.render();
+            }
+          } catch (err) {
+            console.error('Render loop error:', err);
+          }
           requestAnimationFrame(renderLoop);
         }
       };
@@ -308,8 +324,14 @@ function Windows11Emulator() {
       // Set up auto-save
       saveIntervalRef.current = setInterval(async () => {
         if (customEmulatorRef.current) {
-          const state = customEmulatorRef.current.saveState();
-          await saveVMState(pcId, state);
+          try {
+            if (customEmulatorRef.current.saveState) {
+              const state = customEmulatorRef.current.saveState();
+              await saveVMState(pcId, state);
+            }
+          } catch (err) {
+            console.error('Auto-save error:', err);
+          }
         }
       }, 30000); // Save every 30 seconds
 
@@ -318,7 +340,8 @@ function Windows11Emulator() {
       console.log('Custom Emulator: Started successfully');
     } catch (err) {
       console.error('Failed to initialize custom emulator:', err);
-      setError(`Failed to initialize emulator: ${err.message}`);
+      const errorMsg = err.message || 'Failed to initialize emulator';
+      setError(errorMsg);
       setLoading(false);
       setBooting(false);
     }
