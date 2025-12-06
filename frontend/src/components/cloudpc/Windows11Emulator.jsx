@@ -250,13 +250,15 @@ function Windows11Emulator() {
   const styles = {
     container: {
       width: '100%',
-      height: 'calc(100vh - 0px)',
+      height: '100%',
+      minHeight: 'calc(100vh - 0px)',
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: '#000',
       color: '#fff',
       fontFamily: 'Arial, sans-serif',
       position: 'relative',
+      overflow: 'hidden',
     },
     passwordScreen: {
       display: 'flex',
