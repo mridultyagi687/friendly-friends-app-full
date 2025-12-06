@@ -164,6 +164,96 @@ function Windows11Emulator() {
     }
   };
 
+  /**
+   * Initialize custom emulator
+   * Step 8: Connect all components
+   */
+  const initializeCustomEmulator = async () => {
+    try {
+      setBooting(true);
+      setLoading(true);
+      setError(null);
+
+      // Create canvas for VGA output
+      if (!canvasRef.current && screenRef.current) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 480;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.display = 'block';
+        screenRef.current.appendChild(canvas);
+        canvasRef.current = canvas;
+      }
+
+      // Create custom emulator instance
+      const emulator = new CustomEmulator(canvasRef.current);
+      customEmulatorRef.current = emulator;
+
+      // Initialize emulator
+      await emulator.init();
+
+      // Load saved state if available
+      if (hasSavedState) {
+        const savedState = await loadVMState(pcId);
+        if (savedState) {
+          try {
+            emulator.restoreState(savedState);
+            console.log('Custom Emulator: State restored');
+          } catch (err) {
+            console.error('Failed to restore state:', err);
+          }
+        }
+      }
+
+      // Set up input handlers
+      const handleKeyboard = (e) => {
+        emulator.handleKeyboard(e);
+      };
+      const handleMouse = (e) => {
+        emulator.handleMouse(e);
+      };
+
+      if (canvasRef.current) {
+        canvasRef.current.addEventListener('keydown', handleKeyboard);
+        canvasRef.current.addEventListener('keyup', handleKeyboard);
+        canvasRef.current.addEventListener('mousemove', handleMouse);
+        canvasRef.current.addEventListener('mousedown', handleMouse);
+        canvasRef.current.addEventListener('mouseup', handleMouse);
+        canvasRef.current.setAttribute('tabindex', '0'); // Make focusable for keyboard
+      }
+
+      // Start emulator
+      await emulator.start();
+
+      // Set up rendering loop
+      const renderLoop = () => {
+        if (customEmulatorRef.current) {
+          customEmulatorRef.current.render();
+          requestAnimationFrame(renderLoop);
+        }
+      };
+      renderLoop();
+
+      // Set up auto-save
+      saveIntervalRef.current = setInterval(async () => {
+        if (customEmulatorRef.current) {
+          const state = customEmulatorRef.current.saveState();
+          await saveVMState(pcId, state);
+        }
+      }, 30000); // Save every 30 seconds
+
+      setBooting(false);
+      setLoading(false);
+      console.log('Custom Emulator: Started successfully');
+    } catch (err) {
+      console.error('Failed to initialize custom emulator:', err);
+      setError(`Failed to initialize emulator: ${err.message}`);
+      setLoading(false);
+      setBooting(false);
+    }
+  };
+
   const initializeEmulator = async () => {
     if (!window.V86Starter || !screenRef.current) {
       setError('Emulator library not loaded');
