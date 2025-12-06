@@ -215,6 +215,18 @@ function Windows11Emulator() {
         setBooting(false);
         setLoading(false);
         
+        // Constrain any canvas elements created by v86
+        if (screenRef.current) {
+          const canvases = screenRef.current.querySelectorAll('canvas');
+          canvases.forEach(canvas => {
+            canvas.style.position = 'relative';
+            canvas.style.maxWidth = '100%';
+            canvas.style.maxHeight = '100%';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+          });
+        }
+        
         // Start auto-saving state every 30 seconds
         saveIntervalRef.current = setInterval(() => {
           saveCurrentState();
@@ -406,7 +418,7 @@ function Windows11Emulator() {
     );
   }
 
-  // Add CSS to constrain v86.js canvas elements
+  // Add CSS to constrain v86.js canvas elements and prevent fullscreen
   useEffect(() => {
     const styleId = 'v86-screen-constraints';
     // Remove existing style if any
@@ -418,14 +430,24 @@ function Windows11Emulator() {
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      #v86-screen-container canvas,
-      #v86-screen-container > canvas,
-      #v86-screen-container canvas {
+      #v86-screen-container,
+      #v86-screen-container * {
+        position: relative !important;
         max-width: 100% !important;
         max-height: 100% !important;
+      }
+      #v86-screen-container canvas {
         position: relative !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
         width: 100% !important;
         height: 100% !important;
+        display: block !important;
+      }
+      /* Prevent v86 from creating fixed positioned elements */
+      body > canvas[style*="position: fixed"],
+      body > canvas[style*="position:absolute"] {
+        display: none !important;
       }
     `;
     document.head.appendChild(style);
