@@ -112,27 +112,8 @@ function ProtectedRoute({ children, allowedRoles, denyRoles = [], requireAdmin =
   
   // Only redirect if we've waited and still no user
   if (!user && (iosWait || !isIOS)) {
-    // Check if there's an intended route (from opening video player in new window)
-    const intendedRoute = sessionStorage.getItem('intendedRoute');
-    if (intendedRoute) {
-      // Store it for after login
-      sessionStorage.setItem('redirectAfterLogin', intendedRoute);
-      sessionStorage.removeItem('intendedRoute');
-    }
     return <Navigate to="/" replace />;
   }
-  
-  // After authentication, check if we should redirect to intended route
-  useEffect(() => {
-    if (user) {
-      const redirectAfterLogin = sessionStorage.getItem('redirectAfterLogin');
-      if (redirectAfterLogin && window.location.pathname !== redirectAfterLogin) {
-        sessionStorage.removeItem('redirectAfterLogin');
-        // Use window.location for HashRouter compatibility
-        window.location.hash = redirectAfterLogin;
-      }
-    }
-  }, [user]);
 
   // Check for denied roles (new role system)
   if (denyRoles.length > 0 && hasAnyRole(user, denyRoles)) {
