@@ -126,6 +126,39 @@ class CustomEmulator {
   }
 
   /**
+   * Render current frame (for React component rendering loop)
+   */
+  render() {
+    // Render VGA device
+    if (this.vga) {
+      this.vga.render();
+    }
+    
+    // Blit GOP framebuffer if available
+    if (this.gop && this.running) {
+      this.gop.blit();
+    }
+  }
+
+  /**
+   * Handle keyboard input
+   */
+  handleKeyboard(event) {
+    if (this.keyboard) {
+      this.keyboard.handleKeyEvent(event);
+    }
+  }
+
+  /**
+   * Handle mouse input
+   */
+  handleMouse(event) {
+    if (this.mouse) {
+      this.mouse.handleMouseEvent(event);
+    }
+  }
+
+  /**
    * Save emulator state
    * @returns {Object} - Serialized state
    */
