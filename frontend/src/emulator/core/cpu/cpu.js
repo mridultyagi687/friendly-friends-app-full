@@ -2,7 +2,11 @@
  * x86-64 CPU Emulator Core
  * 
  * Step 2: Basic CPU emulation foundation
+ * Enhanced with instruction decoder and executor
  */
+
+import InstructionDecoder from './instruction-decoder.js';
+import InstructionExecutor from './instruction-executor.js';
 
 class CPU {
   constructor() {
