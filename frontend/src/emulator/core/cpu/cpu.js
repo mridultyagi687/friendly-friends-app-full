@@ -7,6 +7,7 @@
 
 import InstructionDecoder from './instruction-decoder.js';
 import InstructionExecutor from './instruction-executor.js';
+import InterruptHandler from './interrupt-handler.js';
 
 class CPU {
   constructor() {
@@ -30,6 +31,7 @@ class CPU {
     this.memory = null; // Will be set by memory manager
     this.decoder = null; // Will be initialized
     this.executor = null; // Will be initialized
+    this.interruptHandler = null; // Will be initialized
     this.instructionCount = 0;
     this.maxInstructions = 1000000; // Safety limit
   }
@@ -45,10 +47,12 @@ class CPU {
     this.running = false;
     this.instructionCount = 0;
     
-    // Initialize decoder and executor
+    // Initialize decoder, executor, and interrupt handler
     if (this.memory) {
       this.decoder = new InstructionDecoder(this, this.memory);
       this.executor = new InstructionExecutor(this, this.memory);
+      this.interruptHandler = new InterruptHandler(this, this.memory);
+      this.interruptHandler.init();
     }
   }
 

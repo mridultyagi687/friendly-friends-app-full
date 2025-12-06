@@ -200,6 +200,14 @@ class InstructionDecoder {
       0xE9: { mnemonic: 'JMP', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
       0xEB: { mnemonic: 'JMP', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
       0xE8: { mnemonic: 'CALL', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
+      0xCD: { mnemonic: 'INT', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1 }, // INT imm8
+      0xCC: { mnemonic: 'INT3', length: 1, needsModRM: false, hasImmediate: false }, // Breakpoint
+      0xCE: { mnemonic: 'INTO', length: 1, needsModRM: false, hasImmediate: false }, // Interrupt on overflow
+      0xCF: { mnemonic: 'IRET', length: 1, needsModRM: false, hasImmediate: false }, // Return from interrupt
+      0xFA: { mnemonic: 'CLI', length: 1, needsModRM: false, hasImmediate: false }, // Clear interrupt flag
+      0xFB: { mnemonic: 'STI', length: 1, needsModRM: false, hasImmediate: false }, // Set interrupt flag
+      0x9C: { mnemonic: 'PUSHF', length: 1, needsModRM: false, hasImmediate: false }, // Push flags
+      0x9D: { mnemonic: 'POPF', length: 1, needsModRM: false, hasImmediate: false }, // Pop flags
       0x03: { mnemonic: 'ADD', length: 1, needsModRM: true, hasImmediate: false, mToR: true },
       0x29: { mnemonic: 'SUB', length: 1, needsModRM: true, hasImmediate: false, rToM: true },
       0x3B: { mnemonic: 'CMP', length: 1, needsModRM: true, hasImmediate: false, mToR: true },

@@ -57,6 +57,20 @@ class InstructionExecutor {
           return this.executeAND(instruction);
         case 'OR':
           return this.executeOR(instruction);
+        case 'INT':
+        case 'INT3':
+        case 'INTO':
+          return this.executeINT(instruction);
+        case 'IRET':
+          return this.executeIRET(instruction);
+        case 'CLI':
+          return this.executeCLI(instruction);
+        case 'STI':
+          return this.executeSTI(instruction);
+        case 'PUSHF':
+          return this.executePUSHF(instruction);
+        case 'POPF':
+          return this.executePOPF(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -634,6 +648,117 @@ class InstructionExecutor {
     // These would need more complex logic based on the operation
 
     this.cpu.registers.rflags = flags;
+  }
+
+  /**
+   * Execute INT instruction (software interrupt)
+   */
+  executeINT(instruction) {
+    const { opcode, immediate } = instruction;
+    let vector;
+
+    if (opcode.mnemonic === 'INT3') {
+      vector = 3; // Breakpoint
+    } else if (opcode.mnemonic === 'INTO') {
+      // Interrupt on overflow (if OF flag is set)
+      if ((this.cpu.registers.rflags & 0x800n) !== 0n) {
+        vector = 4;
+      } else {
+        // No interrupt, just continue
+        this.cpu.registers.rip += BigInt(instruction.length);
+        return true;
+      }
+    } else {
+      // INT imm8
+      if (immediate === null) {
+        return false;
+      }
+      vector = immediate & 0xFF;
+    }
+
+    // TODO: Call interrupt handler
+    // For now, just log
+    console.log(`CPU: Software interrupt ${vector}`);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute IRET instruction (return from interrupt)
+   */
+  executeIRET(instruction) {
+    const operandSize = 64;
+
+    // Pop flags
+    const flagsAddr = Number(this.cpu.registers.rsp);
+    const flags = this.readMemory(flagsAddr, operandSize);
+    this.cpu.registers.rsp += BigInt(operandSize / 8);
+    this.cpu.registers.rflags = flags;
+
+    // Pop return address (CS:RIP)
+    const returnAddr = this.readMemory(Number(this.cpu.registers.rsp), operandSize);
+    this.cpu.registers.rsp += BigInt(operandSize / 8);
+    this.cpu.registers.rip = returnAddr;
+
+    return true;
+  }
+
+  /**
+   * Execute CLI instruction (clear interrupt flag)
+   */
+  executeCLI(instruction) {
+    // Clear interrupt flag (IF) - bit 9
+    this.cpu.registers.rflags &= ~0x200n;
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute STI instruction (set interrupt flag)
+   */
+  executeSTI(instruction) {
+    // Set interrupt flag (IF) - bit 9
+    this.cpu.registers.rflags |= 0x200n;
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute PUSHF instruction (push flags)
+   */
+  executePUSHF(instruction) {
+    const operandSize = 64;
+
+    // Decrement stack pointer
+    this.cpu.registers.rsp -= BigInt(operandSize / 8);
+
+    // Write flags to stack
+    const stackAddr = Number(this.cpu.registers.rsp);
+    this.writeMemory(stackAddr, this.cpu.registers.rflags, operandSize);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute POPF instruction (pop flags)
+   */
+  executePOPF(instruction) {
+    const operandSize = 64;
+
+    // Read flags from stack
+    const stackAddr = Number(this.cpu.registers.rsp);
+    const flags = this.readMemory(stackAddr, operandSize);
+
+    // Write to flags register
+    this.cpu.registers.rflags = flags;
+
+    // Increment stack pointer
+    this.cpu.registers.rsp += BigInt(operandSize / 8);
+
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
   }
 }
 
