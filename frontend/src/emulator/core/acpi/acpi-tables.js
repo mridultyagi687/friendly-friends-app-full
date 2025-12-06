@@ -118,7 +118,6 @@ class ACPITables {
     const signature = 'RSDT'; // 4 bytes
     const length = 36 + 4; // Header + 1 table pointer
     const revision = 1;
-    const checksum = 0;
     const oemId = 'FRIEND '; // 6 bytes
     const oemTableId = 'EMULATOR'; // 8 bytes
     const oemRevision = 1;
