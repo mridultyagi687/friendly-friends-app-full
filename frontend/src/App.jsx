@@ -21,7 +21,7 @@ const Blog = lazy(() => import('./components/blog/Blog'));
 const Roles = lazy(() => import('./components/roles/Roles'));
 const RoleAssignment = lazy(() => import('./components/roles/RoleAssignment'));
 const CloudPCs = lazy(() => import('./components/cloudpc/CloudPCs'));
-const CloudPCViewer = lazy(() => import('./components/cloudpc/Windows11Emulator'));
+const CloudPCViewer = lazy(() => import('./components/cloudpc/CloudPCViewer'));
 const AppTour = lazy(() => import('./components/AppTour'));
 const BugReporter = lazy(() => import('./components/bugs/BugReporter'));
 const ResearchList = lazy(() => import('./components/research/ResearchList'));
