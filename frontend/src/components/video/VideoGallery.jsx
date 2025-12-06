@@ -432,17 +432,34 @@ function VideoGallery() {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    // Get base path from environment (same as App.jsx)
-                    const basename = import.meta.env.BASE_URL || '/';
+                    // Use the current window's location to construct the URL properly
+                    // This ensures we get the correct base path (including GitHub Pages path if applicable)
+                    const currentPath = window.location.pathname;
                     const baseURL = window.location.origin;
-                    // Remove trailing slash from basename if present, then add video-player path
-                    const cleanBasename = basename.endsWith('/') ? basename.slice(0, -1) : basename;
-                    const videoUrl = `${baseURL}${cleanBasename}/video-player/${video.id}`;
+                    
+                    // Extract base path from current location
+                    // If we're at /friendly-friends-app-full/videos, base is /friendly-friends-app-full
+                    let basePath = '';
+                    if (currentPath.includes('/videos')) {
+                      basePath = currentPath.replace('/videos', '').replace(/\/$/, '');
+                    } else {
+                      // Fallback: use environment base URL
+                      const basename = import.meta.env.BASE_URL || '/';
+                      basePath = basename.endsWith('/') ? basename.slice(0, -1) : basename;
+                    }
+                    
+                    // Construct the video player URL
+                    const videoUrl = `${baseURL}${basePath}/video-player/${video.id}`;
+                    
                     // Open in a new window (not tab) with specific features
+                    // Note: Modern browsers may still open tabs, but we try to force a window
                     const windowFeatures = 'width=1200,height=800,resizable=yes,scrollbars=yes,menubar=no,toolbar=no,location=no,status=no';
                     const newWindow = window.open(videoUrl, 'Friendly Friends Video Player', windowFeatures);
                     if (!newWindow) {
                       alert('Please allow popups for this site to open the video player in a new window.');
+                    } else {
+                      // Focus the window if it was opened
+                      newWindow.focus();
                     }
                   }}
                   style={styles.playButtonSmall}
