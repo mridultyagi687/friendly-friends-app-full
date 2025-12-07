@@ -10,6 +10,23 @@ class InterruptHandler {
     this.memory = memory;
     this.interruptTable = new Map(); // IDT (Interrupt Descriptor Table)
     this.interruptHandlers = new Map();
+    
+    // Interrupt Priority Levels (IRQL) - Windows-style
+    this.irqlLevels = {
+      PASSIVE: 0,      // Lowest - normal execution
+      APC: 1,          // Asynchronous Procedure Call
+      DISPATCH: 2,     // Dispatch level
+      DEVICE: 3,       // Device interrupt
+      CLOCK: 4,        // Clock interrupt
+      IPI: 5,          // Inter-Processor Interrupt
+      POWER: 6,        // Power management
+      PROFILE: 7,      // Profile interrupt
+      HIGH: 8,         // Highest - all interrupts disabled
+    };
+    
+    this.currentIRQL = this.irqlLevels.PASSIVE;
+    this.irqlStack = []; // Stack for IRQL changes
+    this.interruptMask = 0xFFFFFFFF; // Interrupt mask (all enabled by default)
   }
 
   /**
@@ -174,15 +191,33 @@ class InterruptHandler {
    * @returns {boolean} - True if handled successfully
    */
   handleInterrupt(vector, errorCode = 0) {
+    // Check if interrupt is masked
+    if (this.isInterruptMasked(vector)) {
+      console.log(`Interrupt Handler: Interrupt 0x${vector.toString(16)} is masked`);
+      return false;
+    }
+    
+    // Check IRQL - don't handle interrupts at HIGH level
+    if (this.currentIRQL >= this.irqlLevels.HIGH) {
+      console.warn(`Interrupt Handler: At HIGH IRQL, ignoring interrupt 0x${vector.toString(16)}`);
+      return false;
+    }
+    
     const handler = this.interruptHandlers.get(vector);
     if (handler) {
       try {
+        // Raise IRQL to appropriate level for this interrupt
+        const oldIRQL = this.raiseIRQL(this.getIRQLForInterrupt(vector));
+        
         // Save current state
         this.saveState();
 
         // Call handler
         const result = handler(errorCode);
 
+        // Restore IRQL
+        this.lowerIRQL(oldIRQL);
+        
         // Restore state (if handler didn't modify it)
         // this.restoreState();
         
@@ -196,6 +231,113 @@ class InterruptHandler {
       console.warn(`Interrupt Handler: No handler for interrupt 0x${vector.toString(16)}`);
       return false;
     }
+  }
+
+  /**
+   * Raise IRQL (Interrupt Request Level)
+   * @param {number} newIRQL - New IRQL level
+   * @returns {number} - Previous IRQL level
+   */
+  raiseIRQL(newIRQL) {
+    const oldIRQL = this.currentIRQL;
+    this.irqlStack.push(oldIRQL);
+    this.currentIRQL = Math.max(this.currentIRQL, newIRQL);
+    
+    // Update interrupt mask based on IRQL
+    this.updateInterruptMask();
+    
+    console.log(`Interrupt Handler: Raised IRQL from ${oldIRQL} to ${this.currentIRQL}`);
+    return oldIRQL;
+  }
+
+  /**
+   * Lower IRQL (Interrupt Request Level)
+   * @param {number} targetIRQL - Target IRQL level
+   */
+  lowerIRQL(targetIRQL) {
+    if (this.irqlStack.length > 0) {
+      this.currentIRQL = this.irqlStack.pop();
+    } else {
+      this.currentIRQL = targetIRQL;
+    }
+    
+    // Update interrupt mask based on IRQL
+    this.updateInterruptMask();
+    
+    console.log(`Interrupt Handler: Lowered IRQL to ${this.currentIRQL}`);
+  }
+
+  /**
+   * Get IRQL for interrupt vector
+   * @param {number} vector - Interrupt vector
+   * @returns {number} - IRQL level
+   */
+  getIRQLForInterrupt(vector) {
+    // Map interrupt vectors to IRQL levels
+    if (vector >= 0x20 && vector <= 0x2F) {
+      // Hardware interrupts (IRQ 0-15)
+      return this.irqlLevels.DEVICE;
+    } else if (vector === 0x08) {
+      // Double fault - critical
+      return this.irqlLevels.HIGH;
+    } else if (vector >= 0x00 && vector <= 0x1F) {
+      // Exceptions - high priority
+      return this.irqlLevels.DISPATCH;
+    } else {
+      // Software interrupts
+      return this.irqlLevels.APC;
+    }
+  }
+
+  /**
+   * Check if interrupt is masked
+   * @param {number} vector - Interrupt vector
+   * @returns {boolean} - True if masked
+   */
+  isInterruptMasked(vector) {
+    const bit = 1 << (vector & 0x1F);
+    return (this.interruptMask & bit) === 0;
+  }
+
+  /**
+   * Mask interrupt
+   * @param {number} vector - Interrupt vector
+   */
+  maskInterrupt(vector) {
+    const bit = 1 << (vector & 0x1F);
+    this.interruptMask &= ~bit;
+    console.log(`Interrupt Handler: Masked interrupt 0x${vector.toString(16)}`);
+  }
+
+  /**
+   * Unmask interrupt
+   * @param {number} vector - Interrupt vector
+   */
+  unmaskInterrupt(vector) {
+    const bit = 1 << (vector & 0x1F);
+    this.interruptMask |= bit;
+    console.log(`Interrupt Handler: Unmasked interrupt 0x${vector.toString(16)}`);
+  }
+
+  /**
+   * Update interrupt mask based on current IRQL
+   */
+  updateInterruptMask() {
+    // At HIGH IRQL, mask all interrupts
+    if (this.currentIRQL >= this.irqlLevels.HIGH) {
+      this.interruptMask = 0;
+    } else {
+      // Enable interrupts based on IRQL
+      this.interruptMask = 0xFFFFFFFF;
+    }
+  }
+
+  /**
+   * Get current IRQL
+   * @returns {number} - Current IRQL level
+   */
+  getCurrentIRQL() {
+    return this.currentIRQL;
   }
 
   /**

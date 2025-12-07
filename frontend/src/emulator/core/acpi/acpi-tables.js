@@ -10,6 +10,8 @@ class ACPITables {
     this.memory = memory;
     this.tables = {};
     this.rsdpAddress = 0xE0000; // Standard RSDP location
+    this.devices = []; // Device tree
+    this.pciDevices = []; // PCI devices discovered
   }
 
   /**
@@ -35,6 +37,12 @@ class ACPITables {
     
     // Create MCFG (PCI Express Configuration Table)
     this.createMCFG();
+    
+    // Discover PCI devices
+    this.discoverPCIDevices();
+    
+    // Build device tree
+    this.buildDeviceTree();
     
     console.log('ACPI: Tables initialized');
   }
@@ -380,6 +388,211 @@ class ACPITables {
     
     this.writeUInt32(addr, Number(val & 0xFFFFFFFFn));
     this.writeUInt32(addr + 4, Number((val >> 32n) & 0xFFFFFFFFn));
+  }
+
+  /**
+   * Discover PCI devices
+   * Scans PCI configuration space for devices
+   */
+  discoverPCIDevices() {
+    console.log('ACPI: Discovering PCI devices...');
+    
+    // Standard PCI configuration space addresses (0xCF8-0xCFF for I/O)
+    // For emulation, we'll create a virtual PCI bus
+    
+    // Add AHCI controller (SATA)
+    this.pciDevices.push({
+      bus: 0,
+      device: 31,
+      function: 2,
+      vendorId: 0x8086, // Intel
+      deviceId: 0x2922, // ICH9M AHCI Controller
+      classCode: 0x010601, // SATA AHCI Controller
+      revisionId: 0x02,
+      headerType: 0x00, // Standard header
+      interruptLine: 0x0B, // IRQ 11
+      interruptPin: 0x01, // INTA#
+      baseAddress0: 0xFEBF0000, // MMIO base
+      baseAddress5: 0xFEBC0000, // Port registers base
+    });
+    
+    // Add VGA controller (if present)
+    this.pciDevices.push({
+      bus: 0,
+      device: 2,
+      function: 0,
+      vendorId: 0x1234, // Generic VGA
+      deviceId: 0x1111, // VGA Controller
+      classCode: 0x030000, // VGA Controller
+      revisionId: 0x01,
+      headerType: 0x00,
+      interruptLine: 0x0A, // IRQ 10
+      interruptPin: 0x01, // INTA#
+      baseAddress0: 0xE0000000, // Framebuffer base
+    });
+    
+    console.log(`ACPI: Discovered ${this.pciDevices.length} PCI device(s)`);
+  }
+
+  /**
+   * Build device tree from discovered devices
+   */
+  buildDeviceTree() {
+    console.log('ACPI: Building device tree...');
+    
+    // Root device
+    const rootDevice = {
+      name: '\\_SB',
+      type: 'Device',
+      children: [],
+    };
+    
+    // Add PCI bus
+    const pciBus = {
+      name: 'PCI0',
+      type: 'Device',
+      address: 0,
+      children: [],
+    };
+    
+    // Add PCI devices
+    for (const pciDevice of this.pciDevices) {
+      const deviceName = this.getPCIDeviceName(pciDevice);
+      const device = {
+        name: deviceName,
+        type: 'Device',
+        address: (pciDevice.bus << 16) | (pciDevice.device << 8) | pciDevice.function,
+        vendorId: pciDevice.vendorId,
+        deviceId: pciDevice.deviceId,
+        classCode: pciDevice.classCode,
+        interruptLine: pciDevice.interruptLine,
+        interruptPin: pciDevice.interruptPin,
+        baseAddresses: [
+          pciDevice.baseAddress0 || 0,
+          pciDevice.baseAddress5 || 0,
+        ],
+        children: [],
+      };
+      
+      pciBus.children.push(device);
+    }
+    
+    rootDevice.children.push(pciBus);
+    this.devices.push(rootDevice);
+    
+    console.log(`ACPI: Device tree built with ${this.pciDevices.length} device(s)`);
+  }
+
+  /**
+   * Get PCI device name from device info
+   * @param {Object} pciDevice - PCI device info
+   * @returns {string} - Device name
+   */
+  getPCIDeviceName(pciDevice) {
+    // Map device IDs to names
+    if (pciDevice.deviceId === 0x2922) {
+      return 'SATA'; // AHCI Controller
+    } else if (pciDevice.classCode === 0x030000) {
+      return 'GFX0'; // Graphics
+    } else {
+      return `DEV${pciDevice.device}`;
+    }
+  }
+
+  /**
+   * Get device tree
+   * @returns {Array} - Device tree
+   */
+  getDeviceTree() {
+    return this.devices;
+  }
+
+  /**
+   * Get PCI devices
+   * @returns {Array} - PCI devices
+   */
+  getPCIDevices() {
+    return this.pciDevices;
+  }
+
+  /**
+   * Read PCI configuration space
+   * @param {number} bus - PCI bus number
+   * @param {number} device - PCI device number
+   * @param {number} function - PCI function number
+   * @param {number} offset - Register offset
+   * @returns {number} - Register value
+   */
+  readPCIConfig(bus, device, function_, offset) {
+    // Find device
+    const pciDevice = this.pciDevices.find(d => 
+      d.bus === bus && d.device === device && d.function === function_
+    );
+    
+    if (!pciDevice) {
+      return 0xFFFFFFFF; // Device not found
+    }
+    
+    // Map offset to register
+    switch (offset) {
+      case 0x00: // Vendor ID
+        return pciDevice.vendorId;
+      case 0x02: // Device ID
+        return pciDevice.deviceId;
+      case 0x08: // Revision ID and Class Code
+        return (pciDevice.classCode << 8) | pciDevice.revisionId;
+      case 0x0C: // Header Type
+        return pciDevice.headerType;
+      case 0x3C: // Interrupt Line
+        return pciDevice.interruptLine;
+      case 0x3D: // Interrupt Pin
+        return pciDevice.interruptPin;
+      case 0x10: // Base Address 0
+        return pciDevice.baseAddress0 || 0;
+      case 0x24: // Base Address 5
+        return pciDevice.baseAddress5 || 0;
+      default:
+        return 0;
+    }
+  }
+
+  /**
+   * Write PCI configuration space
+   * @param {number} bus - PCI bus number
+   * @param {number} device - PCI device number
+   * @param {number} function - PCI function number
+   * @param {number} offset - Register offset
+   * @param {number} value - Register value
+   */
+  writePCIConfig(bus, device, function_, offset, value) {
+    // Find device
+    const pciDevice = this.pciDevices.find(d => 
+      d.bus === bus && d.device === device && d.function === function_
+    );
+    
+    if (!pciDevice) {
+      return; // Device not found
+    }
+    
+    // Update writable registers
+    switch (offset) {
+      case 0x04: // Command register
+        // Allow command register writes (simplified)
+        break;
+      case 0x10: // Base Address 0
+        if (pciDevice.baseAddress0 !== undefined) {
+          pciDevice.baseAddress0 = value;
+        }
+        break;
+      case 0x24: // Base Address 5
+        if (pciDevice.baseAddress5 !== undefined) {
+          pciDevice.baseAddress5 = value;
+        }
+        break;
+      default:
+        // Read-only or reserved registers
+        break;
+    }
   }
 
   /**

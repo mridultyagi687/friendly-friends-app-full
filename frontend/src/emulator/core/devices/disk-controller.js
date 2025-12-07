@@ -11,6 +11,43 @@ class DiskController {
     this.ports = []; // SATA ports
     this.initialized = false;
     
+    // AHCI registers (memory-mapped I/O)
+    this.ahciBase = 0xFEBF0000; // Base address for AHCI registers
+    this.registers = {
+      // Global Host Control (GHC)
+      ghc: 0x00, // Global Host Control register
+      is: 0x08, // Interrupt Status register
+      pi: 0x0C, // Ports Implemented register
+      vs: 0x10, // Version register
+      ccc_ctl: 0x14, // Command Completion Coalescing Control
+      ccc_ports: 0x18, // Command Completion Coalescing Ports
+      em_loc: 0x1C, // Enclosure Management Location
+      em_ctl: 0x20, // Enclosure Management Control
+      cap2: 0x24, // Host Capabilities Extended
+      bohc: 0x28, // BIOS/OS Handoff Control
+    };
+    
+    // Port registers (each port has its own set)
+    this.portRegisters = {
+      clb: 0x00, // Command List Base Address
+      clbu: 0x04, // Command List Base Address Upper
+      fb: 0x08, // FIS Base Address
+      fbu: 0x0C, // FIS Base Address Upper
+      is: 0x10, // Interrupt Status
+      ie: 0x14, // Interrupt Enable
+      cmd: 0x18, // Command and Status
+      reserved: 0x1C, // Reserved
+      tfd: 0x20, // Task File Data
+      sig: 0x24, // Signature
+      ssts: 0x28, // Serial ATA Status
+      sctl: 0x2C, // Serial ATA Control
+      serr: 0x30, // Serial ATA Error
+      sact: 0x34, // Serial ATA Active
+      ci: 0x38, // Command Issue
+      sntf: 0x3C, // Serial ATA Notification
+      fbs: 0x40, // FIS-based Switching Control
+    };
+    
     // Initialize with one disk on port 0
     this.ports.push({
       portNumber: 0,
@@ -19,6 +56,10 @@ class DiskController {
       storage: storage,
       lba: 0, // Logical Block Address
       sectorSize: 512,
+      commandList: null, // Command list base address
+      fisBase: null, // FIS base address
+      commandActive: false,
+      error: 0,
     });
   }
 
@@ -38,8 +79,76 @@ class DiskController {
       command: 0x0007, // I/O, Memory, Bus Master enabled
     };
     
+    // Initialize AHCI registers
+    this.initAHCIRegisters();
+    
     this.initialized = true;
     console.log(`DiskController: Initialized with ${this.ports.length} port(s)`);
+  }
+
+  /**
+   * Initialize AHCI registers
+   */
+  initAHCIRegisters() {
+    // Allocate memory for command lists and FIS structures
+    const commandListBase = 0x1000000; // 1MB mark
+    const fisBase = 0x1001000; // FIS structures
+    
+    // Initialize port 0
+    const port = this.ports[0];
+    port.commandList = commandListBase;
+    port.fisBase = fisBase;
+    
+    // Write initial register values to memory (if memory-mapped)
+    // In a real system, these would be actual MMIO registers
+    // For emulation, we'll track them in memory
+    
+    // GHC: Enable AHCI (bit 31)
+    this.writeRegister(this.registers.ghc, 0x80000000);
+    
+    // PI: Ports Implemented (bit 0 = port 0)
+    this.writeRegister(this.registers.pi, 0x00000001);
+    
+    // Port 0 registers
+    const port0Base = this.ahciBase + 0x100; // Port 0 starts at offset 0x100
+    this.writeRegister(port0Base + this.portRegisters.clb, commandListBase & 0xFFFFFFFF);
+    this.writeRegister(port0Base + this.portRegisters.clbu, (commandListBase >> 32) & 0xFFFFFFFF);
+    this.writeRegister(port0Base + this.portRegisters.fb, fisBase & 0xFFFFFFFF);
+    this.writeRegister(port0Base + this.portRegisters.fbu, (fisBase >> 32) & 0xFFFFFFFF);
+    
+    // Port signature (SATA device)
+    this.writeRegister(port0Base + this.portRegisters.sig, 0x00000101); // SATA signature
+    
+    // Port status (device present)
+    this.writeRegister(port0Base + this.portRegisters.ssts, 0x00000303); // Device detected, ready
+    
+    console.log('DiskController: AHCI registers initialized');
+  }
+
+  /**
+   * Write AHCI register (simplified - stores in memory)
+   * @param {number} offset - Register offset
+   * @param {number} value - Register value
+   */
+  writeRegister(offset, value) {
+    // In a real system, this would write to MMIO
+    // For emulation, we store register values
+    if (!this.registerValues) {
+      this.registerValues = new Map();
+    }
+    this.registerValues.set(offset, value);
+  }
+
+  /**
+   * Read AHCI register (simplified - reads from memory)
+   * @param {number} offset - Register offset
+   * @returns {number} - Register value
+   */
+  readRegister(offset) {
+    if (!this.registerValues) {
+      return 0;
+    }
+    return this.registerValues.get(offset) || 0;
   }
 
   /**
