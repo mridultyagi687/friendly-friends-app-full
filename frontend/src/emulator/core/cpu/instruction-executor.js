@@ -274,8 +274,8 @@ class InstructionExecutor {
     const result = regValue + memValue;
     this.cpu.registers[reg] = result;
 
-    // Update flags (simplified)
-    this.updateFlags(result, operandSize);
+    // Update flags including overflow
+    this.updateFlagsWithOperands(result, regValue, memValue, operandSize, 'add');
 
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
@@ -447,20 +447,30 @@ class InstructionExecutor {
     // Base register
     if (sib) {
       const baseReg = this.getRegisterFromModRM({ reg: sib.base, mod: 0 }, rex, 64);
-      address += this.cpu.registers[baseReg] || 0n;
+      const baseValue = this.cpu.registers[baseReg];
+      if (baseValue !== undefined) {
+        address += baseValue;
+      }
     } else {
+      // Get base register from rm field
       const baseReg = this.getRegisterFromModRM({ reg: modrm.rm, mod: 0 }, rex, 64);
-      address += this.cpu.registers[baseReg] || 0n;
+      const baseValue = this.cpu.registers[baseReg];
+      if (baseValue !== undefined) {
+        address += baseValue;
+      }
     }
 
     // Index register (SIB)
     if (sib) {
       const indexReg = this.getRegisterFromModRM({ reg: sib.index, mod: 0 }, rex, 64);
-      address += (this.cpu.registers[indexReg] || 0n) * BigInt(sib.scale);
+      const indexValue = this.cpu.registers[indexReg];
+      if (indexValue !== undefined) {
+        address += indexValue * BigInt(sib.scale || 1);
+      }
     }
 
     // Displacement
-    if (displacement !== null) {
+    if (displacement !== null && displacement !== undefined) {
       address += BigInt(displacement);
     }
 
@@ -729,6 +739,71 @@ class InstructionExecutor {
     // Carry flag (CF) - bit 0 (simplified, set on unsigned overflow)
     // Overflow flag (OF) - bit 11 (simplified, set on signed overflow)
     // These would need more complex logic based on the operation
+
+    this.cpu.registers.rflags = flags;
+  }
+
+  /**
+   * Update CPU flags with operand information for overflow calculation
+   */
+  updateFlagsWithOperands(result, operand1, operand2, operandSize, operation = 'add') {
+    let flags = this.cpu.registers.rflags;
+    
+    // Convert to BigInt
+    const resultBigInt = typeof result === 'bigint' ? result : BigInt(result);
+    const op1 = typeof operand1 === 'bigint' ? operand1 : BigInt(operand1);
+    const op2 = typeof operand2 === 'bigint' ? operand2 : BigInt(operand2);
+
+    // Zero flag (ZF) - bit 6
+    if (resultBigInt === 0n) {
+      flags |= 0x40n;
+    } else {
+      flags &= ~0x40n;
+    }
+
+    // Sign flag (SF) - bit 7
+    const mask = operandSize === 64 ? 0x8000000000000000n : 0x80000000n;
+    if ((resultBigInt & mask) !== 0n) {
+      flags |= 0x80n;
+    } else {
+      flags &= ~0x80n;
+    }
+
+    // Parity flag (PF) - bit 2
+    const lowByte = Number(resultBigInt & 0xFFn);
+    let parity = 0;
+    for (let i = 0; i < 8; i++) {
+      if (lowByte & (1 << i)) parity++;
+    }
+    if ((parity % 2) === 0) {
+      flags |= 0x04n;
+    } else {
+      flags &= ~0x04n;
+    }
+
+    // Overflow flag (OF) - bit 11
+    if (operation === 'add') {
+      // OF is set when adding two positive numbers gives negative, or two negatives gives positive
+      const signMask = operandSize === 64 ? 0x8000000000000000n : 0x80000000n;
+      const op1Sign = (op1 & signMask) !== 0n;
+      const op2Sign = (op2 & signMask) !== 0n;
+      const resultSign = (resultBigInt & signMask) !== 0n;
+      
+      // Overflow occurs when operands have same sign but result has different sign
+      if (op1Sign === op2Sign && op1Sign !== resultSign) {
+        flags |= 0x800n; // Set OF
+      } else {
+        flags &= ~0x800n; // Clear OF
+      }
+    }
+
+    // Carry flag (CF) - bit 0 (unsigned overflow)
+    const maxValue = operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn;
+    if (resultBigInt > maxValue) {
+      flags |= 0x01n; // Set CF
+    } else {
+      flags &= ~0x01n; // Clear CF
+    }
 
     this.cpu.registers.rflags = flags;
   }

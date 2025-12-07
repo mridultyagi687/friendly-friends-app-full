@@ -14,13 +14,26 @@ describe('Boot Progress Tests', () => {
 
   beforeEach(() => {
     // Mock canvas for JSDOM environment
+    // Create proper Uint8ClampedArray for imageData.data
+    const createImageDataArray = (width, height) => {
+      return new Uint8ClampedArray(width * height * 4);
+    };
+
     mockCanvas = {
       getContext: vi.fn(() => ({
         fillRect: vi.fn(),
         clearRect: vi.fn(),
-        getImageData: vi.fn(() => ({ data: new Array(4) })),
+        getImageData: vi.fn(() => ({ 
+          data: createImageDataArray(640, 480),
+          width: 640,
+          height: 480,
+        })),
         putImageData: vi.fn(),
-        createImageData: vi.fn(() => ({ data: new Array(4) })),
+        createImageData: vi.fn((width, height) => ({ 
+          data: createImageDataArray(width || 640, height || 480),
+          width: width || 640,
+          height: height || 480,
+        })),
         setTransform: vi.fn(),
         drawImage: vi.fn(),
         save: vi.fn(),

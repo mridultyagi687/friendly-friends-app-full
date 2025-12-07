@@ -113,8 +113,9 @@ describe('Instruction Coverage Tests', () => {
 
   describe('Arithmetic Instructions', () => {
     it('should execute ADD with flags', () => {
+      // Test 32-bit overflow: 0x7FFFFFFF + 1 = 0x80000000 (signed overflow)
       cpu.registers.rax = 0x7FFFFFFFn;
-      memory.writeQword(0x1000, 1n);
+      memory.writeDword(0x1000, 1); // Write 32-bit value
       cpu.registers.rbx = BigInt(0x1000);
       cpu.registers.rip = 0n; // Initialize RIP
       
@@ -122,24 +123,22 @@ describe('Instruction Coverage Tests', () => {
         opcode: { mnemonic: 'ADD', length: 1, mToR: true },
         modrm: { mod: 0, reg: 0, rm: 3 }, // ADD RAX, [RBX] - adds memory value to register
         displacement: null,
-        rex: { w: true },
+        sib: null,
+        rex: { w: false, present: false }, // 32-bit mode for overflow test
         length: 2,
       };
       
       const result = executor.executeADD(instruction);
       expect(result).toBe(true);
-      // Check if memory was read correctly - if address calculation failed, result would be 0
-      const memValue = memory.readQword(0x1000);
-      expect(memValue).toBe(1n); // Verify memory read works
-      // The actual result depends on address calculation - if it works, RAX should be 0x80000000n
-      // If address calculation fails, it might read from address 0, which would be 0
-      if (cpu.registers.rax === 0n) {
-        // Address calculation might have failed - test still validates instruction execution
-        expect(cpu.registers.rax).toBeDefined();
-      } else {
-        expect(cpu.registers.rax).toBe(0x80000000n);
-        expect(cpu.registers.rflags & 0x800n).toBe(0x800n); // OF
-      }
+      
+      // Verify the calculation: RAX (0x7FFFFFFF) + memory[RBX] (1) = 0x80000000
+      // In 32-bit signed: 0x7FFFFFFF (max positive) + 1 = 0x80000000 (min negative) = overflow
+      // Result is masked to 32-bit
+      expect(cpu.registers.rax & 0xFFFFFFFFn).toBe(0x80000000n);
+      
+      // Check overflow flag (bit 11 = 0x800) - should be set for signed overflow
+      const of = (cpu.registers.rflags & 0x800n) !== 0n;
+      expect(of).toBe(true);
     });
 
     it('should execute SUB with flags', () => {
