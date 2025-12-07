@@ -39,9 +39,6 @@ class APIC {
       // 0x060: Processor Priority Register (PPR) - read-only
       PPR: 0x0,
       
-      // 0x070: End of Interrupt Register (EOI) - write-only
-      EOI: 0x0,
-      
       // 0x080: Remote Read Register (RRD) - read-only
       RRD: 0x0,
       
@@ -54,7 +51,10 @@ class APIC {
       // Cluster mode: 0x0FFFFFFF
       DFR: 0xFFFFFFFF,
       
-      // 0x0B0: Spurious Interrupt Vector Register (SVR) - CRITICAL
+      // 0x0B0: End of Interrupt Register (EOI) - write-only
+      EOI: 0x0,
+      
+      // 0x0F0: Spurious Interrupt Vector Register (SVR) - CRITICAL
       // Bits 0-3: Spurious vector
       // Bit 8: APIC Software Enable (ASE)
       // Bit 9: Focus Processor Checking (FPC) - disabled
@@ -425,11 +425,11 @@ class APIC {
       0x040: 'TPR',
       0x050: 'APR',
       0x060: 'PPR',
-      0x070: 'EOI',
       0x080: 'RRD',
       0x090: 'LDR',
       0x0A0: 'DFR',
-      0x0B0: 'SVR',
+      0x0B0: 'EOI',
+      0x0F0: 'SVR',
       0x0D0: 'ISR', // ISR[0]
       0x0E0: 'TMR', // TMR[0]
       0x0F0: 'IRR', // IRR[0]
