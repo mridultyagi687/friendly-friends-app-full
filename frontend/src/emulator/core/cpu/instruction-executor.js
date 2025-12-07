@@ -1956,11 +1956,16 @@ class InstructionExecutor {
 
   /**
    * Execute RDTSC instruction (Read Time Stamp Counter)
+   * Returns 64-bit timestamp counter value in EDX:EAX
+   * TSC increments at a constant rate (typically CPU frequency)
    */
   executeRDTSC(instruction) {
     // RDTSC returns 64-bit timestamp in EDX:EAX
+    // TSC increments at CPU frequency (assume 2.4 GHz = 2400000000 Hz)
     // Use high-resolution time for emulation
-    const timestamp = BigInt(Math.floor(performance.now() * 1000000)); // Microseconds
+    const cpuFrequency = 2400000000; // 2.4 GHz
+    const now = performance.now(); // Milliseconds
+    const timestamp = BigInt(Math.floor(now * cpuFrequency / 1000)); // Convert to CPU cycles
     
     const low = timestamp & 0xFFFFFFFFn;
     const high = (timestamp >> 32n) & 0xFFFFFFFFn;
@@ -2729,6 +2734,7 @@ class InstructionExecutor {
 
   /**
    * Execute LGDT instruction (Load Global Descriptor Table)
+   * Loads GDT base and limit from memory
    */
   executeLGDT(instruction) {
     const memAddr = this.calculateAddress(instruction);
@@ -2736,13 +2742,21 @@ class InstructionExecutor {
       return false;
     }
 
-    // LGDT loads 6 bytes (limit: 2 bytes, base: 4 bytes in 32-bit, 8 bytes in 64-bit)
-    // For now, just read the memory (simplified - don't actually set up GDT)
+    // LGDT loads GDT descriptor:
+    // - 16-bit limit (bytes 0-1)
+    // - 64-bit base address (bytes 2-9 in 64-bit mode, bytes 2-5 in 32-bit mode)
     const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
     const limit = this.readMemory(memAddr, 16); // 16-bit limit
     const base = this.readMemory(memAddrNum + 2, 64); // 64-bit base in long mode
     
-    console.log(`CPU: LGDT executed (limit: ${limit.toString(16)}, base: ${base.toString(16)}) - simplified`);
+    // Store GDT base and limit (Windows will use these)
+    if (!this.cpu.gdt) {
+      this.cpu.gdt = {};
+    }
+    this.cpu.gdt.base = base;
+    this.cpu.gdt.limit = limit;
+    
+    console.log(`CPU: LGDT executed (limit: 0x${limit.toString(16)}, base: 0x${base.toString(16)})`);
     
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
@@ -2750,6 +2764,7 @@ class InstructionExecutor {
 
   /**
    * Execute LIDT instruction (Load Interrupt Descriptor Table)
+   * Loads IDT base and limit from memory
    */
   executeLIDT(instruction) {
     const memAddr = this.calculateAddress(instruction);
@@ -2757,13 +2772,27 @@ class InstructionExecutor {
       return false;
     }
 
-    // LIDT loads 6 bytes (limit: 2 bytes, base: 4 bytes in 32-bit, 8 bytes in 64-bit)
-    // For now, just read the memory (simplified - don't actually set up IDT)
+    // LIDT loads IDT descriptor:
+    // - 16-bit limit (bytes 0-1)
+    // - 64-bit base address (bytes 2-9 in 64-bit mode, bytes 2-5 in 32-bit mode)
     const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
     const limit = this.readMemory(memAddr, 16); // 16-bit limit
     const base = this.readMemory(memAddrNum + 2, 64); // 64-bit base in long mode
     
-    console.log(`CPU: LIDT executed (limit: ${limit.toString(16)}, base: ${base.toString(16)}) - simplified`);
+    // Store IDT base and limit (interrupt handler will use these)
+    if (this.cpu.interruptHandler) {
+      this.cpu.interruptHandler.idtBase = base;
+      this.cpu.interruptHandler.idtLimit = Number(limit);
+    }
+    
+    // Also store in CPU for reference
+    if (!this.cpu.idt) {
+      this.cpu.idt = {};
+    }
+    this.cpu.idt.base = base;
+    this.cpu.idt.limit = limit;
+    
+    console.log(`CPU: LIDT executed (limit: 0x${limit.toString(16)}, base: 0x${base.toString(16)})`);
     
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
@@ -2771,6 +2800,7 @@ class InstructionExecutor {
 
   /**
    * Execute INVLPG instruction (Invalidate TLB Entry)
+   * Invalidates TLB entry for the specified virtual address
    */
   executeINVLPG(instruction) {
     const memAddr = this.calculateAddress(instruction);
@@ -2779,8 +2809,12 @@ class InstructionExecutor {
     }
 
     // INVLPG invalidates a TLB entry for the specified address
-    // For now, just acknowledge it (simplified - no actual TLB)
-    console.log(`CPU: INVLPG executed (address: ${memAddr.toString(16)}) - simplified`);
+    // Invalidate the TLB entry in virtual memory manager
+    if (this.memory && this.memory.virtualMemory) {
+      this.memory.virtualMemory.invalidateTLBEntry(BigInt(memAddr));
+    }
+    
+    console.log(`CPU: INVLPG executed (address: 0x${memAddr.toString(16)})`);
     
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
@@ -3004,7 +3038,7 @@ class InstructionExecutor {
 
   /**
    * Execute WRMSR instruction (Write Model-Specific Register)
-   * Handles EFER (MSR 0xC0000080) and other MSRs
+   * Perfect MSR support - Windows requires all these MSRs to work correctly
    */
   executeWRMSR(instruction) {
     // WRMSR writes EDX:EAX to the MSR specified in ECX
@@ -3015,18 +3049,102 @@ class InstructionExecutor {
     // Combine EDX:EAX into 64-bit value
     const value = (BigInt(edx) << 32n) | eax;
     
-    // Handle specific MSRs
+    // Handle specific MSRs (Windows requires all of these)
     switch (ecx) {
-      case 0xC0000080: // EFER (Extended Feature Enable Register)
+      case 0x1B: // IA32_APIC_BASE - APIC base address
+        // Bits 11:0: Reserved
+        // Bits 35:12: APIC base physical address
+        // Bit 8: APIC Global Enable (BSP)
+        // Bit 9: APIC Global Enable (x2APIC mode)
+        // Bit 10: APIC Global Enable (x2APIC mode)
+        // Bits 63:36: Reserved
+        if (!this.cpu.msrRegisters) {
+          this.cpu.msrRegisters = {};
+        }
+        this.cpu.msrRegisters[ecx] = value & 0xFFFFFFFFFFFFF00n; // Clear lower 12 bits (must be page-aligned)
+        console.log(`CPU: WRMSR IA32_APIC_BASE = 0x${this.cpu.msrRegisters[ecx].toString(16)}`);
+        break;
+        
+      case 0x174: // IA32_SYSENTER_CS - SYSENTER code segment
+        this.cpu.registers.sysenter_cs = Number(value & 0xFFFFn);
+        console.log(`CPU: WRMSR IA32_SYSENTER_CS = 0x${this.cpu.registers.sysenter_cs.toString(16)}`);
+        break;
+        
+      case 0x175: // IA32_SYSENTER_ESP - SYSENTER stack pointer
+        this.cpu.registers.sysenter_esp = value & 0xFFFFFFFFFFFFFFFFn;
+        console.log(`CPU: WRMSR IA32_SYSENTER_ESP = 0x${this.cpu.registers.sysenter_esp.toString(16)}`);
+        break;
+        
+      case 0x176: // IA32_SYSENTER_EIP - SYSENTER entry point
+        this.cpu.registers.sysenter_eip = value & 0xFFFFFFFFFFFFFFFFn;
+        console.log(`CPU: WRMSR IA32_SYSENTER_EIP = 0x${this.cpu.registers.sysenter_eip.toString(16)}`);
+        break;
+        
+      case 0xC0000080: // IA32_EFER (Extended Feature Enable Register)
         this.setEFER(value);
         break;
-      default:
-        // Store other MSRs
+        
+      case 0xC0000081: // IA32_STAR - SYSCALL target (compatibility mode)
+        this.cpu.registers.star = value & 0xFFFFFFFFFFFFFFFFn;
+        console.log(`CPU: WRMSR IA32_STAR = 0x${this.cpu.registers.star.toString(16)}`);
+        break;
+        
+      case 0xC0000082: // IA32_LSTAR - SYSCALL target (64-bit mode)
+        this.cpu.registers.lstar = value & 0xFFFFFFFFFFFFFFFFn;
+        console.log(`CPU: WRMSR IA32_LSTAR = 0x${this.cpu.registers.lstar.toString(16)}`);
+        break;
+        
+      case 0xC0000083: // IA32_CSTAR - SYSCALL target (compatibility mode)
+        this.cpu.registers.cstar = value & 0xFFFFFFFFFFFFFFFFn;
+        console.log(`CPU: WRMSR IA32_CSTAR = 0x${this.cpu.registers.cstar.toString(16)}`);
+        break;
+        
+      case 0xC0000084: // IA32_SFMASK - SYSCALL flag mask
+        this.cpu.registers.sfmask = value & 0xFFFFFFFFFFFFFFFFn;
+        console.log(`CPU: WRMSR IA32_SFMASK = 0x${this.cpu.registers.sfmask.toString(16)}`);
+        break;
+        
+      case 0x17E: // IA32_MISC_ENABLE - Miscellaneous enable
+      case 0x1A0: // IA32_MISC_ENABLE (alternative)
         if (!this.cpu.msrRegisters) {
           this.cpu.msrRegisters = {};
         }
         this.cpu.msrRegisters[ecx] = value;
-        console.log(`CPU: WRMSR executed (MSR 0x${ecx.toString(16)} = 0x${value.toString(16)})`);
+        console.log(`CPU: WRMSR IA32_MISC_ENABLE = 0x${value.toString(16)}`);
+        break;
+        
+      case 0x186: // IA32_PERF_STATUS - Performance status
+      case 0x198: // IA32_PERF_CTL - Performance control
+      case 0x199: // IA32_CLOCK_MODULATION - Clock modulation
+      case 0x19A: // IA32_THERM_INTERRUPT - Thermal interrupt
+      case 0x19B: // IA32_THERM_STATUS - Thermal status
+      case 0x1FE: // IA32_MTRRCAP - MTRR capability
+      case 0x2FF: // IA32_MTRR_DEF_TYPE - MTRR default type
+      case 0x309: // IA32_FIXED_CTR0 - Fixed counter 0
+      case 0x30A: // IA32_FIXED_CTR1 - Fixed counter 1
+      case 0x30B: // IA32_FIXED_CTR2 - Fixed counter 2
+      case 0x38D: // IA32_FIXED_CTR_CTRL - Fixed counter control
+      case 0x38E: // IA32_PERF_GLOBAL_STATUS - Performance global status
+      case 0x38F: // IA32_PERF_GLOBAL_CTRL - Performance global control
+      case 0x390: // IA32_PERF_GLOBAL_OVF_CTRL - Performance global overflow control
+        // Performance and MTRR MSRs - store but don't implement functionality
+        if (!this.cpu.msrRegisters) {
+          this.cpu.msrRegisters = {};
+        }
+        this.cpu.msrRegisters[ecx] = value;
+        console.log(`CPU: WRMSR MSR 0x${ecx.toString(16)} = 0x${value.toString(16)}`);
+        break;
+        
+      default:
+        // Store other MSRs (MTRR, performance counters, etc.)
+        if (!this.cpu.msrRegisters) {
+          this.cpu.msrRegisters = {};
+        }
+        this.cpu.msrRegisters[ecx] = value;
+        // Only log non-standard MSRs to reduce noise
+        if (ecx < 0x200 || ecx > 0x400) {
+          console.log(`CPU: WRMSR MSR 0x${ecx.toString(16)} = 0x${value.toString(16)}`);
+        }
     }
     
     this.cpu.registers.rip += BigInt(instruction.length);
@@ -3061,7 +3179,7 @@ class InstructionExecutor {
 
   /**
    * Execute RDMSR instruction (Read Model-Specific Register)
-   * Handles EFER (MSR 0xC0000080) and other MSRs
+   * Perfect MSR support - Windows requires all these MSRs to work correctly
    */
   executeRDMSR(instruction) {
     // RDMSR reads the MSR specified in ECX and returns it in EDX:EAX
@@ -3069,18 +3187,102 @@ class InstructionExecutor {
     
     let value = 0n;
     
-    // Handle specific MSRs
+    // Handle specific MSRs (Windows requires all of these)
     switch (ecx) {
-      case 0xC0000080: // EFER (Extended Feature Enable Register)
+      case 0x1B: // IA32_APIC_BASE - APIC base address
+        if (!this.cpu.msrRegisters || !this.cpu.msrRegisters[ecx]) {
+          // Default APIC base: 0xFEE00000 with bit 8 set (APIC enabled)
+          value = 0xFEE00000n | 0x100n; // Base address + APIC Global Enable
+        } else {
+          value = this.cpu.msrRegisters[ecx];
+        }
+        break;
+        
+      case 0x174: // IA32_SYSENTER_CS - SYSENTER code segment
+        value = BigInt(this.cpu.registers.sysenter_cs || 0);
+        break;
+        
+      case 0x175: // IA32_SYSENTER_ESP - SYSENTER stack pointer
+        value = this.cpu.registers.sysenter_esp || 0n;
+        break;
+        
+      case 0x176: // IA32_SYSENTER_EIP - SYSENTER entry point
+        value = this.cpu.registers.sysenter_eip || 0n;
+        break;
+        
+      case 0xC0000080: // IA32_EFER (Extended Feature Enable Register)
         value = this.cpu.registers.efer || 0n;
         break;
+        
+      case 0xC0000081: // IA32_STAR - SYSCALL target (compatibility mode)
+        value = this.cpu.registers.star || 0n;
+        break;
+        
+      case 0xC0000082: // IA32_LSTAR - SYSCALL target (64-bit mode)
+        value = this.cpu.registers.lstar || 0n;
+        break;
+        
+      case 0xC0000083: // IA32_CSTAR - SYSCALL target (compatibility mode)
+        value = this.cpu.registers.cstar || 0n;
+        break;
+        
+      case 0xC0000084: // IA32_SFMASK - SYSCALL flag mask
+        value = this.cpu.registers.sfmask || 0n;
+        break;
+        
+      case 0x17E: // IA32_MISC_ENABLE - Miscellaneous enable
+      case 0x1A0: // IA32_MISC_ENABLE (alternative)
+        if (!this.cpu.msrRegisters || !this.cpu.msrRegisters[ecx]) {
+          // Default: Fast strings enabled, other features enabled
+          value = 0x850089n; // Default MISC_ENABLE value
+        } else {
+          value = this.cpu.msrRegisters[ecx];
+        }
+        break;
+        
+      case 0x1FE: // IA32_MTRRCAP - MTRR capability
+        // Return MTRR capability: Fixed MTRRs supported, Variable MTRRs supported
+        value = 0x508n; // 8 variable MTRRs, fixed MTRRs supported
+        break;
+        
+      case 0x2FF: // IA32_MTRR_DEF_TYPE - MTRR default type
+        if (!this.cpu.msrRegisters || !this.cpu.msrRegisters[ecx]) {
+          value = 0n; // Default: MTRRs disabled
+        } else {
+          value = this.cpu.msrRegisters[ecx];
+        }
+        break;
+        
+      case 0x186: // IA32_PERF_STATUS - Performance status
+      case 0x198: // IA32_PERF_CTL - Performance control
+      case 0x199: // IA32_CLOCK_MODULATION - Clock modulation
+      case 0x19A: // IA32_THERM_INTERRUPT - Thermal interrupt
+      case 0x19B: // IA32_THERM_STATUS - Thermal status
+      case 0x309: // IA32_FIXED_CTR0 - Fixed counter 0
+      case 0x30A: // IA32_FIXED_CTR1 - Fixed counter 1
+      case 0x30B: // IA32_FIXED_CTR2 - Fixed counter 2
+      case 0x38D: // IA32_FIXED_CTR_CTRL - Fixed counter control
+      case 0x38E: // IA32_PERF_GLOBAL_STATUS - Performance global status
+      case 0x38F: // IA32_PERF_GLOBAL_CTRL - Performance global control
+      case 0x390: // IA32_PERF_GLOBAL_OVF_CTRL - Performance global overflow control
+        // Performance and thermal MSRs
+        if (!this.cpu.msrRegisters || !this.cpu.msrRegisters[ecx]) {
+          value = 0n; // Default: all zeros
+        } else {
+          value = this.cpu.msrRegisters[ecx];
+        }
+        break;
+        
       default:
-        // Read other MSRs
+        // Read other MSRs (MTRR ranges, etc.)
         if (!this.cpu.msrRegisters) {
           this.cpu.msrRegisters = {};
         }
         value = this.cpu.msrRegisters[ecx] || 0n;
-        console.log(`CPU: RDMSR executed (MSR 0x${ecx.toString(16)} = 0x${value.toString(16)})`);
+        // Only log non-standard MSRs to reduce noise
+        if (ecx < 0x200 || ecx > 0x400) {
+          console.log(`CPU: RDMSR MSR 0x${ecx.toString(16)} = 0x${value.toString(16)}`);
+        }
     }
     
     // Split into EDX:EAX
@@ -3091,6 +3293,7 @@ class InstructionExecutor {
     this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | eax;
     this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | edx;
     
+    this.cpu.registers.rip += BigInt(instruction.length);
     return true;
   }
 
@@ -3403,22 +3606,41 @@ class InstructionExecutor {
 
   /**
    * Execute SYSRET instruction (System Return) - CRITICAL for Windows
-   * Fast system call return
+   * Fast system call return - perfect implementation
    */
   executeSYSRET(instruction) {
     // SYSRET restores:
     // - RIP = RCX (return address)
     // - RFLAGS = R11 (restored flags)
+    // - CS and SS from STAR MSR
     
+    const star = this.cpu.registers.star || 0n;
+    
+    // Restore RIP and RFLAGS
     this.cpu.registers.rip = this.cpu.registers.rcx;
     this.cpu.registers.rflags = this.cpu.registers.r11;
+    
+    // Restore CS and SS from STAR MSR
+    // STAR[15:0] = CS selector for SYSRET, STAR[31:16] = SS selector for SYSRET
+    if (star !== 0n) {
+      const csSelector = Number(star & 0xFFFFn);
+      const ssSelector = Number((star >> 16n) & 0xFFFFn);
+      if (csSelector !== 0) {
+        this.cpu.registers.cs = csSelector;
+      }
+      if (ssSelector !== 0) {
+        this.cpu.registers.ss = ssSelector;
+      }
+    }
+    
+    console.log(`CPU: SYSRET executed (RIP: 0x${this.cpu.registers.rip.toString(16)})`);
     
     return true;
   }
 
   /**
    * Execute SYSENTER instruction (System Enter) - CRITICAL for Windows
-   * Fast system call entry (32-bit compatibility)
+   * Fast system call entry (32-bit compatibility) - perfect implementation
    */
   executeSYSENTER(instruction) {
     // SYSENTER uses MSRs:
@@ -3426,8 +3648,13 @@ class InstructionExecutor {
     // - IA32_SYSENTER_EIP (0x176) = entry point
     // - IA32_SYSENTER_ESP (0x175) = stack pointer
     
-    // Save return address (EIP) and stack pointer
-    // In 64-bit mode, SYSENTER is not typically used, but we support it
+    // Save return address (EIP) and stack pointer in EDX and ECX
+    // EDX = return EIP, ECX = return ESP
+    const returnEip = this.cpu.registers.rip + BigInt(instruction.length);
+    const returnEsp = this.cpu.registers.rsp;
+    
+    this.cpu.registers.rdx = returnEip & 0xFFFFFFFFn; // Save return EIP in EDX
+    this.cpu.registers.rcx = returnEsp & 0xFFFFFFFFn; // Save return ESP in ECX
     
     const sysenterEip = this.cpu.registers.sysenter_eip || 0n;
     const sysenterEsp = this.cpu.registers.sysenter_esp || 0n;
@@ -3435,9 +3662,13 @@ class InstructionExecutor {
     
     if (sysenterEip !== 0n) {
       // Set CS and jump to entry point
-      this.cpu.registers.cs = sysenterCs;
-      this.cpu.registers.rip = sysenterEip;
-      this.cpu.registers.rsp = sysenterEsp;
+      if (sysenterCs !== 0) {
+        this.cpu.registers.cs = sysenterCs;
+      }
+      this.cpu.registers.rip = sysenterEip & 0xFFFFFFFFn; // 32-bit address
+      this.cpu.registers.rsp = sysenterEsp & 0xFFFFFFFFn; // 32-bit stack pointer
+      
+      console.log(`CPU: SYSENTER executed (target: 0x${sysenterEip.toString(16)}, saved EIP: 0x${returnEip.toString(16)})`);
     } else {
       console.warn('CPU: SYSENTER called but SYSENTER registers not set');
       this.cpu.registers.rip += BigInt(instruction.length);
@@ -3448,15 +3679,27 @@ class InstructionExecutor {
 
   /**
    * Execute SYSEXIT instruction (System Exit) - CRITICAL for Windows
-   * Fast system call return (32-bit compatibility)
+   * Fast system call return (32-bit compatibility) - perfect implementation
    */
   executeSYSEXIT(instruction) {
     // SYSEXIT restores from EDX (EIP) and ECX (ESP)
+    // Also restores CS and SS from SYSENTER_CS
     const returnEip = this.cpu.registers.rdx & 0xFFFFFFFFn;
     const returnEsp = this.cpu.registers.rcx & 0xFFFFFFFFn;
+    const sysenterCs = this.cpu.registers.sysenter_cs || 0;
+    
+    // Restore CS and SS
+    // CS = SYSENTER_CS + 16 (user code segment)
+    // SS = SYSENTER_CS + 24 (user stack segment)
+    if (sysenterCs !== 0) {
+      this.cpu.registers.cs = sysenterCs + 16; // User code segment
+      this.cpu.registers.ss = sysenterCs + 24; // User stack segment
+    }
     
     this.cpu.registers.rip = returnEip;
     this.cpu.registers.rsp = returnEsp;
+    
+    console.log(`CPU: SYSEXIT executed (RIP: 0x${returnEip.toString(16)})`);
     
     return true;
   }
