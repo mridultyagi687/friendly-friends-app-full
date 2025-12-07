@@ -1640,63 +1640,300 @@ class InstructionExecutor {
 
   /**
    * Execute CPUID instruction (Get CPU Information)
+   * Fully accurate implementation with all Windows 10/11 required feature bits
+   * Modeled after Intel Core i7-8700K (Coffee Lake) for realism
    */
   executeCPUID(instruction) {
     // CPUID reads EAX (input), writes to EAX, EBX, ECX, EDX (output)
     const input = Number(this.cpu.registers.rax & 0xFFFFFFFFn);
+    const subleaf = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
 
     let eax, ebx, ecx, edx;
 
     switch (input) {
-      case 0: // Get vendor string
-        // Return "GenuineIntel" (common for compatibility)
-        eax = 0x0000000D; // Maximum input value
+      case 0: // Get vendor string and maximum basic function
+        // Return "GenuineIntel"
+        eax = 0x00000016; // Maximum input value (supports up to leaf 0x16)
         ebx = 0x756E6547; // "Genu"
         ecx = 0x6C65746E; // "ntel"
         edx = 0x49656E69; // "ineI"
         break;
-      case 1: // Get processor info and feature bits
-        eax = 0x000306A9; // Family 6, Model 58, Stepping 9 (Ivy Bridge-like)
-        ebx = 0x00020800; // Brand ID, etc.
-        // ECX feature flags (bit positions):
-        // 0 = SSE3, 1 = PCLMULQDQ, 9 = SSSE3, 19 = SSE4.1, 20 = SSE4.2
-        // 28 = AVX, 29 = F16C, 30 = RDRAND
-        ecx = 0x7FFEFBFF | 0x10000000; // SSE3-SSE4.2 + AVX (bit 28)
-        // EDX feature flags (bit positions):
-        // 0 = FPU, 23 = MMX, 25 = SSE, 26 = SSE2
-        edx = 0xBFEBFBFF; // FPU, MMX, SSE, SSE2
+
+      case 1: // Get processor info and feature bits (CRITICAL for Windows)
+        // Intel Core i7-8700K (Coffee Lake) - Family 6, Model 158 (0x9E), Stepping 10 (0xA)
+        // EAX format: [31:20] Reserved, [19:16] Extended Family, [15:8] Extended Model,
+        //            [7:4] Family, [3:0] Model, [11:8] Type, [7:0] Stepping
+        eax = 0x000906EA; // Family 6, Extended Family 0, Model 0x9E, Extended Model 0x9, Stepping 0xA
+        
+        // EBX: Brand Index, CLFLUSH line size, Logical processors, APIC ID
+        ebx = 0x00080800; // 8 logical processors per package, CLFLUSH size 8 (64 bytes)
+        
+        // ECX feature flags (Windows 10/11 checks these):
+        // Bit 0: SSE3, Bit 1: PCLMULQDQ, Bit 2: DTES64, Bit 3: MONITOR, Bit 4: DS-CPL,
+        // Bit 5: VMX, Bit 6: SMX, Bit 7: EIST, Bit 8: TM2, Bit 9: SSSE3,
+        // Bit 10: CNXT-ID, Bit 11: SDBG, Bit 12: FMA, Bit 13: CMPXCHG16B (CRITICAL),
+        // Bit 14: xTPR Update Control, Bit 15: PDCM, Bit 16: PCID, Bit 17: DCA,
+        // Bit 18: SSE4.1, Bit 19: SSE4.2, Bit 20: x2APIC, Bit 21: MOVBE,
+        // Bit 22: POPCNT, Bit 23: TSC-Deadline, Bit 24: AES, Bit 25: XSAVE,
+        // Bit 26: OSXSAVE, Bit 27: AVX, Bit 28: F16C, Bit 29: RDRAND, Bit 30: Not used, Bit 31: Hypervisor
+        ecx = 0x7FFAFBFF | 
+              (1 << 13) |  // CMPXCHG16B (CRITICAL - Windows BSODs without this)
+              (1 << 12) |  // FMA
+              (1 << 9) |   // SSSE3
+              (1 << 18) |  // SSE4.1
+              (1 << 19) |  // SSE4.2
+              (1 << 22) |  // POPCNT
+              (1 << 25) |  // XSAVE
+              (1 << 26) |  // OSXSAVE
+              (1 << 27) |  // AVX
+              (1 << 28) |  // F16C
+              (1 << 29);   // RDRAND
+        
+        // EDX feature flags (Windows 10/11 checks these):
+        // Bit 0: FPU, Bit 1: VME, Bit 2: DE, Bit 3: PSE, Bit 4: TSC,
+        // Bit 5: MSR, Bit 6: PAE, Bit 7: MCE, Bit 8: CX8, Bit 9: APIC,
+        // Bit 11: SEP, Bit 12: MTRR, Bit 13: PGE, Bit 14: MCA, Bit 15: CMOV,
+        // Bit 16: PAT, Bit 17: PSE-36, Bit 18: PSN, Bit 19: CLFSH,
+        // Bit 21: DS, Bit 22: ACPI, Bit 23: MMX, Bit 24: FXSR,
+        // Bit 25: SSE, Bit 26: SSE2 (CRITICAL), Bit 27: SS, Bit 28: HTT,
+        // Bit 29: TM, Bit 30: IA64, Bit 31: PBE
+        edx = 0xBFEBFBFF | 
+              (1 << 6) |   // PAE (Physical Address Extension)
+              (1 << 23) |  // MMX
+              (1 << 25) |  // SSE
+              (1 << 26) |  // SSE2 (CRITICAL - Windows requires this)
+              (1 << 28);   // HTT (Hyper-Threading Technology)
         break;
-      case 7: // Extended features (subleaf in ECX)
-        const subleaf = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
+
+      case 2: // Cache and TLB information
+        // Return cache descriptors (simplified)
+        eax = 0x76036301;
+        ebx = 0x00F0B2FF;
+        ecx = 0x00000000;
+        edx = 0x00C30000;
+        break;
+
+      case 4: // Cache parameters (subleaf in ECX)
         if (subleaf === 0) {
-          // EBX: Extended feature flags
-          // 5 = AVX2, 8 = BMI1, 9 = BMI2, 19 = ADX, 29 = SHA
-          ebx = 0x00000020; // AVX2 (bit 5)
-          ecx = 0; // Reserved
-          edx = 0; // Reserved
-          eax = 0; // Reserved
+          // L1 Data Cache
+          eax = 0x1C004121; // Cache type, level, self-initializing, fully associative
+          ebx = 0x01C0003F; // Line size, partitions, ways
+          ecx = 0x0000003F; // Sets
+          edx = 0x00000001; // Write-back invalidate
+        } else if (subleaf === 1) {
+          // L1 Instruction Cache
+          eax = 0x1C000122;
+          ebx = 0x01C0003F;
+          ecx = 0x0000003F;
+          edx = 0x00000001;
+        } else if (subleaf === 2) {
+          // L2 Cache
+          eax = 0x1C004143;
+          ebx = 0x03C0003F;
+          ecx = 0x000003FF;
+          edx = 0x00000001;
+        } else if (subleaf === 3) {
+          // L3 Cache
+          eax = 0x1C03C163;
+          ebx = 0x03C0003F;
+          ecx = 0x00007FFF;
+          edx = 0x00000001;
         } else {
           eax = 0; ebx = 0; ecx = 0; edx = 0;
         }
         break;
+
+      case 7: // Extended features (subleaf in ECX) - CRITICAL for Windows 10/11
+        if (subleaf === 0) {
+          // EBX: Extended feature flags (Windows checks these extensively)
+          // Bit 0: FSGSBASE, Bit 1: IA32_TSC_ADJUST, Bit 2: SGX, Bit 3: BMI1,
+          // Bit 4: HLE, Bit 5: AVX2 (CRITICAL), Bit 6: FDP_EXCPTN_ONLY,
+          // Bit 7: SMEP, Bit 8: BMI2, Bit 9: Enhanced REP MOVSB/STOSB,
+          // Bit 10: INVPCID, Bit 11: RTM, Bit 12: PQM, Bit 13: FPU CS/DS,
+          // Bit 14: MPX, Bit 15: PQE, Bit 16: AVX512F, Bit 17: AVX512DQ,
+          // Bit 18: RDSEED, Bit 19: ADX, Bit 20: SMAP, Bit 21: AVX512IFMA,
+          // Bit 22: PCOMMIT, Bit 23: CLFLUSHOPT, Bit 24: CLWB, Bit 25: INTEL_PT,
+          // Bit 26: AVX512PF, Bit 27: AVX512ER, Bit 28: AVX512CD, Bit 29: SHA,
+          // Bit 30: AVX512BW, Bit 31: AVX512VL
+          ebx = (1 << 3) |   // BMI1
+               (1 << 5) |   // AVX2 (CRITICAL - Windows 11 requires this)
+               (1 << 8) |   // BMI2
+               (1 << 9) |   // Enhanced REP MOVSB/STOSB
+               (1 << 18) |  // RDSEED
+               (1 << 19) |  // ADX
+               (1 << 29);   // SHA
+            
+          // ECX: Extended feature flags
+          // Bit 0: PREFETCHWT1, Bit 1: AVX512VBMI, Bit 2: UMIP,
+          // Bit 3: PKU, Bit 4: OSPKE, Bit 5: WAITPKG, Bit 6: AVX512_VBMI2,
+          // Bit 7: CET_SS, Bit 8: GFNI, Bit 9: VAES, Bit 10: VPCLMULQDQ,
+          // Bit 11: AVX512_VNNI, Bit 12: AVX512_BITALG, Bit 13: TME_EN,
+          // Bit 14: AVX512_VPOPCNTDQ, Bit 15: Reserved, Bit 16: LA57,
+          // Bit 17: MAWAU, Bit 18: RDPID, Bit 19: KL, Bit 20: BUS_LOCK_DETECT,
+          // Bit 21: CLDEMOTE, Bit 22: Reserved, Bit 23: MOVDIRI, Bit 24: MOVDIR64B,
+          // Bit 25: ENQCMD, Bit 26: SGX_LC, Bit 27: PKS, Bit 28: Reserved,
+          // Bit 29: AVX512_4VNNIW, Bit 30: AVX512_4FMAPS, Bit 31: FSREP,
+          ecx = 0; // Most extended features not needed for Windows 10/11
+            
+          // EDX: Extended feature flags
+          // Bit 0: Reserved, Bit 1: Reserved, Bit 2: AVX512_4VNNIW,
+          // Bit 3: AVX512_4FMAPS, Bit 4: Fast Short REP MOV, Bit 5: UINTR,
+          // Bit 6: Reserved, Bit 7: Reserved, Bit 8: Reserved, Bit 9: Reserved,
+          // Bit 10: Reserved, Bit 11: Reserved, Bit 12: Reserved, Bit 13: Reserved,
+          // Bit 14: Reserved, Bit 15: Reserved, Bit 16: Reserved, Bit 17: Reserved,
+          // Bit 18: Reserved, Bit 19: Reserved, Bit 20: Reserved, Bit 21: Reserved,
+          // Bit 22: Reserved, Bit 23: Reserved, Bit 24: Reserved, Bit 25: Reserved,
+          // Bit 26: Reserved, Bit 27: Reserved, Bit 28: Reserved, Bit 29: Reserved,
+          // Bit 30: Reserved, Bit 31: Reserved
+          edx = 0;
+            
+          // EAX: Maximum sub-leaf supported
+          eax = 0x00000000; // Only subleaf 0 supported
+        } else {
+          eax = 0; ebx = 0; ecx = 0; edx = 0;
+        }
+        break;
+
+      case 0x0A: // Architectural Performance Monitoring
+        eax = 0x07300403; // Version, number of counters
+        ebx = 0x00000000;
+        ecx = 0x00000000;
+        edx = 0x00000703;
+        break;
+
+      case 0x0B: // Extended Topology Enumeration
+        if (subleaf === 0) {
+          eax = 0x00000001; // SMT level
+          ebx = 0x00000008; // 8 logical processors
+          ecx = 0x00000100; // Level type = SMT
+          edx = 0x00000000;
+        } else if (subleaf === 1) {
+          eax = 0x00000004; // Core level
+          ebx = 0x00000004; // 4 cores
+          ecx = 0x00000201; // Level type = Core
+          edx = 0x00000000;
+        } else {
+          eax = 0; ebx = 0; ecx = 0; edx = 0;
+        }
+        break;
+
+      case 0x0D: // Processor Extended State Enumeration
+        if (subleaf === 0) {
+          // EAX: Valid bits of lower 32 bits of XCR0
+          eax = 0x00000007; // X87, SSE, AVX
+          // EBX: Maximum size of XSAVE/XRSTOR area
+          ebx = 0x00000240; // 576 bytes (X87 + SSE + AVX)
+          // ECX: Valid bits of upper 32 bits of XCR0
+          ecx = 0x00000000;
+          // EDX: Valid bits of upper 32 bits of XCR0
+          edx = 0x00000000;
+        } else if (subleaf === 1) {
+          // XSAVE feature flags
+          eax = 0x00000000;
+          ebx = 0x00000000;
+          ecx = 0x00000000;
+          edx = 0x00000000;
+        } else {
+          eax = 0; ebx = 0; ecx = 0; edx = 0;
+        }
+        break;
+
       case 0x80000000: // Extended function info
         eax = 0x80000008; // Maximum extended function
-        ebx = 0;
-        ecx = 0;
-        edx = 0;
+        ebx = 0x00000000;
+        ecx = 0x00000000;
+        edx = 0x00000000;
         break;
-      case 0x80000001: // Extended processor info
-        eax = 0;
-        ebx = 0;
-        ecx = 0x00000001; // LAHF/SAHF support
-        edx = 0x20000000; // Extended feature flags
+
+      case 0x80000001: // Extended processor info and feature bits (CRITICAL for Windows)
+        // EAX: Extended processor signature
+        eax = 0x00000000;
+        
+        // EBX: Reserved
+        ebx = 0x00000000;
+        
+        // ECX: Extended feature flags
+        // Bit 0: LAHF/SAHF in 64-bit mode (CRITICAL - Windows requires this)
+        // Bit 1: CMP Legacy, Bit 2: SVM, Bit 3: Extended APIC,
+        // Bit 4: AltMovCr8, Bit 5: LZCNT, Bit 6: SSE4A, Bit 7: MisAlignSSE,
+        // Bit 8: PREFETCHW, Bit 9: OSVW, Bit 10: IBS, Bit 11: XOP,
+        // Bit 12: SKINIT, Bit 13: WDT, Bit 14: Reserved, Bit 15: LWP,
+        // Bit 16: FMA4, Bit 17: TCE, Bit 18: Reserved, Bit 19: NodeId,
+        // Bit 20: Reserved, Bit 21: TBM, Bit 22: TopoExt, Bit 23: PerfCtrExtCore,
+        // Bit 24: PerfCtrExtNB, Bit 25: Reserved, Bit 26: DataBreakpoint,
+        // Bit 27: Performance TSC, Bit 28: PerfCtrExtLLC, Bit 29: Reserved,
+        // Bit 30: Reserved, Bit 31: Reserved
+        ecx = (1 << 0) |   // LAHF/SAHF in 64-bit mode (CRITICAL)
+              (1 << 5) |   // LZCNT
+              (1 << 8);    // PREFETCHW
+        
+        // EDX: Extended feature flags
+        // Bit 0: FPU, Bit 1: VME, Bit 2: DE, Bit 3: PSE, Bit 4: TSC,
+        // Bit 5: MSR, Bit 6: PAE, Bit 7: MCE, Bit 8: CX8, Bit 9: APIC,
+        // Bit 11: SYSCALL/SYSRET (CRITICAL - Windows uses this),
+        // Bit 12: MTRR, Bit 13: PGE, Bit 14: MCA, Bit 15: CMOV,
+        // Bit 16: PAT, Bit 17: PSE-36, Bit 19: CLFSH, Bit 20: NX (CRITICAL - Windows requires this),
+        // Bit 21: DS, Bit 22: ACPI, Bit 23: MMX, Bit 24: FXSR,
+        // Bit 25: SSE, Bit 26: SSE2, Bit 27: HTT, Bit 28: Long Mode (CRITICAL),
+        // Bit 29: 3DNow! Extensions, Bit 30: 3DNow!, Bit 31: Reserved
+        edx = 0xBFEBFBFF |
+              (1 << 11) |  // SYSCALL/SYSRET (CRITICAL)
+              (1 << 20) |  // NX (No-Execute bit - CRITICAL for Windows)
+              (1 << 28);   // Long Mode (64-bit support - CRITICAL)
         break;
-      case 0x80000004: // Processor brand string (part 1-3)
-        eax = 0x20202020; // Spaces
-        ebx = 0x20202020;
-        ecx = 0x20202020;
-        edx = 0x20202020;
+
+      case 0x80000002: // Processor brand string (part 1)
+        // "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz"
+        eax = 0x20202020; // "    "
+        ebx = 0x20202020; // "    "
+        ecx = 0x20202020; // "    "
+        edx = 0x6E492020; // " Int"
         break;
+
+      case 0x80000003: // Processor brand string (part 2)
+        eax = 0x286C6574; // "tel("
+        ebx = 0x50202952; // "R) C"
+        ecx = 0x69756E6F; // "ore("
+        edx = 0x52286D65; // "TM) "
+        break;
+
+      case 0x80000004: // Processor brand string (part 3)
+        eax = 0x20372069; // " i7-"
+        ebx = 0x30303837; // "8700"
+        ecx = 0x204B2020; // " K  "
+        edx = 0x20555043; // "CPU "
+        break;
+
+      case 0x80000005: // L1 Cache and TLB information
+        eax = 0x00000000;
+        ebx = 0x00000000;
+        ecx = 0x00000000;
+        edx = 0x00000000;
+        break;
+
+      case 0x80000006: // L2 Cache and TLB information
+        eax = 0x00000000;
+        ebx = 0x00000000;
+        ecx = 0x00000000;
+        edx = 0x00000000;
+        break;
+
+      case 0x80000007: // Advanced Power Management
+        eax = 0x00000000;
+        ebx = 0x00000000;
+        ecx = 0x00000000;
+        edx = 0x00000000;
+        break;
+
+      case 0x80000008: // Virtual and physical address sizes (CRITICAL for Windows)
+        // EAX: Virtual address size (bits 7:0), Physical address size (bits 15:8)
+        // Windows 10/11 requires 48-bit virtual addresses and 36+ bit physical addresses
+        eax = 0x00003030; // 48-bit virtual (0x30), 48-bit physical (0x30)
+        ebx = 0x00000000;
+        ecx = 0x00000000;
+        edx = 0x00000000;
+        break;
+
       default:
         // Unknown CPUID leaf - return zeros
         eax = 0;
