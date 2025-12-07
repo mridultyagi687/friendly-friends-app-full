@@ -29,6 +29,8 @@ class UEFIFirmware {
       locateProtocol: this.locateProtocol.bind(this),
       locateHandleBuffer: this.locateHandleBuffer.bind(this),
       handleProtocol: this.handleProtocol.bind(this),
+      exitBootServices: this.exitBootServices.bind(this),
+      getMemoryMap: this.getMemoryMap.bind(this),
     };
     this.runtimeServices = {
       // UEFI Runtime Services (simplified)
@@ -36,6 +38,8 @@ class UEFIFirmware {
       setTime: this.setTime.bind(this),
     };
     this.efiSystemTable = null;
+    this.bootServicesExited = false;
+    this.memoryMapKey = 0x12345678n; // Memory map key
   }
 
   /**
@@ -386,6 +390,129 @@ class UEFIFirmware {
   getSystemTableAddress() {
     // TODO: Return actual address in memory
     return 0x100000n; // Placeholder
+  }
+
+  /**
+   * UEFI Boot Service: Exit Boot Services
+   * Called by OS when it's ready to take control
+   * @param {bigint} imageHandle - Handle of the image
+   * @param {bigint} mapKey - Memory map key
+   * @returns {boolean} - True if successful
+   */
+  exitBootServices(imageHandle, mapKey) {
+    console.log('UEFI: Exit Boot Services called');
+    console.log(`  Image Handle: 0x${imageHandle.toString(16)}`);
+    console.log(`  Map Key: 0x${mapKey.toString(16)}`);
+    
+    // Validate map key
+    if (mapKey !== this.memoryMapKey) {
+      console.error('UEFI: Invalid memory map key');
+      return false;
+    }
+    
+    // Mark boot services as exited
+    this.bootServicesExited = true;
+    
+    // Disable boot services (they're no longer available)
+    this.bootServices = null;
+    
+    // Clear boot services from system table
+    // In a real implementation, we'd update the EFI System Table
+    
+    console.log('UEFI: Boot services exited successfully');
+    return true;
+  }
+
+  /**
+   * UEFI Boot Service: Get Memory Map
+   * Returns the current memory map
+   * @param {bigint} memoryMapSize - Pointer to size of memory map buffer
+   * @param {bigint} memoryMap - Pointer to memory map buffer
+   * @param {bigint} mapKey - Pointer to memory map key
+   * @param {bigint} descriptorSize - Pointer to descriptor size
+   * @param {bigint} descriptorVersion - Pointer to descriptor version
+   * @returns {number} - EFI_STATUS code
+   */
+  getMemoryMap(memoryMapSize, memoryMap, mapKey, descriptorSize, descriptorVersion) {
+    console.log('UEFI: Get Memory Map called');
+    
+    // Memory map descriptor structure (EFI_MEMORY_DESCRIPTOR):
+    // - Type (UINT32)
+    // - PhysicalStart (UINT64)
+    // - VirtualStart (UINT64)
+    // - NumberOfPages (UINT64)
+    // - Attribute (UINT64)
+    
+    const descriptorSizeValue = 48; // 48 bytes per descriptor
+    const descriptorVersion = 1;
+    
+    // Create memory map descriptors
+    const descriptors = [];
+    
+    // Descriptor 1: Available memory (0x00000000 - 0x7FFFFFFF)
+    descriptors.push({
+      type: 6, // EfiConventionalMemory
+      physicalStart: 0x00000000n,
+      virtualStart: 0x00000000n,
+      numberOfPages: 0x80000n, // 2GB in 4KB pages
+      attribute: 0x000000000000000Fn, // EFI_MEMORY_WB (Write Back)
+    });
+    
+    // Descriptor 2: Reserved memory (0x80000000 - 0xFFFFFFFF)
+    descriptors.push({
+      type: 10, // EfiReservedMemoryType
+      physicalStart: 0x80000000n,
+      virtualStart: 0x80000000n,
+      numberOfPages: 0x80000n, // 2GB in 4KB pages
+      attribute: 0x0000000000000000n,
+    });
+    
+    // Calculate required buffer size
+    const requiredSize = descriptors.length * descriptorSizeValue;
+    
+    // Check if buffer is large enough
+    const currentSize = this.memory.readDword(Number(memoryMapSize));
+    if (currentSize < requiredSize) {
+      // Update size and return BUFFER_TOO_SMALL
+      this.memory.writeDword(Number(memoryMapSize), requiredSize);
+      return 5; // EFI_BUFFER_TOO_SMALL
+    }
+    
+    // Write descriptors to memory
+    let offset = 0;
+    for (const desc of descriptors) {
+      const addr = Number(memoryMap) + offset;
+      
+      // Type (UINT32)
+      this.memory.writeDword(addr, desc.type);
+      
+      // PhysicalStart (UINT64)
+      this.memory.writeQword(addr + 4, desc.physicalStart);
+      
+      // VirtualStart (UINT64)
+      this.memory.writeQword(addr + 12, desc.virtualStart);
+      
+      // NumberOfPages (UINT64)
+      this.memory.writeQword(addr + 20, desc.numberOfPages);
+      
+      // Attribute (UINT64)
+      this.memory.writeQword(addr + 28, desc.attribute);
+      
+      // Padding (UINT64) - descriptor is 48 bytes
+      this.memory.writeQword(addr + 36, 0n);
+      
+      offset += descriptorSizeValue;
+    }
+    
+    // Update output parameters
+    this.memory.writeDword(Number(memoryMapSize), requiredSize);
+    this.memory.writeQword(Number(mapKey), this.memoryMapKey);
+    this.memory.writeDword(Number(descriptorSize), descriptorSizeValue);
+    this.memory.writeDword(Number(descriptorVersion), descriptorVersion);
+    
+    console.log(`UEFI: Memory map returned (${descriptors.length} descriptors, ${requiredSize} bytes)`);
+    
+    return 0; // EFI_SUCCESS
   }
 }
 

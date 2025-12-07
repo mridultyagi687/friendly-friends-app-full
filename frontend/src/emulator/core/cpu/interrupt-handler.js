@@ -146,8 +146,140 @@ class InterruptHandler {
   }
 
   handlePageFault(errorCode) {
-    console.error('Interrupt: Page Fault (0x0E)');
-    // TODO: Handle page fault - load page from disk, etc.
+    // Page fault error code format:
+    // Bit 0: P (Present) - 0 = page not present, 1 = protection violation
+    // Bit 1: W/R (Write/Read) - 0 = read, 1 = write
+    // Bit 2: U/S (User/Supervisor) - 0 = supervisor, 1 = user
+    // Bit 3: RSVD - Reserved bit set
+    // Bit 4: I/D (Instruction/Data) - 0 = data, 1 = instruction fetch
+    
+    const present = (errorCode & 0x01) === 0;
+    const write = (errorCode & 0x02) !== 0;
+    const user = (errorCode & 0x04) !== 0;
+    const instruction = (errorCode & 0x10) !== 0;
+    
+    // Get faulting address from CR2
+    const faultAddress = this.cpu.registers.cr2 || 0n;
+    
+    console.log(`Interrupt: Page Fault (0x0E) at 0x${faultAddress.toString(16)}`);
+    console.log(`  Error Code: 0x${errorCode.toString(16)} (P=${present}, W=${write}, U=${user}, I=${instruction})`);
+    
+    // Try to handle the page fault
+    if (this.memory && this.memory.getVirtualMemory) {
+      const vmm = this.memory.getVirtualMemory();
+      
+      // If page not present, try to map it
+      if (present) {
+        // Page not present - try demand paging
+        const page = faultAddress & 0xFFFFFFFFFFFFF000n; // Page-aligned
+        
+        // Allocate a physical page
+        const physicalPage = this.allocatePhysicalPage(page);
+        if (physicalPage !== null) {
+          // Create page table entry
+          const flags = vmm.PTE_PRESENT | vmm.PTE_WRITABLE | vmm.PTE_USER;
+          const pte = vmm.createPTE(physicalPage, flags);
+          
+          // Find or create page table entry
+          const pteAddr = this.findOrCreatePTE(vmm, faultAddress);
+          if (pteAddr !== null) {
+            vmm.writePTE(pteAddr, pte);
+            vmm.invalidateTLBEntry(faultAddress);
+            console.log(`Page Fault: Mapped page 0x${page.toString(16)} to 0x${physicalPage.toString(16)}`);
+            return true; // Page fault handled
+          }
+        }
+      }
+    }
+    
+    // If we can't handle it, log error
+    console.error(`Page Fault: Could not handle page fault at 0x${faultAddress.toString(16)}`);
+    return false; // Page fault not handled
+  }
+
+  /**
+   * Allocate a physical page for demand paging
+   * @param {bigint} virtualPage - Virtual page address
+   * @returns {bigint|null} - Physical page address or null
+   */
+  allocatePhysicalPage(virtualPage) {
+    if (!this.memory) {
+      return null;
+    }
+    
+    // Try to allocate a page from physical memory
+    // For now, use identity mapping (virtual = physical)
+    // In a real system, we'd use a page frame allocator
+    const physicalPage = virtualPage;
+    
+    // Ensure the page is allocated in physical memory
+    const pageNumber = this.memory.getPageNumber(Number(physicalPage));
+    const page = this.memory.allocatePage(pageNumber);
+    
+    if (page) {
+      return physicalPage;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Find or create page table entry for virtual address
+   * @param {VirtualMemoryManager} vmm - Virtual memory manager
+   * @param {bigint} virtualAddress - Virtual address
+   * @returns {bigint|null} - PTE address or null
+   */
+  findOrCreatePTE(vmm, virtualAddress) {
+    if (vmm.getCR3() === 0n) {
+      return null; // Paging not enabled
+    }
+    
+    try {
+      // Walk page tables to find/create PTE
+      const pml4Index = vmm.getPageTableIndex(virtualAddress, 0);
+      const pml4EntryAddr = vmm.getCR3() + BigInt(pml4Index * 8);
+      let pml4Entry = vmm.readPTE(pml4EntryAddr);
+      
+      if ((pml4Entry & vmm.PTE_PRESENT) === 0n) {
+        // Create PDPT
+        const pdpt = vmm.allocatePageTable();
+        pml4Entry = vmm.createPTE(pdpt, vmm.PTE_PRESENT | vmm.PTE_WRITABLE);
+        vmm.writePTE(pml4EntryAddr, pml4Entry);
+      }
+      
+      const pdptBase = pml4Entry & 0xFFFFFFFFFFFFF000n;
+      const pdptIndex = vmm.getPageTableIndex(virtualAddress, 1);
+      let pdptEntryAddr = pdptBase + BigInt(pdptIndex * 8);
+      let pdptEntry = vmm.readPTE(pdptEntryAddr);
+      
+      if ((pdptEntry & vmm.PTE_PRESENT) === 0n) {
+        // Create PD
+        const pd = vmm.allocatePageTable();
+        pdptEntry = vmm.createPTE(pd, vmm.PTE_PRESENT | vmm.PTE_WRITABLE);
+        vmm.writePTE(pdptEntryAddr, pdptEntry);
+      }
+      
+      const pdBase = pdptEntry & 0xFFFFFFFFFFFFF000n;
+      const pdIndex = vmm.getPageTableIndex(virtualAddress, 2);
+      let pdEntryAddr = pdBase + BigInt(pdIndex * 8);
+      let pdEntry = vmm.readPTE(pdEntryAddr);
+      
+      if ((pdEntry & vmm.PTE_PRESENT) === 0n) {
+        // Create PT
+        const pt = vmm.allocatePageTable();
+        pdEntry = vmm.createPTE(pt, vmm.PTE_PRESENT | vmm.PTE_WRITABLE);
+        vmm.writePTE(pdEntryAddr, pdEntry);
+      }
+      
+      const ptBase = pdEntry & 0xFFFFFFFFFFFFF000n;
+      const ptIndex = vmm.getPageTableIndex(virtualAddress, 3);
+      const ptEntryAddr = ptBase + BigInt(ptIndex * 8);
+      
+      return ptEntryAddr;
+    } catch (error) {
+      console.error('Page Fault: Error finding/creating PTE:', error);
+      return null;
+    }
   }
 
   handleMathFault(errorCode) {

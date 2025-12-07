@@ -146,9 +146,28 @@ class MemoryManager {
     
     const physical = this.virtualMemory.translateAddress(virtualAddress, write);
     if (physical === null) {
-      // Page fault - for now, return identity mapping
-      // TODO: Implement proper page fault handler
-      console.warn(`Memory: Page fault at 0x${virtualAddress.toString(16)}, using identity mapping`);
+      // Page fault - trigger interrupt
+      if (this.cpu && this.cpu.interruptHandler) {
+        // Set CR2 (faulting address)
+        this.cpu.registers.cr2 = virtualAddress;
+        
+        // Create error code
+        let errorCode = 0;
+        if (write) errorCode |= 0x02; // Write
+        // TODO: Add user/supervisor and instruction/data bits
+        
+        // Trigger page fault interrupt (0x0E)
+        this.cpu.interruptHandler.handleInterrupt(0x0E, errorCode);
+        
+        // Try translation again (page fault handler may have fixed it)
+        const retryPhysical = this.virtualMemory.translateAddress(virtualAddress, write);
+        if (retryPhysical !== null) {
+          return retryPhysical;
+        }
+      }
+      
+      // If page fault handler didn't fix it, use identity mapping as fallback
+      console.warn(`Memory: Page fault at 0x${virtualAddress.toString(16)} not handled, using identity mapping`);
       return virtualAddress;
     }
     
