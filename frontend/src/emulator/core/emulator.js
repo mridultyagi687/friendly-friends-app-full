@@ -63,6 +63,9 @@ class CustomEmulator {
     this.diskController.init(); // Initialize disk controller
     this.apic.init(); // Initialize APIC
     
+    // Register APIC as memory-mapped I/O device (0xFEE00000 - 0xFEE00FFF, 4KB)
+    this.memory.registerMMIODevice(0xFEE00000n, 0x1000n, this.apic);
+    
     // Initialize Graphics Output Protocol (needs VGA)
     this.gop = new GraphicsOutputProtocol(this.memory, this.vga);
     this.gop.init();

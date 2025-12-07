@@ -24,8 +24,37 @@ class MemoryManager {
     this.pagingEnabled = false; // Paging disabled by default
     this.cpu = null; // Will be set by emulator for page fault handling
     
+    // Memory-mapped I/O devices
+    this.mmioDevices = new Map(); // address -> device handler
+    
     console.log(`Memory: Initialized with ${this.size / (1024 * 1024 * 1024)}GB addressable space`);
     console.log(`Memory: Using sparse paging (max ${this.maxAllocatedPages * this.pageSize / (1024 * 1024)}MB physical allocation)`);
+  }
+
+  /**
+   * Register a memory-mapped I/O device
+   * @param {bigint} baseAddress - Base address of device
+   * @param {bigint} size - Size of device address space
+   * @param {Object} device - Device object with readRegister/writeRegister methods
+   */
+  registerMMIODevice(baseAddress, size, device) {
+    this.mmioDevices.set(Number(baseAddress), { base: baseAddress, size, device });
+    console.log(`Memory: Registered MMIO device at 0x${baseAddress.toString(16)}, size 0x${size.toString(16)}`);
+  }
+
+  /**
+   * Check if address is in MMIO range
+   * @param {bigint} address - Address to check
+   * @returns {Object|null} - MMIO device info or null
+   */
+  getMMIODevice(address) {
+    for (const [base, info] of this.mmioDevices.entries()) {
+      const baseAddr = BigInt(base);
+      if (address >= baseAddr && address < (baseAddr + info.size)) {
+        return info;
+      }
+    }
+    return null;
   }
 
   /**
@@ -199,6 +228,14 @@ class MemoryManager {
   readByte(address) {
     const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
     const physicalAddr = this.translateAddress(virtualAddr, false);
+    
+    // Check for memory-mapped I/O
+    const mmio = this.getMMIODevice(physicalAddr);
+    if (mmio) {
+      const offset = Number(physicalAddr - mmio.base);
+      return mmio.device.readRegister(offset, 8) & 0xFF;
+    }
+    
     const addr = Number(physicalAddr);
     
     if (addr < 0 || addr >= this.size) {
@@ -266,13 +303,25 @@ class MemoryManager {
   writeByte(address, value) {
     const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
     
-    // Check write protection (WP bit)
-    if (!this.checkWritePermission(virtualAddr)) {
-      // Write blocked - page fault already triggered
+    // Check write protection (WP bit) - but not for MMIO
+    const physicalAddr = this.translateAddress(virtualAddr, true);
+    const mmio = this.getMMIODevice(physicalAddr);
+    
+    if (!mmio) {
+      // Regular memory - check write protection
+      if (!this.checkWritePermission(virtualAddr)) {
+        // Write blocked - page fault already triggered
+        return;
+      }
+    }
+    
+    // Check for memory-mapped I/O
+    if (mmio) {
+      const offset = Number(physicalAddr - mmio.base);
+      mmio.device.writeRegister(offset, value, 8);
       return;
     }
     
-    const physicalAddr = this.translateAddress(virtualAddr, true);
     const addr = Number(physicalAddr);
     
     if (addr < 0 || addr >= this.size) {
@@ -309,6 +358,17 @@ class MemoryManager {
    * @param {number} value - 16-bit value
    */
   writeWord(address, value) {
+    const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
+    const physicalAddr = this.translateAddress(virtualAddr, true);
+    
+    // Check for memory-mapped I/O
+    const mmio = this.getMMIODevice(physicalAddr);
+    if (mmio) {
+      const offset = Number(physicalAddr - mmio.base);
+      mmio.device.writeRegister(offset, value, 16);
+      return;
+    }
+    
     const addr = typeof address === 'bigint' ? Number(address) : address;
     this.writeByte(addr, value & 0xFF);
     this.writeByte(addr + 1, (value >> 8) & 0xFF);
@@ -320,6 +380,16 @@ class MemoryManager {
    * @returns {number} - 32-bit value
    */
   readDword(address) {
+    const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
+    const physicalAddr = this.translateAddress(virtualAddr, false);
+    
+    // Check for memory-mapped I/O
+    const mmio = this.getMMIODevice(physicalAddr);
+    if (mmio) {
+      const offset = Number(physicalAddr - mmio.base);
+      return mmio.device.readRegister(offset, 32) >>> 0; // Convert to unsigned 32-bit
+    }
+    
     const addr = typeof address === 'bigint' ? Number(address) : address;
     return this.readWord(addr) | (this.readWord(addr + 2) << 16);
   }
@@ -330,6 +400,17 @@ class MemoryManager {
    * @param {number} value - 32-bit value
    */
   writeDword(address, value) {
+    const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
+    const physicalAddr = this.translateAddress(virtualAddr, true);
+    
+    // Check for memory-mapped I/O
+    const mmio = this.getMMIODevice(physicalAddr);
+    if (mmio) {
+      const offset = Number(physicalAddr - mmio.base);
+      mmio.device.writeRegister(offset, value, 32);
+      return;
+    }
+    
     const addr = typeof address === 'bigint' ? Number(address) : address;
     this.writeWord(addr, value & 0xFFFF);
     this.writeWord(addr + 2, (value >> 16) & 0xFFFF);
@@ -341,6 +422,19 @@ class MemoryManager {
    * @returns {bigint} - 64-bit value
    */
   readQword(address) {
+    const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
+    const physicalAddr = this.translateAddress(virtualAddr, false);
+    
+    // Check for memory-mapped I/O
+    const mmio = this.getMMIODevice(physicalAddr);
+    if (mmio) {
+      const offset = Number(physicalAddr - mmio.base);
+      // Read as two 32-bit values
+      const low = BigInt(mmio.device.readRegister(offset, 32) >>> 0);
+      const high = BigInt(mmio.device.readRegister(offset + 4, 32) >>> 0);
+      return low | (high << 32n);
+    }
+    
     const addr = typeof address === 'bigint' ? Number(address) : address;
     const lowDword = this.readDword(addr);
     const highDword = this.readDword(addr + 4);
@@ -356,6 +450,19 @@ class MemoryManager {
    * @param {bigint} value - 64-bit value
    */
   writeQword(address, value) {
+    const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
+    const physicalAddr = this.translateAddress(virtualAddr, true);
+    
+    // Check for memory-mapped I/O
+    const mmio = this.getMMIODevice(physicalAddr);
+    if (mmio) {
+      const offset = Number(physicalAddr - mmio.base);
+      // Write as two 32-bit values
+      mmio.device.writeRegister(offset, Number(value & 0xFFFFFFFFn), 32);
+      mmio.device.writeRegister(offset + 4, Number((value >> 32n) & 0xFFFFFFFFn), 32);
+      return;
+    }
+    
     const addr = typeof address === 'bigint' ? Number(address) : address;
     this.writeDword(addr, Number(value & 0xFFFFFFFFn));
     this.writeDword(addr + 4, Number((value >> 32n) & 0xFFFFFFFFn));
