@@ -16,8 +16,12 @@ class GraphicsOutputProtocol {
     this.protocolGuid = null;
     this.protocolInstalled = false;
     
-    // Define installProtocol immediately in constructor to ensure it's always available
-    this.installProtocol = this.installProtocol.bind(this);
+    // Define installProtocol as instance method immediately
+    this.installProtocol = () => {
+      console.log('GOP: Installing Graphics Output Protocol');
+      this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+      this.protocolInstalled = true;
+    };
     
     this.currentMode = {
       maxMode: 1,
@@ -223,17 +227,8 @@ class GraphicsOutputProtocol {
   /**
    * Install protocol (register with UEFI system)
    * This makes the protocol available via locateProtocol
+   * Note: Defined in constructor as arrow function to ensure it's always available
    */
-  installProtocol() {
-    if (!this) {
-      console.error('GOP: installProtocol called without context');
-      return;
-    }
-    console.log('GOP: Installing Graphics Output Protocol');
-    // Protocol is now available via UEFI firmware's locateProtocol
-    this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97'; // EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID
-    this.protocolInstalled = true;
-  }
 
   /**
    * Get protocol interface (for locateProtocol)
