@@ -27,6 +27,16 @@ class InstructionExecutor {
         case 'NOP':
           return this.executeNOP(instruction);
         case 'MOV':
+          // Check if this is MOV to/from CR register (0x0F 0x20/0x22)
+          if (instruction.opcode.mnemonic === 'MOV_CR') {
+            if (instruction.opcode.rToM) {
+              // MOV r32, CR0-CR4 (0x0F 0x20)
+              return this.executeMOVCR(instruction, true);
+            } else {
+              // MOV CR0-CR4, r32 (0x0F 0x22)
+              return this.executeMOVCR(instruction, false);
+            }
+          }
           return this.executeMOV(instruction);
         case 'PUSH':
           return this.executePUSH(instruction);
@@ -128,6 +138,15 @@ class InstructionExecutor {
           return this.executeWRMSR(instruction);
         case 'RDMSR':
           return this.executeRDMSR(instruction);
+        case 'LGDT':
+        case 'LIDT':
+        case 'SGDT':
+        case 'SIDT':
+          return this.executeGDTIDT(instruction);
+        case 'LTR':
+          return this.executeLTR(instruction);
+        case 'INVLPG':
+          return this.executeINVLPG(instruction);
         case 'ADC':
           return this.executeADC(instruction);
         case 'SBB':

@@ -5,7 +5,11 @@
  * 
  * Uses sparse/paged memory model to support large address spaces (50GB+)
  * without allocating all memory upfront (browsers limit ArrayBuffer to ~2GB)
+ * 
+ * Enhanced with virtual memory support
  */
+
+import VirtualMemoryManager from './virtual-memory.js';
 
 class MemoryManager {
   constructor(size = 50 * 1024 * 1024 * 1024) { // 50GB default addressable space
@@ -14,6 +18,10 @@ class MemoryManager {
     this.pageTable = new Map(); // Sparse page table: pageNumber -> ArrayBuffer
     this.allocatedPages = 0; // Track number of allocated pages
     this.maxAllocatedPages = Math.floor((2 * 1024 * 1024 * 1024) / this.pageSize); // ~2GB max physical allocation (browser limit)
+    
+    // Virtual memory manager
+    this.virtualMemory = new VirtualMemoryManager(this);
+    this.pagingEnabled = false; // Paging disabled by default
     
     console.log(`Memory: Initialized with ${this.size / (1024 * 1024 * 1024)}GB addressable space`);
     console.log(`Memory: Using sparse paging (max ${this.maxAllocatedPages * this.pageSize / (1024 * 1024)}MB physical allocation)`);
@@ -97,15 +105,65 @@ class MemoryManager {
       this.allocatePage(i);
     }
     console.log(`Memory: Pre-allocated ${preAllocPages} pages (${preAllocPages * this.pageSize / (1024 * 1024)}MB)`);
+    
+    // Initialize virtual memory
+    this.virtualMemory.init();
+  }
+
+  /**
+   * Enable/disable paging
+   * @param {boolean} enabled - Enable paging
+   */
+  setPagingEnabled(enabled) {
+    this.pagingEnabled = enabled;
+    if (enabled) {
+      console.log('Memory: Paging enabled');
+    } else {
+      console.log('Memory: Paging disabled');
+      this.virtualMemory.invalidateTLB();
+    }
+  }
+
+  /**
+   * Get virtual memory manager
+   * @returns {VirtualMemoryManager} - Virtual memory manager
+   */
+  getVirtualMemory() {
+    return this.virtualMemory;
+  }
+
+  /**
+   * Translate virtual address to physical address
+   * @param {bigint} virtualAddress - Virtual address
+   * @param {boolean} write - Is this a write operation?
+   * @returns {bigint} - Physical address
+   */
+  translateAddress(virtualAddress, write = false) {
+    if (!this.pagingEnabled || this.virtualMemory.getCR3() === 0n) {
+      // Paging disabled - identity mapping
+      return virtualAddress;
+    }
+    
+    const physical = this.virtualMemory.translateAddress(virtualAddress, write);
+    if (physical === null) {
+      // Page fault - for now, return identity mapping
+      // TODO: Implement proper page fault handler
+      console.warn(`Memory: Page fault at 0x${virtualAddress.toString(16)}, using identity mapping`);
+      return virtualAddress;
+    }
+    
+    return physical;
   }
 
   /**
    * Read byte from address
-   * @param {number|bigint} address - Memory address
+   * @param {number|bigint} address - Memory address (virtual if paging enabled)
    * @returns {number} - Byte value (0 if page not allocated)
    */
   readByte(address) {
-    const addr = typeof address === 'bigint' ? Number(address) : address;
+    const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
+    const physicalAddr = this.translateAddress(virtualAddr, false);
+    const addr = Number(physicalAddr);
     
     if (addr < 0 || addr >= this.size) {
       throw new Error(`Memory access violation at address 0x${addr.toString(16)}`);
@@ -123,11 +181,13 @@ class MemoryManager {
 
   /**
    * Write byte to address
-   * @param {number|bigint} address - Memory address
+   * @param {number|bigint} address - Memory address (virtual if paging enabled)
    * @param {number} value - Byte value (0-255)
    */
   writeByte(address, value) {
-    const addr = typeof address === 'bigint' ? Number(address) : address;
+    const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
+    const physicalAddr = this.translateAddress(virtualAddr, true);
+    const addr = Number(physicalAddr);
     
     if (addr < 0 || addr >= this.size) {
       throw new Error(`Memory access violation at address 0x${addr.toString(16)}`);

@@ -237,6 +237,8 @@ class InstructionDecoder {
       // Loop instructions
       0xE2: { mnemonic: 'LOOP', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
       0xE1: { mnemonic: 'LOOPE', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
+      // System instructions (0F prefix)
+      // These will be handled in parseTwoByteOpcode
       0xE0: { mnemonic: 'LOOPNE', length: 1, needsModRM: false, hasImmediate: true, immediateSize: 1, relative: true },
       // Multiplication and division (0xF6/0xF7 - reg field selects operation)
       0xF6: { mnemonic: 'MULDIV', length: 1, needsModRM: true, hasImmediate: false }, // MUL/DIV/IMUL/IDIV/NEG/TEST (reg field selects)
@@ -343,7 +345,7 @@ class InstructionDecoder {
 
     // Standard SSE instructions (no prefix or with 0xF2)
     const twoByteOpcodes = {
-      0x01: { mnemonic: 'SYSTEM', length: 2, needsModRM: true, hasImmediate: false }, // LGDT/LIDT/INVLPG (0x0F 0x01, reg field selects)
+      0x01: { mnemonic: 'LGDT', length: 2, needsModRM: true, hasImmediate: false }, // LGDT/LIDT/SGDT/SIDT (0x0F 0x01, mod field selects)
       0x10: { mnemonic: 'MOVUPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVUPS (0x0F 0x10)
       0x11: { mnemonic: 'MOVUPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVUPS store (0x0F 0x11)
       0x20: { mnemonic: 'MOV_CR', length: 2, needsModRM: true, hasImmediate: false }, // MOV CR (0x0F 0x20)
