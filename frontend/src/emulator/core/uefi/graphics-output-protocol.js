@@ -13,6 +13,8 @@ class GraphicsOutputProtocol {
     this.info = null;
     this.framebufferAddress = 0xB8000; // Standard VGA text mode address
     this.graphicsFramebufferAddress = 0xE0000000; // Graphics framebuffer address
+    this.protocolGuid = null;
+    this.protocolInstalled = false;
     this.currentMode = {
       maxMode: 1,
       mode: 0,
@@ -219,6 +221,10 @@ class GraphicsOutputProtocol {
    * This makes the protocol available via locateProtocol
    */
   installProtocol() {
+    if (!this) {
+      console.error('GOP: installProtocol called without context');
+      return;
+    }
     console.log('GOP: Installing Graphics Output Protocol');
     // Protocol is now available via UEFI firmware's locateProtocol
     this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97'; // EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID
