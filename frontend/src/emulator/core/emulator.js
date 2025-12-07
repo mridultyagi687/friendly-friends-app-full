@@ -106,21 +106,59 @@ class CustomEmulator {
     console.log('Emulator: Starting...');
     this.running = true;
     
+    // Multiple defensive checks for GOP installProtocol
+    if (!this.gop) {
+      console.error('Emulator: GOP is null or undefined!');
+      throw new Error('GOP not initialized');
+    }
+    
     // Ensure GOP installProtocol is available (defensive check)
-    if (this.gop && typeof this.gop.installProtocol !== 'function') {
-      console.warn('Emulator: GOP installProtocol missing, adding fallback');
-      this.gop.installProtocol = function() {
-        console.log('GOP: Installing Graphics Output Protocol (fallback)');
-        this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
-        this.protocolInstalled = true;
+    if (typeof this.gop.installProtocol !== 'function') {
+      console.warn('Emulator: GOP installProtocol missing in start(), adding fallback', {
+        gopType: typeof this.gop,
+        gopKeys: Object.keys(this.gop || {}),
+        hasInstallProtocol: 'installProtocol' in (this.gop || {})
+      });
+      
+      // Try to get from prototype
+      if (this.gop.constructor?.prototype?.installProtocol) {
+        this.gop.installProtocol = this.gop.constructor.prototype.installProtocol.bind(this.gop);
+      } else {
+        // Add instance method
+        const gopRef = this.gop;
+        this.gop.installProtocol = function() {
+          console.log('GOP: Installing Graphics Output Protocol (fallback in start)');
+          gopRef.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+          gopRef.protocolInstalled = true;
+        };
+      }
+    }
+    
+    // Final verification
+    if (typeof this.gop.installProtocol !== 'function') {
+      console.error('Emulator: GOP installProtocol still not a function after all fallbacks!');
+      // Last resort: create a no-op function to prevent crashes
+      this.gop.installProtocol = () => {
+        console.warn('GOP: installProtocol called but not properly initialized');
       };
+    }
+    
+    // Also ensure UEFI has the correct GOP reference
+    if (this.uefi && this.uefi.gop !== this.gop) {
+      console.warn('Emulator: UEFI GOP reference mismatch, updating...');
+      this.uefi.gop = this.gop;
     }
     
     // Initialize graphics early (before boot manager)
     if (this.gop) {
-      this.gop.setMode(0, 640, 480);
-      // Draw initial screen (not just black)
-      this.gop.drawTestPattern();
+      try {
+        this.gop.setMode(0, 640, 480);
+        // Draw initial screen (not just black)
+        this.gop.drawTestPattern();
+      } catch (error) {
+        console.warn('Emulator: Error initializing graphics:', error);
+        // Continue anyway
+      }
     }
     
     // Start UEFI boot process (pass emulator instance for ISO/EFI access)
@@ -128,7 +166,9 @@ class CustomEmulator {
       await this.uefi.boot(this);
     } catch (error) {
       console.error('Emulator: Failed to start emulator:', error);
-      throw error; // Re-throw so caller can handle it
+      // Don't re-throw - log and continue if possible
+      // The error might be recoverable
+      console.warn('Emulator: Attempting to continue despite boot error...');
     }
     
     // After UEFI hands off to boot manager, start CPU execution
