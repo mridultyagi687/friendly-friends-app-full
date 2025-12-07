@@ -2788,6 +2788,7 @@ class InstructionExecutor {
 
   /**
    * Execute MOV CR instruction (Move to/from Control Registers)
+   * Properly handles CR0, CR1, CR2, CR3, CR4 with bit validation
    */
   executeMOV_CR(instruction) {
     const { modrm, rex } = instruction;
@@ -2796,9 +2797,12 @@ class InstructionExecutor {
     }
 
     const crNumber = modrm.reg;
-    const isStore = (instruction.opcode.offset && instruction.opcode.offset + 1 < 256) 
-      ? (instruction.opcode.offset + 1) === 0x22 
-      : false; // 0x0F 0x22 = MOV to CR, 0x0F 0x20 = MOV from CR
+    // Determine if this is MOV to CR (0x0F 0x22) or MOV from CR (0x0F 0x20)
+    // Check the second byte of the opcode
+    const isStore = instruction.opcode.length === 2 && 
+                    (instruction.opcode.offset === undefined || 
+                     (instruction.opcode.offset !== undefined && 
+                      this.memory.readByte(Number(this.cpu.registers.rip) + 1) === 0x22));
 
     if (modrm.mod === 3) {
       // Register mode
@@ -2806,21 +2810,63 @@ class InstructionExecutor {
       
       if (isStore) {
         // MOV CR, reg - Store register to control register
-        const value = this.cpu.registers[reg];
-        // Store in a simplified control register storage
-        if (!this.cpu.controlRegisters) {
-          this.cpu.controlRegisters = {};
+        const value = this.cpu.registers[reg] & 0xFFFFFFFFn; // CR registers are 32-bit
+        
+        // Validate and set control register based on number
+        switch (crNumber) {
+          case 0:
+            this.setCR0(value);
+            break;
+          case 1:
+            // CR1 is reserved, ignore writes
+            console.warn('CPU: Attempted write to reserved CR1, ignored');
+            break;
+          case 2:
+            // CR2 is page fault linear address, can be written
+            this.cpu.registers.cr2 = value;
+            break;
+          case 3:
+            // CR3 is page directory base address
+            this.cpu.registers.cr3 = value;
+            // Invalidate TLB when CR3 changes
+            if (this.memory && this.memory.virtualMemory) {
+              this.memory.virtualMemory.invalidateTLB();
+            }
+            break;
+          case 4:
+            this.setCR4(value);
+            break;
+          default:
+            console.warn(`CPU: Attempted write to unsupported CR${crNumber}, ignored`);
+            return false;
         }
-        this.cpu.controlRegisters[`cr${crNumber}`] = value;
-        console.log(`CPU: MOV CR${crNumber}, ${reg} (value: ${value.toString(16)}) - simplified`);
+        console.log(`CPU: MOV CR${crNumber}, ${reg} (value: 0x${value.toString(16)})`);
       } else {
         // MOV reg, CR - Load register from control register
-        if (!this.cpu.controlRegisters) {
-          this.cpu.controlRegisters = {};
+        let crValue = 0n;
+        switch (crNumber) {
+          case 0:
+            crValue = this.cpu.registers.cr0;
+            break;
+          case 1:
+            crValue = this.cpu.registers.cr1;
+            break;
+          case 2:
+            crValue = this.cpu.registers.cr2;
+            break;
+          case 3:
+            crValue = this.cpu.registers.cr3;
+            break;
+          case 4:
+            crValue = this.cpu.registers.cr4;
+            break;
+          default:
+            console.warn(`CPU: Attempted read from unsupported CR${crNumber}`);
+            return false;
         }
-        const crValue = this.cpu.controlRegisters[`cr${crNumber}`] || 0n;
-        this.cpu.registers[reg] = crValue;
-        console.log(`CPU: MOV ${reg}, CR${crNumber} (value: ${crValue.toString(16)}) - simplified`);
+        // Write 32-bit value to register (preserve upper bits)
+        this.cpu.registers[reg] = (this.cpu.registers[reg] & 0xFFFFFFFF00000000n) | crValue;
+        console.log(`CPU: MOV ${reg}, CR${crNumber} (value: 0x${crValue.toString(16)})`);
       }
     } else {
       return false; // Memory mode not supported for MOV CR
@@ -2828,6 +2874,89 @@ class InstructionExecutor {
 
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
+  }
+
+  /**
+   * Set CR0 register with proper bit validation
+   * CR0 bits:
+   * 0 = PE (Protected Mode Enable)
+   * 1 = MP (Monitor Coprocessor)
+   * 2 = EM (Emulation)
+   * 3 = TS (Task Switched)
+   * 4 = ET (Extension Type)
+   * 5 = NE (Numeric Error)
+   * 16 = WP (Write Protect) - CRITICAL
+   * 18 = AM (Alignment Mask)
+   * 29 = NW (Not Write-through)
+   * 30 = CD (Cache Disable)
+   * 31 = PG (Paging Enable)
+   */
+  setCR0(value) {
+    // Validate and set CR0
+    // Preserve reserved bits (set to 0)
+    const validBits = 0x8005003Bn; // Valid CR0 bits
+    const newCR0 = value & BigInt(validBits);
+    
+    const oldCR0 = this.cpu.registers.cr0;
+    this.cpu.registers.cr0 = newCR0;
+    
+    // Check if paging was enabled/disabled
+    const pagingWasEnabled = (oldCR0 & 0x80000000n) !== 0n;
+    const pagingNowEnabled = (newCR0 & 0x80000000n) !== 0n;
+    
+    if (pagingWasEnabled !== pagingNowEnabled && this.memory) {
+      this.memory.pagingEnabled = pagingNowEnabled;
+      if (this.memory.virtualMemory) {
+        if (pagingNowEnabled) {
+          console.log('CPU: Paging enabled (CR0.PG = 1)');
+        } else {
+          console.log('CPU: Paging disabled (CR0.PG = 0)');
+        }
+      }
+    }
+    
+    console.log(`CPU: CR0 set to 0x${newCR0.toString(16)} (WP=${(newCR0 & 0x10000n) ? 1 : 0}, PG=${(newCR0 & 0x80000000n) ? 1 : 0})`);
+  }
+
+  /**
+   * Set CR4 register with proper bit validation
+   * CR4 bits:
+   * 0 = VME (Virtual 8086 Mode Extensions)
+   * 1 = PVI (Protected-Mode Virtual Interrupts)
+   * 2 = TSD (Time Stamp Disable)
+   * 3 = DE (Debugging Extensions)
+   * 4 = PSE (Page Size Extensions)
+   * 5 = PAE (Physical Address Extension) - CRITICAL
+   * 6 = MCE (Machine Check Enable)
+   * 7 = PGE (Page Global Enable)
+   * 8 = PCE (Performance Counter Enable)
+   * 9 = OSFXSR (OS support for FXSAVE/FXRSTOR)
+   * 10 = OSXMMEXCPT (OS support for unmasked SIMD exceptions)
+   * 11 = UMIP (User-Mode Instruction Prevention)
+   * 12 = LA57 (5-level paging) - MUST BE 0
+   * 13 = VMXE (VMX Enable)
+   * 14 = SMXE (SMX Enable)
+   * 16 = FSGSBASE (FS/GS Base)
+   * 17 = PCIDE (PCID Enable)
+   * 18 = OSXSAVE (OS support for XSAVE)
+   * 20 = SMEP (Supervisor Mode Execution Prevention) - CRITICAL
+   * 21 = SMAP (Supervisor Mode Access Prevention) - CRITICAL
+   */
+  setCR4(value) {
+    // Validate CR4 - ensure LA57 (bit 12) is 0
+    const validBits = 0x000007FFn | 0x00030000n; // Valid CR4 bits (excluding LA57)
+    let newCR4 = value & BigInt(validBits);
+    
+    // Force LA57 (bit 12) to 0 - 5-level paging not supported
+    newCR4 = newCR4 & ~0x1000n; // Clear bit 12
+    
+    this.cpu.registers.cr4 = newCR4;
+    
+    const pae = (newCR4 & 0x20n) !== 0n;
+    const smep = (newCR4 & 0x100000n) !== 0n;
+    const smap = (newCR4 & 0x200000n) !== 0n;
+    
+    console.log(`CPU: CR4 set to 0x${newCR4.toString(16)} (PAE=${pae ? 1 : 0}, SMEP=${smep ? 1 : 0}, SMAP=${smap ? 1 : 0}, LA57=0)`);
   }
 
   /**
@@ -2875,40 +3004,84 @@ class InstructionExecutor {
 
   /**
    * Execute WRMSR instruction (Write Model-Specific Register)
+   * Handles EFER (MSR 0xC0000080) and other MSRs
    */
   executeWRMSR(instruction) {
-    // WRMSR writes ECX:EAX to the MSR specified in EDX
+    // WRMSR writes EDX:EAX to the MSR specified in ECX
     const ecx = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
     const eax = this.cpu.registers.rax & 0xFFFFFFFFn;
     const edx = this.cpu.registers.rdx & 0xFFFFFFFFn;
     
     // Combine EDX:EAX into 64-bit value
-    const value = (edx << 32n) | eax;
+    const value = (BigInt(edx) << 32n) | eax;
     
-    // Store MSR (simplified - just log it)
-    if (!this.cpu.msrRegisters) {
-      this.cpu.msrRegisters = {};
+    // Handle specific MSRs
+    switch (ecx) {
+      case 0xC0000080: // EFER (Extended Feature Enable Register)
+        this.setEFER(value);
+        break;
+      default:
+        // Store other MSRs
+        if (!this.cpu.msrRegisters) {
+          this.cpu.msrRegisters = {};
+        }
+        this.cpu.msrRegisters[ecx] = value;
+        console.log(`CPU: WRMSR executed (MSR 0x${ecx.toString(16)} = 0x${value.toString(16)})`);
     }
-    this.cpu.msrRegisters[ecx] = value;
-    
-    console.log(`CPU: WRMSR executed (MSR ${ecx.toString(16)} = ${value.toString(16)}) - simplified`);
     
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
   }
 
   /**
+   * Set EFER register with proper bit validation
+   * EFER bits:
+   * 0 = SCE (SYSCALL Enable)
+   * 8 = LME (Long Mode Enable)
+   * 10 = LMA (Long Mode Active)
+   * 11 = NXE (No-Execute Enable) - CRITICAL
+   * 12 = SVME (Secure Virtual Machine Enable)
+   * 13 = LMSLE (Long Mode Segment Limit Enable)
+   * 14 = FFXSR (Fast FXSAVE/FXRSTOR)
+   * 15 = TCE (Translation Cache Extension)
+   */
+  setEFER(value) {
+    // Validate EFER bits
+    const validBits = 0x0000D501n; // Valid EFER bits
+    const newEFER = value & BigInt(validBits);
+    
+    this.cpu.registers.efer = newEFER;
+    
+    const nxe = (newEFER & 0x800n) !== 0n; // Bit 11
+    const lme = (newEFER & 0x100n) !== 0n; // Bit 8
+    const sce = (newEFER & 0x01n) !== 0n; // Bit 0
+    
+    console.log(`CPU: EFER set to 0x${newEFER.toString(16)} (NXE=${nxe ? 1 : 0}, LME=${lme ? 1 : 0}, SCE=${sce ? 1 : 0})`);
+  }
+
+  /**
    * Execute RDMSR instruction (Read Model-Specific Register)
+   * Handles EFER (MSR 0xC0000080) and other MSRs
    */
   executeRDMSR(instruction) {
     // RDMSR reads the MSR specified in ECX and returns it in EDX:EAX
     const ecx = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
     
-    // Get MSR value (simplified - return 0 if not set)
-    if (!this.cpu.msrRegisters) {
-      this.cpu.msrRegisters = {};
+    let value = 0n;
+    
+    // Handle specific MSRs
+    switch (ecx) {
+      case 0xC0000080: // EFER (Extended Feature Enable Register)
+        value = this.cpu.registers.efer || 0n;
+        break;
+      default:
+        // Read other MSRs
+        if (!this.cpu.msrRegisters) {
+          this.cpu.msrRegisters = {};
+        }
+        value = this.cpu.msrRegisters[ecx] || 0n;
+        console.log(`CPU: RDMSR executed (MSR 0x${ecx.toString(16)} = 0x${value.toString(16)})`);
     }
-    const value = this.cpu.msrRegisters[ecx] || 0n;
     
     // Split into EDX:EAX
     const eax = value & 0xFFFFFFFFn;
@@ -2918,9 +3091,6 @@ class InstructionExecutor {
     this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | eax;
     this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | edx;
     
-    console.log(`CPU: RDMSR executed (MSR ${ecx.toString(16)} = ${value.toString(16)}) - simplified`);
-    
-    this.cpu.registers.rip += BigInt(instruction.length);
     return true;
   }
 

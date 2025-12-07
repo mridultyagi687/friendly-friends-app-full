@@ -53,6 +53,8 @@ class CPU {
       sfmask: 0n, // SYSCALL flag mask
       // Extended Control Register 0 (XCR0) - Controls XSAVE/XRSTOR
       xcr0: 0x07n, // Default: X87 (bit 0) + SSE/XMM (bit 1) + AVX/YMM (bit 2) enabled
+      // Extended Feature Enable Register (EFER) - Model-specific register
+      efer: 0n, // Default: all bits cleared
       // YMM registers (16 x 256-bit) - Upper 128 bits of each XMM register
       // Lower 128 bits are in XMM registers, upper 128 bits are here
       ymm0: 0n, ymm1: 0n, ymm2: 0n, ymm3: 0n,

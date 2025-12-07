@@ -220,8 +220,58 @@ class MemoryManager {
    * @param {number|bigint} address - Memory address (virtual if paging enabled)
    * @param {number} value - Byte value (0-255)
    */
+  /**
+   * Check if write is allowed (WP bit and page permissions)
+   * @param {bigint} virtualAddr - Virtual address
+   * @returns {boolean} - True if write is allowed
+   */
+  checkWritePermission(virtualAddr) {
+    // Check CR0.WP (Write Protect) bit
+    if (!this.cpu) return true; // No CPU reference, allow write
+    
+    const cr0 = this.cpu.registers.cr0 || 0n;
+    const wp = (cr0 & 0x10000n) !== 0n; // Bit 16
+    
+    if (!wp) return true; // WP=0, writes allowed
+    
+    // WP=1: Kernel-mode writes to read-only pages are blocked
+    // Check if we're in kernel mode (CPL=0)
+    // CPL is in the lower 2 bits of CS selector
+    const cs = this.cpu.registers.cs || 0;
+    const cpl = cs & 0x03; // Current Privilege Level
+    
+    if (cpl !== 0) return true; // User mode, WP doesn't block
+    
+    // Kernel mode (CPL=0) with WP=1: check page permissions
+    if (this.pagingEnabled && this.virtualMemory) {
+      // Check if page is read-only
+      const pte = this.virtualMemory.getPTE(virtualAddr);
+      if (pte !== null && pte !== undefined) {
+        const writable = (pte & 0x02n) !== 0n; // Bit 1: Writable
+        if (!writable) {
+          // Kernel-mode write to read-only page with WP=1 - blocked
+          console.warn(`Memory: Write blocked - kernel-mode write to read-only page at 0x${virtualAddr.toString(16)} (WP=1)`);
+          // Trigger page fault
+          if (this.cpu && this.cpu.interruptHandler) {
+            this.cpu.interruptHandler.handlePageFault(virtualAddr, true);
+          }
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  }
+
   writeByte(address, value) {
     const virtualAddr = typeof address === 'bigint' ? address : BigInt(address);
+    
+    // Check write protection (WP bit)
+    if (!this.checkWritePermission(virtualAddr)) {
+      // Write blocked - page fault already triggered
+      return;
+    }
+    
     const physicalAddr = this.translateAddress(virtualAddr, true);
     const addr = Number(physicalAddr);
     

@@ -65,6 +65,83 @@ class VirtualMemoryManager {
   }
 
   /**
+   * Get page table entry for a virtual address
+   * @param {bigint} virtualAddress - Virtual address
+   * @returns {bigint|null} - Page table entry or null if not present
+   */
+  getPTE(virtualAddress) {
+    // Check TLB first
+    const page = virtualAddress & 0xFFFFFFFFFFFFF000n;
+    if (this.tlb.has(page)) {
+      const tlbEntry = this.tlb.get(page);
+      if (tlbEntry.present) {
+        return tlbEntry.pte || null;
+      }
+    }
+
+    // If CR3 is 0, paging is disabled
+    if (this.cr3 === 0n) {
+      return null;
+    }
+
+    // Walk page tables to get PTE
+    try {
+      // Level 0: PML4
+      const pml4Index = this.getPageTableIndex(virtualAddress, 0);
+      const pml4EntryAddr = this.cr3 + BigInt(pml4Index * 8);
+      const pml4Entry = this.readPTE(pml4EntryAddr);
+      
+      if ((pml4Entry & this.PTE_PRESENT) === 0n) {
+        return null;
+      }
+      
+      const pdptBase = pml4Entry & 0xFFFFFFFFFFFFF000n;
+      
+      // Level 1: PDPT
+      const pdptIndex = this.getPageTableIndex(virtualAddress, 1);
+      const pdptEntryAddr = pdptBase + BigInt(pdptIndex * 8);
+      const pdptEntry = this.readPTE(pdptEntryAddr);
+      
+      if ((pdptEntry & this.PTE_PRESENT) === 0n) {
+        return null;
+      }
+      
+      // Check for 1GB page
+      if ((pdptEntry & this.PTE_PS) !== 0n) {
+        return pdptEntry;
+      }
+      
+      const pdBase = pdptEntry & 0xFFFFFFFFFFFFF000n;
+      
+      // Level 2: PD
+      const pdIndex = this.getPageTableIndex(virtualAddress, 2);
+      const pdEntryAddr = pdBase + BigInt(pdIndex * 8);
+      const pdEntry = this.readPTE(pdEntryAddr);
+      
+      if ((pdEntry & this.PTE_PRESENT) === 0n) {
+        return null;
+      }
+      
+      // Check for 2MB page
+      if ((pdEntry & this.PTE_PS) !== 0n) {
+        return pdEntry;
+      }
+      
+      const ptBase = pdEntry & 0xFFFFFFFFFFFFF000n;
+      
+      // Level 3: PT (4KB page)
+      const ptIndex = this.getPageTableIndex(virtualAddress, 3);
+      const ptEntryAddr = ptBase + BigInt(ptIndex * 8);
+      const ptEntry = this.readPTE(ptEntryAddr);
+      
+      return ptEntry;
+    } catch (error) {
+      console.warn(`VirtualMemory: Error getting PTE for 0x${virtualAddress.toString(16)}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Extract page table index from address
    * @param {bigint} address - Virtual address
    * @param {number} level - Page table level (0-3)
@@ -296,6 +373,7 @@ class VirtualMemoryManager {
       present: (pte & this.PTE_PRESENT) !== 0n,
       writable: (pte & this.PTE_WRITABLE) !== 0n,
       user: (pte & this.PTE_USER) !== 0n,
+      pte: pte, // Store full PTE for write protection checks
     });
   }
 
