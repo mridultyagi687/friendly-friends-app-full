@@ -915,31 +915,77 @@ class InstructionExecutor {
 
   /**
    * Execute MOVS instruction (Move String)
+   * Supports REP prefix for repeated operations
    */
   executeMOVS(instruction) {
-    const { opcode, rex } = instruction;
+    const { opcode, rex, prefixes } = instruction;
     const operandSize = opcode.mnemonic === 'MOVSB' ? 8 : (rex && rex.w) ? 64 : 32;
+    const hasRep = prefixes && prefixes.rep !== null;
 
-    // Source: [RSI], Destination: [RDI]
-    const srcAddr = Number(this.cpu.registers.rsi);
-    const dstAddr = Number(this.cpu.registers.rdi);
+    // If REP prefix, repeat while RCX > 0
+    if (hasRep) {
+      const repType = prefixes.rep; // 'rep', 'repne'
+      let iterations = 0;
+      const maxIterations = 10000; // Safety limit
 
-    // Read from source
-    const value = this.readMemory(srcAddr, operandSize);
+      while (this.cpu.registers.rcx > 0n && iterations < maxIterations) {
+        // Check REP condition
+        if (repType === 'repne') {
+          // REPNE: repeat while ZF = 0
+          const zf = (this.cpu.registers.rflags & 0x40n) !== 0n;
+          if (zf) break; // Stop if ZF = 1
+        } else if (repType === 'repe') {
+          // REPE/REPZ: repeat while ZF = 1
+          const zf = (this.cpu.registers.rflags & 0x40n) !== 0n;
+          if (!zf) break; // Stop if ZF = 0
+        }
 
-    // Write to destination
-    this.writeMemory(dstAddr, value, operandSize);
+        // Execute one iteration
+        const srcAddr = Number(this.cpu.registers.rsi);
+        const dstAddr = Number(this.cpu.registers.rdi);
+        const value = this.readMemory(srcAddr, operandSize);
+        this.writeMemory(dstAddr, value, operandSize);
 
-    // Update pointers (direction flag determines direction)
-    const df = (this.cpu.registers.rflags & 0x400n) !== 0n; // Direction flag
-    const increment = BigInt(operandSize / 8);
-    
-    if (df) {
-      this.cpu.registers.rsi -= increment;
-      this.cpu.registers.rdi -= increment;
+        // Update pointers
+        const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+        const increment = BigInt(operandSize / 8);
+        
+        if (df) {
+          this.cpu.registers.rsi -= increment;
+          this.cpu.registers.rdi -= increment;
+        } else {
+          this.cpu.registers.rsi += increment;
+          this.cpu.registers.rdi += increment;
+        }
+
+        // Decrement RCX
+        this.cpu.registers.rcx -= 1n;
+        iterations++;
+      }
+
+      // Update flags after REP operation
+      if (this.cpu.registers.rcx === 0n) {
+        // ZF is set if all bytes were processed
+        this.cpu.registers.rflags |= 0x40n; // Set ZF
+      }
     } else {
-      this.cpu.registers.rsi += increment;
-      this.cpu.registers.rdi += increment;
+      // Single iteration (no REP)
+      const srcAddr = Number(this.cpu.registers.rsi);
+      const dstAddr = Number(this.cpu.registers.rdi);
+      const value = this.readMemory(srcAddr, operandSize);
+      this.writeMemory(dstAddr, value, operandSize);
+
+      // Update pointers
+      const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+      const increment = BigInt(operandSize / 8);
+      
+      if (df) {
+        this.cpu.registers.rsi -= increment;
+        this.cpu.registers.rdi -= increment;
+      } else {
+        this.cpu.registers.rsi += increment;
+        this.cpu.registers.rdi += increment;
+      }
     }
 
     this.cpu.registers.rip += BigInt(instruction.length);
@@ -948,26 +994,68 @@ class InstructionExecutor {
 
   /**
    * Execute STOS instruction (Store String)
+   * Supports REP prefix for repeated operations
    */
   executeSTOS(instruction) {
-    const { opcode, rex } = instruction;
+    const { opcode, rex, prefixes } = instruction;
     const operandSize = opcode.mnemonic === 'STOSB' ? 8 : (rex && rex.w) ? 64 : 32;
+    const hasRep = prefixes && prefixes.rep !== null;
 
-    // Source: RAX, Destination: [RDI]
-    const dstAddr = Number(this.cpu.registers.rdi);
-    const value = this.cpu.registers.rax & this.getMask(operandSize);
+    // If REP prefix, repeat while RCX > 0
+    if (hasRep) {
+      const repType = prefixes.rep; // 'rep', 'repne'
+      let iterations = 0;
+      const maxIterations = 10000; // Safety limit
 
-    // Write to destination
-    this.writeMemory(dstAddr, value, operandSize);
+      while (this.cpu.registers.rcx > 0n && iterations < maxIterations) {
+        // Check REP condition
+        if (repType === 'repne') {
+          const zf = (this.cpu.registers.rflags & 0x40n) !== 0n;
+          if (zf) break;
+        } else if (repType === 'repe') {
+          const zf = (this.cpu.registers.rflags & 0x40n) !== 0n;
+          if (!zf) break;
+        }
 
-    // Update pointer
-    const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
-    const increment = BigInt(operandSize / 8);
-    
-    if (df) {
-      this.cpu.registers.rdi -= increment;
+        // Execute one iteration
+        const dstAddr = Number(this.cpu.registers.rdi);
+        const value = this.cpu.registers.rax & this.getMask(operandSize);
+        this.writeMemory(dstAddr, value, operandSize);
+
+        // Update pointer
+        const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+        const increment = BigInt(operandSize / 8);
+        
+        if (df) {
+          this.cpu.registers.rdi -= increment;
+        } else {
+          this.cpu.registers.rdi += increment;
+        }
+
+        // Decrement RCX
+        this.cpu.registers.rcx -= 1n;
+        iterations++;
+      }
+
+      // Update flags after REP operation
+      if (this.cpu.registers.rcx === 0n) {
+        this.cpu.registers.rflags |= 0x40n; // Set ZF
+      }
     } else {
-      this.cpu.registers.rdi += increment;
+      // Single iteration (no REP)
+      const dstAddr = Number(this.cpu.registers.rdi);
+      const value = this.cpu.registers.rax & this.getMask(operandSize);
+      this.writeMemory(dstAddr, value, operandSize);
+
+      // Update pointer
+      const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+      const increment = BigInt(operandSize / 8);
+      
+      if (df) {
+        this.cpu.registers.rdi -= increment;
+      } else {
+        this.cpu.registers.rdi += increment;
+      }
     }
 
     this.cpu.registers.rip += BigInt(instruction.length);
@@ -976,32 +1064,74 @@ class InstructionExecutor {
 
   /**
    * Execute CMPS instruction (Compare String)
+   * Supports REP prefix for repeated operations
    */
   executeCMPS(instruction) {
-    const { opcode, rex } = instruction;
+    const { opcode, rex, prefixes } = instruction;
     const operandSize = opcode.mnemonic === 'CMPSB' ? 8 : (rex && rex.w) ? 64 : 32;
+    const hasRep = prefixes && prefixes.rep !== null;
 
-    // Source: [RSI], Destination: [RDI]
-    const srcAddr = Number(this.cpu.registers.rsi);
-    const dstAddr = Number(this.cpu.registers.rdi);
+    // If REP prefix, repeat while RCX > 0 and condition met
+    if (hasRep) {
+      const repType = prefixes.rep; // 'rep' (REPE/REPZ), 'repne' (REPNE/REPNZ)
+      let iterations = 0;
+      const maxIterations = 10000; // Safety limit
 
-    const srcValue = this.readMemory(srcAddr, operandSize);
-    const dstValue = this.readMemory(dstAddr, operandSize);
+      while (this.cpu.registers.rcx > 0n && iterations < maxIterations) {
+        // Execute one comparison
+        const srcAddr = Number(this.cpu.registers.rsi);
+        const dstAddr = Number(this.cpu.registers.rdi);
+        const srcValue = this.readMemory(srcAddr, operandSize);
+        const dstValue = this.readMemory(dstAddr, operandSize);
+        const result = dstValue - srcValue;
+        this.updateFlags(result, operandSize);
 
-    // Compare (subtract)
-    const result = dstValue - srcValue;
-    this.updateFlags(result, operandSize);
+        // Check REP condition
+        const zf = (this.cpu.registers.rflags & 0x40n) !== 0n;
+        if (repType === 'repne') {
+          // REPNE: repeat while ZF = 0
+          if (zf) break; // Stop if ZF = 1 (strings equal)
+        } else if (repType === 'rep' || repType === 'repe') {
+          // REPE/REPZ: repeat while ZF = 1
+          if (!zf) break; // Stop if ZF = 0 (strings not equal)
+        }
 
-    // Update pointers
-    const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
-    const increment = BigInt(operandSize / 8);
-    
-    if (df) {
-      this.cpu.registers.rsi -= increment;
-      this.cpu.registers.rdi -= increment;
+        // Update pointers
+        const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+        const increment = BigInt(operandSize / 8);
+        
+        if (df) {
+          this.cpu.registers.rsi -= increment;
+          this.cpu.registers.rdi -= increment;
+        } else {
+          this.cpu.registers.rsi += increment;
+          this.cpu.registers.rdi += increment;
+        }
+
+        // Decrement RCX
+        this.cpu.registers.rcx -= 1n;
+        iterations++;
+      }
     } else {
-      this.cpu.registers.rsi += increment;
-      this.cpu.registers.rdi += increment;
+      // Single iteration (no REP)
+      const srcAddr = Number(this.cpu.registers.rsi);
+      const dstAddr = Number(this.cpu.registers.rdi);
+      const srcValue = this.readMemory(srcAddr, operandSize);
+      const dstValue = this.readMemory(dstAddr, operandSize);
+      const result = dstValue - srcValue;
+      this.updateFlags(result, operandSize);
+
+      // Update pointers
+      const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+      const increment = BigInt(operandSize / 8);
+      
+      if (df) {
+        this.cpu.registers.rsi -= increment;
+        this.cpu.registers.rdi -= increment;
+      } else {
+        this.cpu.registers.rsi += increment;
+        this.cpu.registers.rdi += increment;
+      }
     }
 
     this.cpu.registers.rip += BigInt(instruction.length);
@@ -1010,28 +1140,68 @@ class InstructionExecutor {
 
   /**
    * Execute SCAS instruction (Scan String)
+   * Supports REP prefix for repeated operations
    */
   executeSCAS(instruction) {
-    const { opcode, rex } = instruction;
+    const { opcode, rex, prefixes } = instruction;
     const operandSize = opcode.mnemonic === 'SCASB' ? 8 : (rex && rex.w) ? 64 : 32;
+    const hasRep = prefixes && prefixes.rep !== null;
 
-    // Source: RAX, Destination: [RDI]
-    const dstAddr = Number(this.cpu.registers.rdi);
-    const dstValue = this.readMemory(dstAddr, operandSize);
-    const srcValue = this.cpu.registers.rax & this.getMask(operandSize);
+    // If REP prefix, repeat while RCX > 0 and condition met
+    if (hasRep) {
+      const repType = prefixes.rep; // 'rep' (REPE/REPZ), 'repne' (REPNE/REPNZ)
+      let iterations = 0;
+      const maxIterations = 10000; // Safety limit
 
-    // Compare
-    const result = dstValue - srcValue;
-    this.updateFlags(result, operandSize);
+      while (this.cpu.registers.rcx > 0n && iterations < maxIterations) {
+        // Execute one comparison
+        const dstAddr = Number(this.cpu.registers.rdi);
+        const dstValue = this.readMemory(dstAddr, operandSize);
+        const srcValue = this.cpu.registers.rax & this.getMask(operandSize);
+        const result = dstValue - srcValue;
+        this.updateFlags(result, operandSize);
 
-    // Update pointer
-    const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
-    const increment = BigInt(operandSize / 8);
-    
-    if (df) {
-      this.cpu.registers.rdi -= increment;
+        // Check REP condition
+        const zf = (this.cpu.registers.rflags & 0x40n) !== 0n;
+        if (repType === 'repne') {
+          // REPNE: repeat while ZF = 0
+          if (zf) break; // Stop if ZF = 1 (found match)
+        } else if (repType === 'rep' || repType === 'repe') {
+          // REPE/REPZ: repeat while ZF = 1
+          if (!zf) break; // Stop if ZF = 0 (no match)
+        }
+
+        // Update pointer
+        const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+        const increment = BigInt(operandSize / 8);
+        
+        if (df) {
+          this.cpu.registers.rdi -= increment;
+        } else {
+          this.cpu.registers.rdi += increment;
+        }
+
+        // Decrement RCX
+        this.cpu.registers.rcx -= 1n;
+        iterations++;
+      }
     } else {
-      this.cpu.registers.rdi += increment;
+      // Single iteration (no REP)
+      const dstAddr = Number(this.cpu.registers.rdi);
+      const dstValue = this.readMemory(dstAddr, operandSize);
+      const srcValue = this.cpu.registers.rax & this.getMask(operandSize);
+      const result = dstValue - srcValue;
+      this.updateFlags(result, operandSize);
+
+      // Update pointer
+      const df = (this.cpu.registers.rflags & 0x400n) !== 0n;
+      const increment = BigInt(operandSize / 8);
+      
+      if (df) {
+        this.cpu.registers.rdi -= increment;
+      } else {
+        this.cpu.registers.rdi += increment;
+      }
     }
 
     this.cpu.registers.rip += BigInt(instruction.length);
