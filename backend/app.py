@@ -23,8 +23,7 @@ frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 CORS(app, origins=[frontend_url], supports_credentials=True)
 
 # Initialize database on startup
-@app.before_first_request
-def initialize_database():
+with app.app_context():
     init_db()
 
 # Health check endpoint
