@@ -292,16 +292,36 @@ class InstructionExecutor {
     const memValue = this.readMemory(memAddr, operandSize);
     const regValue = this.cpu.registers[reg] || 0n;
 
-    // Perform addition (ensure both are BigInt)
-    const result = (typeof regValue === 'bigint' ? regValue : BigInt(regValue)) + 
-                   (typeof memValue === 'bigint' ? memValue : BigInt(memValue));
+    // Mask operands to operand size before addition (important for overflow detection)
+    const mask = operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn;
+    const maskedRegValue = (typeof regValue === 'bigint' ? regValue : BigInt(regValue)) & mask;
+    const maskedMemValue = (typeof memValue === 'bigint' ? memValue : BigInt(memValue)) & mask;
+
+    // Perform addition with masked operands
+    const result = maskedRegValue + maskedMemValue;
     
-    // Update flags including overflow (before masking)
-    this.updateFlagsWithOperands(result, regValue, memValue, operandSize, 'add');
+    // Update flags including overflow (before masking result)
+    // Pass original values for overflow calculation, but use masked values for actual operation
+    this.updateFlagsWithOperands(result, maskedRegValue, maskedMemValue, operandSize, 'add');
     
     // Mask result to operand size and store
-    const mask = operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn;
-    this.cpu.registers[reg] = result & mask;
+    // For 32-bit operations, we need to preserve the upper 32 bits of the 64-bit register
+    // by sign-extending or zero-extending based on the result
+    if (operandSize === 32) {
+      const maskedResult = result & mask;
+      // Sign-extend 32-bit result to 64-bit register
+      const signBit = (maskedResult & 0x80000000n) !== 0n;
+      if (signBit) {
+        // Sign-extend: set upper 32 bits to 1s
+        this.cpu.registers[reg] = maskedResult | 0xFFFFFFFF00000000n;
+      } else {
+        // Zero-extend: clear upper 32 bits
+        this.cpu.registers[reg] = maskedResult;
+      }
+    } else {
+      // 64-bit operation: just mask and store
+      this.cpu.registers[reg] = result & mask;
+    }
 
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
@@ -520,7 +540,10 @@ class InstructionExecutor {
       case 16:
         return BigInt(this.memory.readWord(addr));
       case 32:
-        return BigInt(this.memory.readDword(addr));
+        const dwordValue = this.memory.readDword(addr);
+        // Ensure we return a proper 32-bit signed value as BigInt
+        // readDword returns a number, convert to BigInt and mask to 32-bit
+        return BigInt(dwordValue) & 0xFFFFFFFFn;
       case 64:
         return this.memory.readQword(addr);
       default:
