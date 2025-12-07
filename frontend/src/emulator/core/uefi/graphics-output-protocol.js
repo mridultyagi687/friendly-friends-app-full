@@ -41,6 +41,15 @@ class GraphicsOutputProtocol {
   init() {
     console.log('GOP: Initializing Graphics Output Protocol...');
     
+    // Ensure installProtocol method exists (defensive)
+    if (typeof this.installProtocol !== 'function') {
+      this.installProtocol = function() {
+        console.log('GOP: Installing Graphics Output Protocol (fallback)');
+        this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+        this.protocolInstalled = true;
+      };
+    }
+    
     // Set up initial graphics mode
     this.setMode(0);
     
