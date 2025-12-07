@@ -16,27 +16,32 @@ class ACPITables {
 
   /**
    * Initialize ACPI tables
+   * Creates minimal but correct ACPI tables: RSDP → XSDT → FADT + DSDT + MADT
    */
   init() {
-    console.log('ACPI: Initializing tables...');
+    console.log('ACPI: Initializing minimal ACPI tables...');
     
-    // Create RSDP (Root System Description Pointer)
-    this.createRSDP();
+    // Calculate table addresses (aligned to 16-byte boundaries)
+    const rsdpAddress = this.rsdpAddress; // 0xE0000
+    const xsdtAddress = 0xE1000; // XSDT at 0xE1000
+    const fadtAddress = 0xE2000; // FADT at 0xE2000
+    const dsdtAddress = 0xE3000; // DSDT at 0xE3000
+    const madtAddress = 0xE4000; // MADT at 0xE4000
     
-    // Create RSDT (Root System Description Table)
-    this.createRSDT();
+    // Create RSDP (Root System Description Pointer) - points to XSDT
+    this.createRSDP(rsdpAddress, xsdtAddress);
+    
+    // Create XSDT (Extended System Description Table) - uses 64-bit pointers
+    this.createXSDT(xsdtAddress, [fadtAddress, dsdtAddress, madtAddress]);
     
     // Create FADT (Fixed ACPI Description Table)
-    this.createFADT();
+    this.createFADT(fadtAddress, dsdtAddress);
     
-    // Create DSDT (Differentiated System Description Table)
-    this.createDSDT();
+    // Create DSDT (Differentiated System Description Table) - minimal valid AML
+    this.createDSDT(dsdtAddress);
     
-    // Create MADT (Multiple APIC Description Table)
-    this.createMADT();
-    
-    // Create MCFG (PCI Express Configuration Table)
-    this.createMCFG();
+    // Create MADT (Multiple APIC Description Table) - with Local APIC entry
+    this.createMADT(madtAddress);
     
     // Discover PCI devices
     this.discoverPCIDevices();
@@ -44,58 +49,54 @@ class ACPITables {
     // Build device tree
     this.buildDeviceTree();
     
-    console.log('ACPI: Tables initialized');
+    console.log('ACPI: Minimal ACPI tables initialized');
   }
 
   /**
    * Create RSDP (Root System Description Pointer)
-   * This is the entry point for ACPI
+   * This is the entry point for ACPI - points to XSDT
    */
-  createRSDP() {
-    const rsdpAddress = this.rsdpAddress;
-    
-    // RSDP structure (36 bytes for ACPI 1.0, 8 more for 2.0+)
+  createRSDP(rsdpAddress, xsdtAddress) {
+    // RSDP structure (36 bytes for ACPI 1.0, 20 more for 2.0+ = 56 bytes total)
     const signature = 'RSD PTR '; // 8 bytes
-    const oemId = 'FRIEND '; // 6 bytes
+    const oemId = 'FRIEND '; // 6 bytes (pad with space)
     const revision = 2; // ACPI 2.0+
-    const rsdtAddress = rsdpAddress + 36; // RSDT follows RSDP
     
-    // Write RSDP to memory
     let offset = 0;
     
-    // Signature (8 bytes)
+    // Signature (8 bytes): "RSD PTR "
     for (let i = 0; i < 8; i++) {
       this.memory.writeByte(rsdpAddress + offset + i, signature.charCodeAt(i));
     }
     offset += 8;
     
-    // Checksum (1 byte) - placeholder
+    // Checksum (1 byte) - placeholder, will calculate later
     this.memory.writeByte(rsdpAddress + offset, 0);
     offset += 1;
     
-    // OEM ID (6 bytes)
+    // OEM ID (6 bytes): "FRIEND"
     for (let i = 0; i < 6; i++) {
       this.memory.writeByte(rsdpAddress + offset + i, oemId.charCodeAt(i));
     }
     offset += 6;
     
-    // Revision (1 byte)
+    // Revision (1 byte): 2 for ACPI 2.0+
     this.memory.writeByte(rsdpAddress + offset, revision);
     offset += 1;
     
-    // RSDT Address (4 bytes for ACPI 1.0, 8 bytes for 2.0+)
-    this.writeUInt32(rsdpAddress + offset, rsdtAddress);
+    // RSDT Address (4 bytes) - ACPI 1.0 compatibility (set to 0 for ACPI 2.0+)
+    this.writeUInt32(rsdpAddress + offset, 0);
     offset += 4;
     
-    // Length (4 bytes) - ACPI 2.0+
+    // Length (4 bytes) - ACPI 2.0+ structure length (36 bytes)
     this.writeUInt32(rsdpAddress + offset, 36);
     offset += 4;
     
-    // XSDT Address (8 bytes) - ACPI 2.0+
-    this.writeUInt64(rsdpAddress + offset, rsdtAddress);
+    // XSDT Address (8 bytes) - ACPI 2.0+ (64-bit pointer to XSDT)
+    this.writeUInt64(rsdpAddress + offset, xsdtAddress);
     offset += 8;
     
-    // Extended Checksum (1 byte)
+    // Extended Checksum (1 byte) - for bytes 0-35
     this.memory.writeByte(rsdpAddress + offset, 0);
     offset += 1;
     
@@ -104,7 +105,7 @@ class ACPITables {
       this.memory.writeByte(rsdpAddress + offset + i, 0);
     }
     
-    // Calculate checksum
+    // Calculate checksum for first 20 bytes (ACPI 1.0)
     let checksum = 0;
     for (let i = 0; i < 20; i++) {
       checksum = (checksum + this.memory.readByte(rsdpAddress + i)) & 0xFF;
@@ -112,19 +113,26 @@ class ACPITables {
     checksum = (256 - checksum) & 0xFF;
     this.memory.writeByte(rsdpAddress + 8, checksum);
     
+    // Calculate extended checksum for bytes 0-35 (ACPI 2.0+)
+    let extChecksum = 0;
+    for (let i = 0; i < 36; i++) {
+      extChecksum = (extChecksum + this.memory.readByte(rsdpAddress + i)) & 0xFF;
+    }
+    extChecksum = (256 - extChecksum) & 0xFF;
+    this.memory.writeByte(rsdpAddress + 32, extChecksum);
+    
     this.tables.rsdp = rsdpAddress;
-    console.log(`ACPI: RSDP created at 0x${rsdpAddress.toString(16)}`);
+    console.log(`ACPI: RSDP created at 0x${rsdpAddress.toString(16)}, points to XSDT at 0x${xsdtAddress.toString(16)}`);
   }
 
   /**
-   * Create RSDT (Root System Description Table)
+   * Create XSDT (Extended System Description Table)
+   * Uses 64-bit pointers instead of 32-bit (required for Windows 10/11)
    */
-  createRSDT() {
-    const rsdtAddress = this.rsdpAddress + 36;
-    
-    // ACPI Table Header (36 bytes)
-    const signature = 'RSDT'; // 4 bytes
-    const length = 36 + 4; // Header + 1 table pointer
+  createXSDT(xsdtAddress, tableAddresses) {
+    // XSDT structure: Header (36 bytes) + 64-bit table pointers
+    const signature = 'XSDT'; // 4 bytes
+    const length = 36 + (tableAddresses.length * 8); // Header + 64-bit pointers
     const revision = 1;
     const oemId = 'FRIEND '; // 6 bytes
     const oemTableId = 'EMULATOR'; // 8 bytes
@@ -134,111 +142,160 @@ class ACPITables {
     
     let offset = 0;
     
-    // Signature (4 bytes)
+    // ACPI Table Header (36 bytes)
+    // Signature (4 bytes): "XSDT"
     for (let i = 0; i < 4; i++) {
-      this.memory.writeByte(rsdtAddress + offset + i, signature.charCodeAt(i));
+      this.memory.writeByte(xsdtAddress + offset + i, signature.charCodeAt(i));
     }
     offset += 4;
     
     // Length (4 bytes)
-    this.writeUInt32(rsdtAddress + offset, length);
+    this.writeUInt32(xsdtAddress + offset, length);
     offset += 4;
     
     // Revision (1 byte)
-    this.memory.writeByte(rsdtAddress + offset, revision);
+    this.memory.writeByte(xsdtAddress + offset, revision);
     offset += 1;
     
-    // Checksum (1 byte) - placeholder
-    this.memory.writeByte(rsdtAddress + offset, 0);
+    // Checksum (1 byte) - placeholder, will calculate later
+    this.memory.writeByte(xsdtAddress + offset, 0);
     offset += 1;
     
-    // OEM ID (6 bytes)
+    // OEM ID (6 bytes): "FRIEND"
     for (let i = 0; i < 6; i++) {
-      this.memory.writeByte(rsdtAddress + offset + i, oemId.charCodeAt(i));
+      this.memory.writeByte(xsdtAddress + offset + i, oemId.charCodeAt(i));
     }
     offset += 6;
     
-    // OEM Table ID (8 bytes)
+    // OEM Table ID (8 bytes): "EMULATOR"
     for (let i = 0; i < 8; i++) {
-      this.memory.writeByte(rsdtAddress + offset + i, oemTableId.charCodeAt(i));
+      this.memory.writeByte(xsdtAddress + offset + i, oemTableId.charCodeAt(i));
     }
     offset += 8;
     
     // OEM Revision (4 bytes)
-    this.writeUInt32(rsdtAddress + offset, oemRevision);
+    this.writeUInt32(xsdtAddress + offset, oemRevision);
     offset += 4;
     
-    // Creator ID (4 bytes)
+    // Creator ID (4 bytes): "FRIE"
     for (let i = 0; i < 4; i++) {
-      this.memory.writeByte(rsdtAddress + offset + i, creatorId.charCodeAt(i));
+      this.memory.writeByte(xsdtAddress + offset + i, creatorId.charCodeAt(i));
     }
     offset += 4;
     
     // Creator Revision (4 bytes)
-    this.writeUInt32(rsdtAddress + offset, creatorRevision);
+    this.writeUInt32(xsdtAddress + offset, creatorRevision);
     offset += 4;
     
-    // Table Pointers (4 bytes each)
-    // Point to FADT
-    const fadtAddress = rsdtAddress + length;
-    this.writeUInt32(rsdtAddress + offset, fadtAddress);
+    // Table Pointers (64-bit each) - point to FADT, DSDT, MADT
+    for (const tableAddr of tableAddresses) {
+      this.writeUInt64(xsdtAddress + offset, tableAddr);
+      offset += 8;
+    }
     
     // Calculate checksum
     let checksum = 0;
     for (let i = 0; i < length; i++) {
-      checksum = (checksum + this.memory.readByte(rsdtAddress + i)) & 0xFF;
+      checksum = (checksum + this.memory.readByte(xsdtAddress + i)) & 0xFF;
     }
     checksum = (256 - checksum) & 0xFF;
-    this.memory.writeByte(rsdtAddress + 8, checksum);
+    this.memory.writeByte(xsdtAddress + 8, checksum);
     
-    this.tables.rsdt = rsdtAddress;
-    console.log(`ACPI: RSDT created at 0x${rsdtAddress.toString(16)}`);
+    this.tables.xsdt = xsdtAddress;
+    console.log(`ACPI: XSDT created at 0x${xsdtAddress.toString(16)} with ${tableAddresses.length} table(s)`);
   }
 
   /**
    * Create FADT (Fixed ACPI Description Table)
+   * Minimal but correct FADT structure
    */
-  createFADT() {
-    const fadtAddress = this.rsdpAddress + 36 + 40; // After RSDT
-    
-    // FADT structure (244 bytes minimum)
+  createFADT(fadtAddress, dsdtAddress) {
+    // FADT structure (244 bytes for ACPI 5.0+)
     const signature = 'FACP'; // 4 bytes
     const length = 244;
+    const revision = 6; // ACPI 6.0
+    const oemId = 'FRIEND '; // 6 bytes
+    const oemTableId = 'EMULATOR'; // 8 bytes
+    const oemRevision = 1;
+    const creatorId = 'FRIE'; // 4 bytes
+    const creatorRevision = 1;
     
     let offset = 0;
     
     // ACPI Table Header (36 bytes)
-    // Signature
+    // Signature (4 bytes): "FACP"
     for (let i = 0; i < 4; i++) {
       this.memory.writeByte(fadtAddress + offset + i, signature.charCodeAt(i));
     }
     offset += 4;
     
-    // Length
+    // Length (4 bytes)
     this.writeUInt32(fadtAddress + offset, length);
     offset += 4;
     
-    // Revision, Checksum, OEM ID, etc. (simplified)
-    this.memory.writeByte(fadtAddress + offset, 1); // Revision
+    // Revision (1 byte)
+    this.memory.writeByte(fadtAddress + offset, revision);
     offset += 1;
-    this.memory.writeByte(fadtAddress + offset, 0); // Checksum placeholder
+    
+    // Checksum (1 byte) - placeholder
+    this.memory.writeByte(fadtAddress + offset, 0);
     offset += 1;
     
     // OEM ID (6 bytes)
-    const oemId = 'FRIEND ';
     for (let i = 0; i < 6; i++) {
       this.memory.writeByte(fadtAddress + offset + i, oemId.charCodeAt(i));
     }
     offset += 6;
     
-    // Fill rest with zeros (simplified FADT)
-    for (let i = offset; i < length; i++) {
-      this.memory.writeByte(fadtAddress + i, 0);
+    // OEM Table ID (8 bytes)
+    for (let i = 0; i < 8; i++) {
+      this.memory.writeByte(fadtAddress + offset + i, oemTableId.charCodeAt(i));
     }
+    offset += 8;
     
-    // Set DSDT pointer (offset 40 in FADT)
-    const dsdtAddress = fadtAddress + length;
-    this.writeUInt32(fadtAddress + 40, dsdtAddress);
+    // OEM Revision (4 bytes)
+    this.writeUInt32(fadtAddress + offset, oemRevision);
+    offset += 4;
+    
+    // Creator ID (4 bytes)
+    for (let i = 0; i < 4; i++) {
+      this.memory.writeByte(fadtAddress + offset + i, creatorId.charCodeAt(i));
+    }
+    offset += 4;
+    
+    // Creator Revision (4 bytes)
+    this.writeUInt32(fadtAddress + offset, creatorRevision);
+    offset += 4;
+    
+    // FADT-specific fields (offset 36+)
+    // FACS Address (offset 36, 4 bytes) - set to 0 (no FACS)
+    this.writeUInt32(fadtAddress + offset, 0);
+    offset += 4;
+    
+    // DSDT Address (offset 40, 4 bytes) - 32-bit pointer
+    this.writeUInt32(fadtAddress + offset, dsdtAddress);
+    offset += 4;
+    
+    // DSDT Address (offset 44, 8 bytes) - 64-bit pointer (ACPI 2.0+)
+    this.writeUInt64(fadtAddress + offset, dsdtAddress);
+    offset += 8;
+    
+    // Fill rest with zeros (minimal FADT)
+    // Important fields that Windows checks:
+    // - PM1a Event Block Address (offset 64, 2 bytes) - set to 0
+    // - PM1b Event Block Address (offset 66, 2 bytes) - set to 0
+    // - PM1a Control Block Address (offset 68, 2 bytes) - set to 0
+    // - PM1b Control Block Address (offset 70, 2 bytes) - set to 0
+    // - PM2 Control Block Address (offset 72, 2 bytes) - set to 0
+    // - PM Timer Block Address (offset 76, 4 bytes) - set to 0
+    // - GPE0 Block Address (offset 80, 4 bytes) - set to 0
+    // - GPE1 Block Address (offset 84, 4 bytes) - set to 0
+    // - Flags (offset 112, 4 bytes) - set to 0 (no legacy devices)
+    
+    while (offset < length) {
+      this.memory.writeByte(fadtAddress + offset, 0);
+      offset++;
+    }
     
     // Calculate checksum
     let checksum = 0;
@@ -249,34 +306,93 @@ class ACPITables {
     this.memory.writeByte(fadtAddress + 8, checksum);
     
     this.tables.fadt = fadtAddress;
-    console.log(`ACPI: FADT created at 0x${fadtAddress.toString(16)}`);
+    console.log(`ACPI: FADT created at 0x${fadtAddress.toString(16)}, DSDT at 0x${dsdtAddress.toString(16)}`);
   }
 
   /**
    * Create DSDT (Differentiated System Description Table)
+   * Minimal valid DSDT with basic AML code
    */
-  createDSDT() {
-    const dsdtAddress = this.rsdpAddress + 36 + 40 + 244; // After FADT
-    
-    // DSDT structure (minimal)
+  createDSDT(dsdtAddress) {
+    // DSDT structure: Header (36 bytes) + minimal AML code
     const signature = 'DSDT'; // 4 bytes
-    const length = 200; // Minimal DSDT
+    const length = 200; // Minimal DSDT size
+    const revision = 2; // ACPI 2.0
+    const oemId = 'FRIEND '; // 6 bytes
+    const oemTableId = 'EMULATOR'; // 8 bytes
+    const oemRevision = 1;
+    const creatorId = 'FRIE'; // 4 bytes
+    const creatorRevision = 1;
     
     let offset = 0;
     
-    // ACPI Table Header
+    // ACPI Table Header (36 bytes)
+    // Signature (4 bytes): "DSDT"
     for (let i = 0; i < 4; i++) {
       this.memory.writeByte(dsdtAddress + offset + i, signature.charCodeAt(i));
     }
     offset += 4;
     
+    // Length (4 bytes)
     this.writeUInt32(dsdtAddress + offset, length);
     offset += 4;
     
-    // Fill with minimal AML (ACPI Machine Language) code
-    // This is a simplified DSDT - real one would contain device definitions
-    for (let i = offset; i < length; i++) {
-      this.memory.writeByte(dsdtAddress + i, 0);
+    // Revision (1 byte)
+    this.memory.writeByte(dsdtAddress + offset, revision);
+    offset += 1;
+    
+    // Checksum (1 byte) - placeholder
+    this.memory.writeByte(dsdtAddress + offset, 0);
+    offset += 1;
+    
+    // OEM ID (6 bytes)
+    for (let i = 0; i < 6; i++) {
+      this.memory.writeByte(dsdtAddress + offset + i, oemId.charCodeAt(i));
+    }
+    offset += 6;
+    
+    // OEM Table ID (8 bytes)
+    for (let i = 0; i < 8; i++) {
+      this.memory.writeByte(dsdtAddress + offset + i, oemTableId.charCodeAt(i));
+    }
+    offset += 8;
+    
+    // OEM Revision (4 bytes)
+    this.writeUInt32(dsdtAddress + offset, oemRevision);
+    offset += 4;
+    
+    // Creator ID (4 bytes)
+    for (let i = 0; i < 4; i++) {
+      this.memory.writeByte(dsdtAddress + offset + i, creatorId.charCodeAt(i));
+    }
+    offset += 4;
+    
+    // Creator Revision (4 bytes)
+    this.writeUInt32(dsdtAddress + offset, creatorRevision);
+    offset += 4;
+    
+    // Minimal AML (ACPI Machine Language) code
+    // AML starts at offset 36
+    // Minimal valid DSDT: DefinitionBlock with empty scope
+    // DefinitionBlock signature: 0x10 (NameOp) + "DSDT" + Package
+    // For minimal DSDT, we'll use a simple scope definition
+    
+    // Write minimal AML: Scope(\_SB) { } 
+    // 0x10 = ScopeOp, 0x5F 0x53 0x42 0x00 = "\_SB", 0x00 = NullName, 0x79 = NoopOp
+    const minimalAML = [
+      0x10, 0x5F, 0x53, 0x42, 0x00, // Scope(\_SB)
+      0x79, // NoopOp (empty scope)
+    ];
+    
+    for (let i = 0; i < minimalAML.length && offset < length; i++) {
+      this.memory.writeByte(dsdtAddress + offset, minimalAML[i]);
+      offset++;
+    }
+    
+    // Fill rest with zeros
+    while (offset < length) {
+      this.memory.writeByte(dsdtAddress + offset, 0);
+      offset++;
     }
     
     // Calculate checksum
@@ -293,29 +409,99 @@ class ACPITables {
 
   /**
    * Create MADT (Multiple APIC Description Table)
+   * Minimal MADT with Local APIC entry
    */
-  createMADT() {
-    const madtAddress = this.rsdpAddress + 36 + 40 + 244 + 200; // After DSDT
-    
-    // MADT structure (minimal)
+  createMADT(madtAddress) {
+    // MADT structure: Header (36 bytes) + APIC entries
     const signature = 'APIC'; // 4 bytes
-    const length = 100;
+    const revision = 3; // ACPI 3.0
+    const oemId = 'FRIEND '; // 6 bytes
+    const oemTableId = 'EMULATOR'; // 8 bytes
+    const oemRevision = 1;
+    const creatorId = 'FRIE'; // 4 bytes
+    const creatorRevision = 1;
+    
+    // Calculate length: Header (36) + Local APIC entry (8) = 44 bytes
+    const length = 44;
     
     let offset = 0;
     
-    // ACPI Table Header
+    // ACPI Table Header (36 bytes)
+    // Signature (4 bytes): "APIC"
     for (let i = 0; i < 4; i++) {
       this.memory.writeByte(madtAddress + offset + i, signature.charCodeAt(i));
     }
     offset += 4;
     
+    // Length (4 bytes)
     this.writeUInt32(madtAddress + offset, length);
     offset += 4;
     
-    // Fill with minimal data
-    for (let i = offset; i < length; i++) {
-      this.memory.writeByte(madtAddress + i, 0);
+    // Revision (1 byte)
+    this.memory.writeByte(madtAddress + offset, revision);
+    offset += 1;
+    
+    // Checksum (1 byte) - placeholder
+    this.memory.writeByte(madtAddress + offset, 0);
+    offset += 1;
+    
+    // OEM ID (6 bytes)
+    for (let i = 0; i < 6; i++) {
+      this.memory.writeByte(madtAddress + offset + i, oemId.charCodeAt(i));
     }
+    offset += 6;
+    
+    // OEM Table ID (8 bytes)
+    for (let i = 0; i < 8; i++) {
+      this.memory.writeByte(madtAddress + offset + i, oemTableId.charCodeAt(i));
+    }
+    offset += 8;
+    
+    // OEM Revision (4 bytes)
+    this.writeUInt32(madtAddress + offset, oemRevision);
+    offset += 4;
+    
+    // Creator ID (4 bytes)
+    for (let i = 0; i < 4; i++) {
+      this.memory.writeByte(madtAddress + offset + i, creatorId.charCodeAt(i));
+    }
+    offset += 4;
+    
+    // Creator Revision (4 bytes)
+    this.writeUInt32(madtAddress + offset, creatorRevision);
+    offset += 4;
+    
+    // MADT-specific fields (offset 36+)
+    // Local APIC Address (offset 36, 4 bytes) - APIC base address
+    const apicBase = 0xFEE00000; // Standard APIC base
+    this.writeUInt32(madtAddress + offset, apicBase);
+    offset += 4;
+    
+    // Flags (offset 40, 4 bytes) - bit 0 = PCAT_COMPAT (dual 8259 PICs present)
+    this.writeUInt32(madtAddress + offset, 1); // PCAT_COMPAT = 1
+    offset += 4;
+    
+    // APIC Structure Entries start at offset 44
+    // Local APIC Entry (Type 0)
+    // Entry Type (1 byte): 0 = Processor Local APIC
+    this.memory.writeByte(madtAddress + offset, 0);
+    offset += 1;
+    
+    // Entry Length (1 byte): 8 bytes
+    this.memory.writeByte(madtAddress + offset, 8);
+    offset += 1;
+    
+    // ACPI Processor ID (1 byte): 0
+    this.memory.writeByte(madtAddress + offset, 0);
+    offset += 1;
+    
+    // APIC ID (1 byte): 0
+    this.memory.writeByte(madtAddress + offset, 0);
+    offset += 1;
+    
+    // Flags (4 bytes): bit 0 = Enabled
+    this.writeUInt32(madtAddress + offset, 1); // Enabled
+    offset += 4;
     
     // Calculate checksum
     let checksum = 0;
@@ -326,7 +512,7 @@ class ACPITables {
     this.memory.writeByte(madtAddress + 8, checksum);
     
     this.tables.madt = madtAddress;
-    console.log(`ACPI: MADT created at 0x${madtAddress.toString(16)}`);
+    console.log(`ACPI: MADT created at 0x${madtAddress.toString(16)} with Local APIC entry`);
   }
 
   /**
