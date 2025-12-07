@@ -216,27 +216,57 @@ class InterruptHandler {
 
   // Interrupt handlers
   handleDivideError(errorCode) {
-    console.error('Interrupt: Divide Error (0x00)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: Divide Error (0x00) at RIP=0x${rip.toString(16)}`);
+    
+    // Divide by zero - try to skip the instruction
+    // In a real system, this would be handled by the OS
+    if (this.cpu && this.cpu.registers) {
+      // Try to advance RIP (minimal recovery)
+      this.cpu.registers.rip += 1n;
+      return false; // Indicate error occurred
+    }
+    return false;
   }
 
   handleDebug(errorCode) {
-    console.log('Interrupt: Debug Exception (0x01)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.log(`Interrupt: Debug Exception (0x01) at RIP=0x${rip.toString(16)}`);
+    // Debug exception - continue execution normally
+    return true;
   }
 
   handleNMI(errorCode) {
-    console.warn('Interrupt: Non-Maskable Interrupt (0x02)');
+    console.warn('Interrupt: Non-Maskable Interrupt (0x02) - Critical hardware error');
+    // NMI cannot be masked - system may be unstable
+    // In a real system, this would trigger emergency shutdown
+    return false;
   }
 
   handleBreakpoint(errorCode) {
-    console.log('Interrupt: Breakpoint (0x03)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.log(`Interrupt: Breakpoint (0x03) at RIP=0x${rip.toString(16)}`);
+    // Breakpoint - continue execution (debugger would handle this)
+    return true;
   }
 
   handleOverflow(errorCode) {
-    console.log('Interrupt: Overflow (0x04)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.log(`Interrupt: Overflow (0x04) at RIP=0x${rip.toString(16)}`);
+    // INTO instruction overflow - continue execution
+    return true;
   }
 
   handleBoundsCheck(errorCode) {
-    console.error('Interrupt: Bounds Check Failed (0x05)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: Bounds Check Failed (0x05) at RIP=0x${rip.toString(16)}`);
+    
+    // BOUND instruction failed - try to skip
+    if (this.cpu && this.cpu.registers) {
+      this.cpu.registers.rip += 1n;
+      return false;
+    }
+    return false;
   }
 
   handleInvalidOpcode(errorCode) {
@@ -254,27 +284,57 @@ class InterruptHandler {
   }
 
   handleDeviceNotAvailable(errorCode) {
-    console.warn('Interrupt: Device Not Available (0x07)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.warn(`Interrupt: Device Not Available (0x07) at RIP=0x${rip.toString(16)}`);
+    
+    // FPU/MMX/SSE not available - try to continue
+    // In a real system, this would load FPU state or disable FPU
+    return true;
   }
 
   handleDoubleFault(errorCode) {
     console.error('Interrupt: Double Fault (0x08) - System may be unstable');
+    // Double fault - critical error, system likely unstable
+    // In a real system, this would trigger triple fault and reset
+    return false;
   }
 
   handleInvalidTSS(errorCode) {
-    console.error('Interrupt: Invalid TSS (0x0A)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: Invalid TSS (0x0A) at RIP=0x${rip.toString(16)}, Error Code: 0x${errorCode.toString(16)}`);
+    
+    // Invalid Task State Segment - try to continue with current TSS
+    // In a real system, this would load a valid TSS
+    return false;
   }
 
   handleSegmentNotPresent(errorCode) {
-    console.error('Interrupt: Segment Not Present (0x0B)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: Segment Not Present (0x0B) at RIP=0x${rip.toString(16)}, Error Code: 0x${errorCode.toString(16)}`);
+    
+    // Segment selector points to non-present segment
+    // Try to continue - in a real system, this would load the segment
+    return false;
   }
 
   handleStackFault(errorCode) {
-    console.error('Interrupt: Stack Fault (0x0C)');
+    const rip = this.cpu.registers.rip || 0n;
+    const rsp = this.cpu.registers.rsp || 0n;
+    console.error(`Interrupt: Stack Fault (0x0C) at RIP=0x${rip.toString(16)}, RSP=0x${rsp.toString(16)}, Error Code: 0x${errorCode.toString(16)}`);
+    
+    // Stack segment violation or stack overflow
+    // Try to recover by adjusting stack pointer
+    if (this.cpu && this.cpu.registers) {
+      // Try to allocate more stack space (simplified)
+      // In a real system, this would grow the stack or switch stacks
+      return false;
+    }
+    return false;
   }
 
   handleGeneralProtection(errorCode) {
-    console.error(`Interrupt: General Protection Fault (0x0D) - Error Code: 0x${errorCode.toString(16)}`);
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: General Protection Fault (0x0D) at RIP=0x${rip.toString(16)}, Error Code: 0x${errorCode.toString(16)}`);
     
     // GP fault can occur for many reasons:
     // - Invalid segment access
@@ -282,9 +342,26 @@ class InterruptHandler {
     // - Invalid memory access
     // - Null segment selector
     
-    // Try to recover if possible
-    // For now, just log the error
-    // In a real system, this would check the error code and handle accordingly
+    // Check error code to determine cause
+    const selectorIndex = (errorCode & 0xFFF8) >> 3;
+    const external = (errorCode & 0x01) !== 0;
+    const table = (errorCode & 0x02) !== 0; // 0 = GDT, 1 = IDT
+    const selector = errorCode & 0xFFF8;
+    
+    if (selector === 0) {
+      console.error('GP Fault: Null segment selector');
+    } else if (table) {
+      console.error(`GP Fault: Invalid IDT entry (selector: 0x${selector.toString(16)})`);
+    } else {
+      console.error(`GP Fault: Invalid GDT entry (selector: 0x${selector.toString(16)})`);
+    }
+    
+    // Try to recover by skipping instruction (simplified)
+    if (this.cpu && this.cpu.registers) {
+      this.cpu.registers.rip += 1n;
+      return false; // Indicate error
+    }
+    return false;
   }
 
   handlePageFault(errorCode) {
@@ -425,23 +502,48 @@ class InterruptHandler {
   }
 
   handleMathFault(errorCode) {
-    console.error('Interrupt: Math Fault (0x10)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: Math Fault (0x10) at RIP=0x${rip.toString(16)}`);
+    
+    // x87 FPU error - try to continue
+    // In a real system, this would clear FPU status or handle the error
+    return true;
   }
 
   handleAlignmentCheck(errorCode) {
-    console.error('Interrupt: Alignment Check (0x11)');
+    const rip = this.cpu.registers.rip || 0n;
+    const faultAddress = this.cpu.registers.cr2 || 0n;
+    console.error(`Interrupt: Alignment Check (0x11) at RIP=0x${rip.toString(16)}, Address: 0x${faultAddress.toString(16)}`);
+    
+    // Unaligned memory access (when alignment check is enabled)
+    // Try to continue - in a real system, this would fix alignment or raise error
+    return false;
   }
 
   handleMachineCheck(errorCode) {
-    console.error('Interrupt: Machine Check (0x12)');
+    console.error('Interrupt: Machine Check (0x12) - Hardware failure detected');
+    
+    // Machine check - critical hardware error
+    // In a real system, this would log MCA (Machine Check Architecture) data
+    return false;
   }
 
   handleSIMDFloatingPoint(errorCode) {
-    console.error('Interrupt: SIMD Floating Point Exception (0x13)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: SIMD Floating Point Exception (0x13) at RIP=0x${rip.toString(16)}`);
+    
+    // SSE/AVX floating point error
+    // Try to continue - in a real system, this would handle the FP error
+    return true;
   }
 
   handleVirtualization(errorCode) {
-    console.error('Interrupt: Virtualization Exception (0x14)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: Virtualization Exception (0x14) at RIP=0x${rip.toString(16)}`);
+    
+    // VMX/SVM virtualization exception
+    // Try to continue - in a real system, this would handle VM exit
+    return false;
   }
 
   handleSystemCall(errorCode) {

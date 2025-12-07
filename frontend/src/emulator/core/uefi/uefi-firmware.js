@@ -31,6 +31,16 @@ class UEFIFirmware {
       handleProtocol: this.handleProtocol.bind(this),
       exitBootServices: this.exitBootServices.bind(this),
       getMemoryMap: this.getMemoryMap.bind(this),
+      // Event and Timer Services
+      createEvent: this.createEvent.bind(this),
+      closeEvent: this.closeEvent.bind(this),
+      signalEvent: this.signalEvent.bind(this),
+      waitForEvent: this.waitForEvent.bind(this),
+      checkEvent: this.checkEvent.bind(this),
+      setTimer: this.setTimer.bind(this),
+      // Task Priority Services
+      raiseTPL: this.raiseTPL.bind(this),
+      restoreTPL: this.restoreTPL.bind(this),
     };
     this.runtimeServices = {
       // UEFI Runtime Services (simplified)
@@ -40,6 +50,16 @@ class UEFIFirmware {
     this.efiSystemTable = null;
     this.bootServicesExited = false;
     this.memoryMapKey = 0x12345678n; // Memory map key
+    
+    // Event management
+    this.events = new Map(); // Map of event handles to event objects
+    this.nextEventHandle = 0x1000n; // Starting event handle
+    this.timers = new Map(); // Map of timer handles to timer objects
+    this.timerCallbacks = new Map(); // Map of timer handles to callbacks
+    
+    // Task Priority Level (TPL)
+    this.currentTPL = 0; // Application TPL (lowest)
+    this.tplStack = []; // Stack for TPL changes
   }
 
   /**
@@ -390,6 +410,272 @@ class UEFIFirmware {
   getSystemTableAddress() {
     // TODO: Return actual address in memory
     return 0x100000n; // Placeholder
+  }
+
+  /**
+   * UEFI Boot Service: Create Event
+   * Creates a new event
+   * @param {number} type - Event type (EVT_TIMER, EVT_NOTIFY_WAIT, etc.)
+   * @param {number} notifyTpl - Task Priority Level for notification
+   * @param {Function} notifyFunction - Notification function (optional)
+   * @param {bigint} notifyContext - Context for notification (optional)
+   * @param {bigint} event - Pointer to event handle (output)
+   * @returns {number} - EFI_STATUS code (0 = success)
+   */
+  createEvent(type, notifyTpl, notifyFunction, notifyContext, event) {
+    console.log(`UEFI: Create Event (type: 0x${type.toString(16)})`);
+    
+    const eventHandle = this.nextEventHandle++;
+    const eventObj = {
+      handle: eventHandle,
+      type: type,
+      notifyTpl: notifyTpl || 0,
+      notifyFunction: notifyFunction || null,
+      notifyContext: notifyContext || 0n,
+      signaled: false,
+      waiters: [],
+    };
+    
+    this.events.set(eventHandle, eventObj);
+    
+    // Write event handle to memory if pointer provided
+    if (event && this.memory) {
+      this.memory.writeQword(Number(event), eventHandle);
+    }
+    
+    return 0; // EFI_SUCCESS
+  }
+
+  /**
+   * UEFI Boot Service: Close Event
+   * Closes an event
+   * @param {bigint} event - Event handle
+   * @returns {number} - EFI_STATUS code
+   */
+  closeEvent(event) {
+    console.log(`UEFI: Close Event (handle: 0x${event.toString(16)})`);
+    
+    if (this.events.has(event)) {
+      const eventObj = this.events.get(event);
+      
+      // Signal all waiters before closing
+      for (const waiter of eventObj.waiters) {
+        if (waiter.resolve) {
+          waiter.resolve(true);
+        }
+      }
+      
+      this.events.delete(event);
+      return 0; // EFI_SUCCESS
+    }
+    
+    return 0x800000000000000E; // EFI_INVALID_PARAMETER
+  }
+
+  /**
+   * UEFI Boot Service: Signal Event
+   * Signals an event
+   * @param {bigint} event - Event handle
+   * @returns {number} - EFI_STATUS code
+   */
+  signalEvent(event) {
+    if (this.events.has(event)) {
+      const eventObj = this.events.get(event);
+      eventObj.signaled = true;
+      
+      // Resolve all waiters
+      for (const waiter of eventObj.waiters) {
+        if (waiter.resolve) {
+          waiter.resolve(true);
+        }
+      }
+      eventObj.waiters = [];
+      
+      // Call notification function if set
+      if (eventObj.notifyFunction) {
+        try {
+          eventObj.notifyFunction(eventObj.notifyContext);
+        } catch (error) {
+          console.error('UEFI: Error in event notification function:', error);
+        }
+      }
+      
+      return 0; // EFI_SUCCESS
+    }
+    
+    return 0x800000000000000E; // EFI_INVALID_PARAMETER
+  }
+
+  /**
+   * UEFI Boot Service: Wait For Event
+   * Waits for one or more events to be signaled
+   * @param {number} numberOfEvents - Number of events to wait for
+   * @param {bigint} event - Pointer to array of event handles
+   * @param {bigint} index - Pointer to index of signaled event (output)
+   * @returns {number} - EFI_STATUS code
+   */
+  async waitForEvent(numberOfEvents, event, index) {
+    console.log(`UEFI: Wait For Event (count: ${numberOfEvents})`);
+    
+    if (numberOfEvents === 0 || !event) {
+      return 0x8000000000000002; // EFI_INVALID_PARAMETER
+    }
+    
+    // Read event handles from memory
+    const events = [];
+    for (let i = 0; i < numberOfEvents; i++) {
+      const eventHandle = this.memory.readQword(Number(event) + (i * 8));
+      if (this.events.has(eventHandle)) {
+        events.push(this.events.get(eventHandle));
+      }
+    }
+    
+    // Check if any event is already signaled
+    for (let i = 0; i < events.length; i++) {
+      if (events[i].signaled) {
+        if (index && this.memory) {
+          this.memory.writeQword(Number(index), BigInt(i));
+        }
+        return 0; // EFI_SUCCESS
+      }
+    }
+    
+    // Wait for event (simplified - in real UEFI this would use async/await properly)
+    return new Promise((resolve) => {
+      let resolved = false;
+      
+      const waiter = {
+        resolve: (result) => {
+          if (!resolved) {
+            resolved = true;
+            // Find which event was signaled
+            for (let i = 0; i < events.length; i++) {
+              if (events[i].signaled) {
+                if (index && this.memory) {
+                  this.memory.writeQword(Number(index), BigInt(i));
+                }
+                break;
+              }
+            }
+            resolve(0); // EFI_SUCCESS
+          }
+        },
+      };
+      
+      // Add waiter to all events
+      for (const eventObj of events) {
+        eventObj.waiters.push(waiter);
+      }
+      
+      // Timeout after 1 second (simplified)
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(0x8000000000000001); // EFI_TIMEOUT
+        }
+      }, 1000);
+    });
+  }
+
+  /**
+   * UEFI Boot Service: Check Event
+   * Checks if an event is signaled
+   * @param {bigint} event - Event handle
+   * @returns {number} - EFI_STATUS code (0 = signaled, 0x8000000000000001 = not signaled)
+   */
+  checkEvent(event) {
+    if (this.events.has(event)) {
+      const eventObj = this.events.get(event);
+      return eventObj.signaled ? 0 : 0x8000000000000001; // EFI_SUCCESS or EFI_NOT_READY
+    }
+    
+    return 0x800000000000000E; // EFI_INVALID_PARAMETER
+  }
+
+  /**
+   * UEFI Boot Service: Set Timer
+   * Sets a timer event
+   * @param {bigint} event - Event handle
+   * @param {number} type - Timer type (TimerCancel, TimerPeriodic, TimerRelative)
+   * @param {bigint} triggerTime - Time in 100ns units
+   * @returns {number} - EFI_STATUS code
+   */
+  setTimer(event, type, triggerTime) {
+    console.log(`UEFI: Set Timer (event: 0x${event.toString(16)}, type: ${type}, time: ${triggerTime})`);
+    
+    if (!this.events.has(event)) {
+      return 0x800000000000000E; // EFI_INVALID_PARAMETER
+    }
+    
+    // Clear existing timer if any
+    if (this.timerCallbacks.has(event)) {
+      const timerId = this.timerCallbacks.get(event);
+      if (typeof timerId === 'number') {
+        clearTimeout(timerId);
+        clearInterval(timerId);
+      }
+      this.timerCallbacks.delete(event);
+    }
+    
+    // Timer types:
+    // 0 = TimerCancel (cancel timer)
+    // 1 = TimerPeriodic (periodic timer)
+    // 2 = TimerRelative (one-shot timer)
+    
+    if (type === 0) {
+      // Cancel timer
+      return 0; // EFI_SUCCESS
+    }
+    
+    // Convert 100ns units to milliseconds
+    const milliseconds = Number(triggerTime / 10000n);
+    
+    if (type === 1) {
+      // Periodic timer
+      const intervalId = setInterval(() => {
+        this.signalEvent(event);
+      }, milliseconds);
+      this.timerCallbacks.set(event, intervalId);
+    } else if (type === 2) {
+      // One-shot timer
+      const timeoutId = setTimeout(() => {
+        this.signalEvent(event);
+        this.timerCallbacks.delete(event);
+      }, milliseconds);
+      this.timerCallbacks.set(event, timeoutId);
+    }
+    
+    return 0; // EFI_SUCCESS
+  }
+
+  /**
+   * UEFI Boot Service: Raise TPL (Task Priority Level)
+   * Raises the current TPL
+   * @param {number} newTpl - New TPL level
+   * @returns {number} - Previous TPL level
+   */
+  raiseTPL(newTpl) {
+    const oldTpl = this.currentTPL;
+    this.tplStack.push(oldTpl);
+    this.currentTPL = newTpl;
+    console.log(`UEFI: Raise TPL from ${oldTpl} to ${newTpl}`);
+    return oldTpl;
+  }
+
+  /**
+   * UEFI Boot Service: Restore TPL (Task Priority Level)
+   * Restores the previous TPL
+   * @param {number} oldTpl - Previous TPL level to restore
+   */
+  restoreTPL(oldTpl) {
+    if (this.tplStack.length > 0) {
+      const previousTpl = this.tplStack.pop();
+      this.currentTPL = previousTpl;
+      console.log(`UEFI: Restore TPL from ${oldTpl} to ${previousTpl}`);
+    } else {
+      this.currentTPL = oldTpl;
+      console.log(`UEFI: Restore TPL to ${oldTpl}`);
+    }
   }
 
   /**
