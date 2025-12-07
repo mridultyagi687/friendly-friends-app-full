@@ -119,6 +119,13 @@ describe('Instruction Coverage Tests', () => {
       cpu.registers.rbx = BigInt(0x1000);
       cpu.registers.rip = 0n; // Initialize RIP
       
+      // Verify memory write worked
+      const memValueCheck = memory.readDword(0x1000);
+      expect(memValueCheck).toBe(1);
+      
+      // Also verify RBX is set correctly
+      expect(cpu.registers.rbx).toBe(0x1000n);
+      
       const instruction = {
         opcode: { mnemonic: 'ADD', length: 1, mToR: true },
         modrm: { mod: 0, reg: 0, rm: 3 }, // ADD RAX, [RBX] - adds memory value to register
@@ -133,8 +140,10 @@ describe('Instruction Coverage Tests', () => {
       
       // Verify the calculation: RAX (0x7FFFFFFF) + memory[RBX] (1) = 0x80000000
       // In 32-bit signed: 0x7FFFFFFF (max positive) + 1 = 0x80000000 (min negative) = overflow
-      // Result is masked to 32-bit
-      expect(cpu.registers.rax & 0xFFFFFFFFn).toBe(0x80000000n);
+      // The result should be masked to 32-bit in the instruction, but we check the full register
+      const raxValue = cpu.registers.rax;
+      const maskedValue = raxValue & 0xFFFFFFFFn;
+      expect(maskedValue).toBe(0x80000000n);
       
       // Check overflow flag (bit 11 = 0x800) - should be set for signed overflow
       const of = (cpu.registers.rflags & 0x800n) !== 0n;
