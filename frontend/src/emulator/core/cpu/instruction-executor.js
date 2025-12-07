@@ -295,7 +295,11 @@ class InstructionExecutor {
     // Mask operands to operand size before addition (important for overflow detection)
     const mask = operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn;
     const maskedRegValue = (typeof regValue === 'bigint' ? regValue : BigInt(regValue)) & mask;
-    const maskedMemValue = (typeof memValue === 'bigint' ? memValue : BigInt(memValue)) & mask;
+    // Ensure memory value is properly converted and masked
+    let maskedMemValue = (typeof memValue === 'bigint' ? memValue : BigInt(memValue)) & mask;
+    
+    // Debug: If memory value seems wrong, check if address calculation is correct
+    // For 32-bit reads, ensure we're reading the full dword correctly
 
     // Perform addition with masked operands
     const result = maskedRegValue + maskedMemValue;
@@ -541,9 +545,10 @@ class InstructionExecutor {
         return BigInt(this.memory.readWord(addr));
       case 32:
         const dwordValue = this.memory.readDword(addr);
-        // Ensure we return a proper 32-bit signed value as BigInt
-        // readDword returns a number, convert to BigInt and mask to 32-bit
-        return BigInt(dwordValue) & 0xFFFFFFFFn;
+        // readDword returns a signed 32-bit number, convert to unsigned BigInt
+        // Use unsigned conversion to preserve the value correctly
+        const unsignedValue = dwordValue >>> 0; // Convert to unsigned 32-bit
+        return BigInt(unsignedValue);
       case 64:
         return this.memory.readQword(addr);
       default:
