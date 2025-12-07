@@ -151,7 +151,7 @@ class InstructionExecutor {
         case 'LIDT':
         case 'SGDT':
         case 'SIDT':
-          return this.executeGDTIDT(instruction);
+          return this.executeSYSTEM(instruction);
         case 'LTR':
           return this.executeLTR(instruction);
         case 'INVLPG':
@@ -317,27 +317,30 @@ class InstructionExecutor {
     const memValue = this.readMemory(memAddr, operandSize);
     const regValue = this.cpu.registers[reg] || 0n;
 
-    // Mask operands to operand size before addition (important for overflow detection)
+    // Convert to BigInt
     const mask = operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn;
-    const maskedRegValue = (typeof regValue === 'bigint' ? regValue : BigInt(regValue)) & mask;
-    // Ensure memory value is properly converted and masked
-    let maskedMemValue = (typeof memValue === 'bigint' ? memValue : BigInt(memValue)) & mask;
+    const regValueBigInt = (typeof regValue === 'bigint' ? regValue : BigInt(regValue));
+    const memValueBigInt = (typeof memValue === 'bigint' ? memValue : BigInt(memValue));
     
-    // Debug: If memory value seems wrong, check if address calculation is correct
-    // For 32-bit reads, ensure we're reading the full dword correctly
-
-    // Perform addition with masked operands
+    // Compute unmasked sum first (for CF calculation)
+    const unmaskedSum = regValueBigInt + memValueBigInt;
+    
+    // Mask operands to operand size (for OF, ZF, SF, AF calculation)
+    const maskedRegValue = regValueBigInt & mask;
+    const maskedMemValue = memValueBigInt & mask;
+    
+    // Perform addition with masked operands (for result)
     const result = maskedRegValue + maskedMemValue;
     
-    // Update flags including overflow (before masking result)
-    // Pass original values for overflow calculation, but use masked values for actual operation
-    this.updateFlagsWithOperands(result, maskedRegValue, maskedMemValue, operandSize, 'add');
+    // Update flags using masked operands (for OF, ZF, SF, AF) but unmasked sum for CF
+    this.updateFlagsWithOperands(result, maskedRegValue, maskedMemValue, operandSize, 'add', unmaskedSum);
     
     // Mask result to operand size and store
+    const maskedResult = result & mask;
+    
     // For 32-bit operations, we need to preserve the upper 32 bits of the 64-bit register
-    // by sign-extending or zero-extending based on the result
+    // by sign-extending based on the result
     if (operandSize === 32) {
-      const maskedResult = result & mask;
       // Sign-extend 32-bit result to 64-bit register
       const signBit = (maskedResult & 0x80000000n) !== 0n;
       if (signBit) {
@@ -349,7 +352,7 @@ class InstructionExecutor {
       }
     } else {
       // 64-bit operation: just mask and store
-      this.cpu.registers[reg] = result & mask;
+      this.cpu.registers[reg] = maskedResult;
     }
 
     this.cpu.registers.rip += BigInt(instruction.length);
@@ -824,8 +827,15 @@ class InstructionExecutor {
 
   /**
    * Update CPU flags with operand information for overflow calculation
+   * Uses correct BigInt arithmetic for 64-bit operations
+   * @param {bigint} result - The masked result of the operation
+   * @param {bigint} operand1 - First operand (masked)
+   * @param {bigint} operand2 - Second operand (masked)
+   * @param {number} operandSize - Operand size in bits (32 or 64)
+   * @param {string} operation - Operation type ('add' or 'sub')
+   * @param {bigint} unmaskedSum - Unmasked sum for CF calculation (optional, defaults to result)
    */
-  updateFlagsWithOperands(result, operand1, operand2, operandSize, operation = 'add') {
+  updateFlagsWithOperands(result, operand1, operand2, operandSize, operation = 'add', unmaskedSum = null) {
     let flags = this.cpu.registers.rflags;
     
     // Convert to BigInt
@@ -833,23 +843,32 @@ class InstructionExecutor {
     const op1 = typeof operand1 === 'bigint' ? operand1 : BigInt(operand1);
     const op2 = typeof operand2 === 'bigint' ? operand2 : BigInt(operand2);
 
+    // Constants for flag calculation
+    const MASK64 = (1n << 64n) - 1n;
+    const SIGN64 = 1n << 63n;
+    const SIGN32 = 1n << 31n;
+    const mask = operandSize === 64 ? MASK64 : 0xFFFFFFFFn;
+    const signMask = operandSize === 64 ? SIGN64 : SIGN32;
+    
+    // Mask result to operand size
+    const maskedResult = resultBigInt & mask;
+
     // Zero flag (ZF) - bit 6
-    if (resultBigInt === 0n) {
+    if (maskedResult === 0n) {
       flags |= 0x40n;
     } else {
       flags &= ~0x40n;
     }
 
     // Sign flag (SF) - bit 7
-    const mask = operandSize === 64 ? 0x8000000000000000n : 0x80000000n;
-    if ((resultBigInt & mask) !== 0n) {
+    if ((maskedResult & signMask) !== 0n) {
       flags |= 0x80n;
     } else {
       flags &= ~0x80n;
     }
 
     // Parity flag (PF) - bit 2
-    const lowByte = Number(resultBigInt & 0xFFn);
+    const lowByte = Number(maskedResult & 0xFFn);
     let parity = 0;
     for (let i = 0; i < 8; i++) {
       if (lowByte & (1 << i)) parity++;
@@ -860,16 +879,30 @@ class InstructionExecutor {
       flags &= ~0x04n;
     }
 
+    // Auxiliary flag (AF) - bit 4
+    if (operation === 'add' || operation === 'sub') {
+      const auxMask = 0x10n;
+      const auxResult = (op1 ^ op2 ^ maskedResult) & auxMask;
+      if (auxResult !== 0n) {
+        flags |= 0x10n; // Set AF
+      } else {
+        flags &= ~0x10n; // Clear AF
+      }
+    }
+
     // Overflow flag (OF) - bit 11
     if (operation === 'add') {
-      // OF is set when adding two positive numbers gives negative, or two negatives gives positive
-      const signMask = operandSize === 64 ? 0x8000000000000000n : 0x80000000n;
-      const op1Sign = (op1 & signMask) !== 0n;
-      const op2Sign = (op2 & signMask) !== 0n;
-      const resultSign = (resultBigInt & signMask) !== 0n;
-      
-      // Overflow occurs when operands have same sign but result has different sign
-      if (op1Sign === op2Sign && op1Sign !== resultSign) {
+      // OF = ((~(op1 ^ op2)) & (op1 ^ result)) & signMask) !== 0n
+      const of = (((~(op1 ^ op2)) & (op1 ^ maskedResult)) & signMask) !== 0n;
+      if (of) {
+        flags |= 0x800n; // Set OF
+      } else {
+        flags &= ~0x800n; // Clear OF
+      }
+    } else if (operation === 'sub') {
+      // For subtraction: OF = ((op1 ^ op2) & (op1 ^ result)) & signMask) !== 0n
+      const of = (((op1 ^ op2) & (op1 ^ maskedResult)) & signMask) !== 0n;
+      if (of) {
         flags |= 0x800n; // Set OF
       } else {
         flags &= ~0x800n; // Clear OF
@@ -877,11 +910,24 @@ class InstructionExecutor {
     }
 
     // Carry flag (CF) - bit 0 (unsigned overflow)
-    const maxValue = operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn;
-    if (resultBigInt > maxValue) {
-      flags |= 0x01n; // Set CF
-    } else {
-      flags &= ~0x01n; // Clear CF
+    if (operation === 'add') {
+      // CF = (op1 + op2) > mask
+      // Use unmaskedSum if provided (for accurate CF calculation), otherwise use op1 + op2
+      const fullSum = unmaskedSum !== null ? unmaskedSum : (op1 + op2);
+      const cf = fullSum > mask;
+      if (cf) {
+        flags |= 0x01n; // Set CF
+      } else {
+        flags &= ~0x01n; // Clear CF
+      }
+    } else if (operation === 'sub') {
+      // CF = op1 < op2 (unsigned borrow)
+      const cf = op1 < op2;
+      if (cf) {
+        flags |= 0x01n; // Set CF
+      } else {
+        flags &= ~0x01n; // Clear CF
+      }
     }
 
     this.cpu.registers.rflags = flags;
@@ -2209,7 +2255,10 @@ class InstructionExecutor {
       // XRSTOR - Restore extended state
       const xcr0 = this.getXCR0();
       const xsaveSize = this.calculateXSAVESize(xcr0);
-      this.restoreExtendedState(memAddrNum, xsaveSize, xcr0);
+      const success = this.restoreExtendedState(memAddrNum, xsaveSize, xcr0);
+      if (!success) {
+        return false; // #UD fault was raised
+      }
       console.log(`CPU: XRSTOR executed (${xsaveSize} bytes)`);
     } else {
       return false;
@@ -2340,54 +2389,42 @@ class InstructionExecutor {
    * Properly saves X87, XMM (SSE), and YMM (AVX) state based on XCR0
    */
   saveExtendedState(memAddr, size, xcr0) {
-    // XSAVE header (64 bytes)
+    let offset = 0;
+    
+    // Save FXSAVE area (first 512 bytes) if X87 (bit 0) or SSE (bit 1) is enabled
+    // The FXSAVE area contains both X87 and XMM registers
+    if ((xcr0 & 0x01n) || (xcr0 & 0x02n)) {
+      this.saveFPUState(memAddr + offset, 512);
+      offset += 512;
+    }
+    
+    // XSAVE header (64 bytes) at offset 512
+    const headerOffset = 512;
     // XSTATE_BV (8 bytes) - which components are saved (must match XCR0)
     let xstateBv = 0n;
     if (xcr0 & 0x01n) xstateBv |= 0x01n; // X87 FPU
     if (xcr0 & 0x02n) xstateBv |= 0x02n; // SSE/XMM registers
     if (xcr0 & 0x04n) xstateBv |= 0x04n; // AVX/YMM registers
-    if (xcr0 & 0x08n) xstateBv |= 0x08n; // AVX512/ZMM registers
     
-    this.memory.writeQword(memAddr, xstateBv);
-    this.memory.writeQword(memAddr + 8, 0n); // XCOMP_BV (compressed format, not used)
+    this.memory.writeQword(memAddr + headerOffset, xstateBv);
+    this.memory.writeQword(memAddr + headerOffset + 8, 0n); // XCOMP_BV (compressed format, not used)
     
     // Reserved (48 bytes)
     for (let i = 16; i < 64; i++) {
-      this.memory.writeByte(memAddr + i, 0);
+      this.memory.writeByte(memAddr + headerOffset + i, 0);
     }
     
-    let offset = 64;
+    // Extended regions start at offset 576 (512 + 64)
+    offset = 576;
     
-    // Save X87 state if enabled (bit 0)
-    if (xcr0 & 0x01n) {
-      this.saveFPUState(memAddr + offset, 512);
-      offset += 512;
-    }
-    
-    // Save SSE/XMM state if enabled (bit 1)
-    // Note: XMM registers are saved as part of the FPU state area in FXSAVE format
-    // But in XSAVE, they're saved separately if XCR0 bit 1 is set
-    if (xcr0 & 0x02n) {
-      // Save XMM registers (16 x 128-bit = 256 bytes)
-      // These are the lower 128 bits of YMM registers
-      for (let i = 0; i < 16; i++) {
-        const xmmReg = `xmm${i}`;
-        const xmmValue = this.cpu.registers[xmmReg] || 0n;
-        // Write 128-bit value (16 bytes) - lower 64 bits, then upper 64 bits
-        this.memory.writeQword(memAddr + offset, xmmValue & 0xFFFFFFFFFFFFFFFFn);
-        this.memory.writeQword(memAddr + offset + 8, (xmmValue >> 64n) & 0xFFFFFFFFFFFFFFFFn);
-        offset += 16;
-      }
-    }
-    
-    // Save AVX/YMM state if enabled (bit 2)
-    // YMM registers are 256-bit: lower 128 bits are XMM, upper 128 bits are YMM extension
+    // Save AVX/YMM upper 128 bits if enabled (bit 2)
+    // YMM upper halves are saved at canonical offset 576 (0x240)
     if (xcr0 & 0x04n) {
       // Save YMM upper 128 bits (16 x 128-bit = 256 bytes)
       for (let i = 0; i < 16; i++) {
         const ymmReg = `ymm${i}`;
         const ymmValue = this.cpu.registers[ymmReg] || 0n;
-        // Write upper 128 bits of YMM (16 bytes)
+        // Write 128-bit value (16 bytes) - lower 64 bits, then upper 64 bits
         this.memory.writeQword(memAddr + offset, ymmValue & 0xFFFFFFFFFFFFFFFFn);
         this.memory.writeQword(memAddr + offset + 8, (ymmValue >> 64n) & 0xFFFFFFFFFFFFFFFFn);
         offset += 16;
@@ -2400,31 +2437,33 @@ class InstructionExecutor {
    * Properly restores X87, XMM (SSE), and YMM (AVX) state based on XCR0 and XSTATE_BV
    */
   restoreExtendedState(memAddr, size, xcr0) {
-    // Read XSTATE_BV - indicates which components are present in the save area
-    const xstateBv = this.memory.readQword(memAddr);
+    // Read XSTATE_BV from header at offset 512
+    const headerOffset = 512;
+    const xstateBv = this.memory.readQword(memAddr + headerOffset);
     
-    let offset = 64;
+    // Validate xstate_bv: if it contains bits outside allowedMask (0x7n), raise #UD
+    const allowedMask = 0x7n; // Only bits 0, 1, 2 are supported
+    if ((xstateBv & ~allowedMask) !== 0n) {
+      // Unsupported bits set - raise #UD (Invalid Opcode)
+      console.error('CPU: XRSTOR attempted with unsupported xstate_bv bits');
+      if (this.cpu.interruptHandler) {
+        this.cpu.interruptHandler.handleInterrupt(6, 0); // #UD fault
+      }
+      return false;
+    }
     
-    // Restore X87 state if present and enabled in XCR0
-    if ((xstateBv & 0x01n) && (xcr0 & 0x01n)) {
+    let offset = 0;
+    
+    // Restore FXSAVE area (first 512 bytes) if X87 (bit 0) or SSE (bit 1) is present and enabled
+    if (((xstateBv & 0x01n) && (xcr0 & 0x01n)) || ((xstateBv & 0x02n) && (xcr0 & 0x02n))) {
       this.restoreFPUState(memAddr + offset, 512);
       offset += 512;
     }
     
-    // Restore SSE/XMM state if present and enabled in XCR0
-    if ((xstateBv & 0x02n) && (xcr0 & 0x02n)) {
-      // Restore XMM registers (16 x 128-bit = 256 bytes)
-      // These are the lower 128 bits of YMM registers
-      for (let i = 0; i < 16; i++) {
-        const xmmReg = `xmm${i}`;
-        const low = this.memory.readQword(memAddr + offset);
-        const high = this.memory.readQword(memAddr + offset + 8);
-        this.cpu.registers[xmmReg] = low | (high << 64n);
-        offset += 16;
-      }
-    }
+    // Extended regions start at offset 576 (512 + 64)
+    offset = 576;
     
-    // Restore AVX/YMM state if present and enabled in XCR0
+    // Restore AVX/YMM upper 128 bits if present and enabled in XCR0
     if ((xstateBv & 0x04n) && (xcr0 & 0x04n)) {
       // Restore YMM upper 128 bits (16 x 128-bit = 256 bytes)
       for (let i = 0; i < 16; i++) {
@@ -2435,6 +2474,8 @@ class InstructionExecutor {
         offset += 16;
       }
     }
+    
+    return true;
   }
 
   /**
@@ -2447,8 +2488,8 @@ class InstructionExecutor {
     // 1 = SSE/XMM registers
     // 2 = AVX/YMM registers (upper 128 bits of XMM)
     // 3 = AVX512/ZMM registers
-    // Return the actual XCR0 register value
-    return this.cpu.registers.xcr0 || 0x07n; // Default: X87 + SSE + AVX enabled
+    // Return the actual XCR0 register value (initialized to 0n)
+    return this.cpu.registers.xcr0 || 0n;
   }
 
   /**
@@ -2464,14 +2505,26 @@ class InstructionExecutor {
   /**
    * Calculate XSAVE size based on XCR0
    * Returns the total size needed for XSAVE/XRSTOR based on enabled features
+   * Standard layout:
+   * - FXSAVE area: 512 bytes (if bit 0 or 1 set)
+   * - XSAVE header: 64 bytes (always present)
+   * - YMM upper halves: 256 bytes at offset 576 (if bit 2 set)
    */
   calculateXSAVESize(xcr0) {
-    let size = 64; // XSAVE header (always present)
+    let size = 0;
     
-    if (xcr0 & 0x01n) size += 512; // X87 FPU state (512 bytes)
-    if (xcr0 & 0x02n) size += 256; // SSE/XMM registers (16 x 128-bit = 256 bytes)
-    if (xcr0 & 0x04n) size += 256; // AVX/YMM upper 128 bits (16 x 128-bit = 256 bytes)
-    if (xcr0 & 0x08n) size += 1024; // AVX512/ZMM registers (not implemented)
+    // FXSAVE area (512 bytes) if X87 (bit 0) or SSE (bit 1) is enabled
+    if ((xcr0 & 0x01n) || (xcr0 & 0x02n)) {
+      size += 512;
+    }
+    
+    // XSAVE header (64 bytes) - always present
+    size += 64;
+    
+    // YMM upper halves (256 bytes) at offset 576 if AVX (bit 2) is enabled
+    if (xcr0 & 0x04n) {
+      size += 256;
+    }
     
     return size;
   }
@@ -2802,9 +2855,15 @@ class InstructionExecutor {
         return this.executeLIDT(instruction);
       case 7: // INVLPG - Invalidate TLB Entry
         return this.executeINVLPG(instruction);
-      case 0: // XGETBV - Get Extended Control Register (0x0F 0x01 0xD0)
-        if (modrm.mod === 3 && modrm.rm === 0) {
-          return this.executeXGETBV(instruction);
+      case 0: // XGETBV/XSETBV - Extended Control Register operations
+        if (modrm.mod === 3) {
+          if (modrm.rm === 0) {
+            // XGETBV - Get Extended Control Register (0x0F 0x01 0xD0)
+            return this.executeXGETBV(instruction);
+          } else if (modrm.rm === 1) {
+            // XSETBV - Set Extended Control Register (0x0F 0x01 0xD1)
+            return this.executeXSETBV(instruction);
+          }
         }
         break;
       default:
@@ -2825,15 +2884,66 @@ class InstructionExecutor {
     if (xcrNumber === 0) {
       // XCR0 - Extended Control Register 0
       // XCR0 controls which extended states are managed by XSAVE/XRSTOR
-      const xcr0 = this.getXCR0();
-      // Return in EDX:EAX (64-bit value, but XCR0 is only 32 bits)
-      // Lower 32 bits in EAX, upper 32 bits (all zeros) in EDX
-      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | (xcr0 & 0xFFFFFFFFn);
-      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n); // Upper 32 bits are always 0 for XCR0
+      const xcr0 = this.cpu.registers.xcr0 || 0n;
+      // Return in EDX:EAX (64-bit value)
+      // Lower 32 bits in EAX, upper 32 bits in EDX
+      const eax = xcr0 & 0xFFFFFFFFn;
+      const edx = (xcr0 >> 32n) & 0xFFFFFFFFn;
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | eax;
+      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | edx;
     } else {
       // Unknown XCR - return 0
       this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n);
       this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n);
+    }
+    
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute XSETBV instruction (Set Extended Control Register)
+   * Writes EDX:EAX to the XCR register specified in ECX
+   * Requires CPL == 0 (privileged instruction)
+   */
+  executeXSETBV(instruction) {
+    // XSETBV writes EDX:EAX to the XCR register specified in ECX
+    const xcrNumber = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
+    const eax = this.cpu.registers.rax & 0xFFFFFFFFn;
+    const edx = this.cpu.registers.rdx & 0xFFFFFFFFn;
+    
+    // Combine EDX:EAX into 64-bit value
+    const newXcr0 = (edx << 32n) | eax;
+    
+    // Check CPL == 0 (privileged instruction)
+    // For now, we'll assume CPL is 0 if we're in kernel mode
+    // In a real implementation, this would check the current privilege level
+    // TODO: Implement proper CPL checking
+    
+    if (xcrNumber === 0) {
+      // XCR0 - Extended Control Register 0
+      // Validate reserved bits: only allow bits 0 (x87), 1 (XMM), and 2 (YMM)
+      const allowedMask = 0x7n; // Bits 0, 1, 2
+      
+      if ((newXcr0 & ~allowedMask) !== 0n) {
+        // Reserved bits set - raise #GP
+        console.error('CPU: XSETBV attempted with reserved bits set');
+        if (this.cpu.interruptHandler) {
+          this.cpu.interruptHandler.handleInterrupt(13, 0); // #GP fault
+        }
+        return false;
+      }
+      
+      // Set XCR0
+      this.cpu.registers.xcr0 = newXcr0 & allowedMask;
+      console.log(`CPU: XSETBV executed (XCR0 = 0x${this.cpu.registers.xcr0.toString(16)})`);
+    } else {
+      // Unknown XCR - raise #GP
+      console.error(`CPU: XSETBV attempted with invalid XCR index ${xcrNumber}`);
+      if (this.cpu.interruptHandler) {
+        this.cpu.interruptHandler.handleInterrupt(13, 0); // #GP fault
+      }
+      return false;
     }
     
     this.cpu.registers.rip += BigInt(instruction.length);

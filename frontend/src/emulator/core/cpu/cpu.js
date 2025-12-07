@@ -52,7 +52,7 @@ class CPU {
       cstar: 0n, // Compatibility mode SYSCALL target
       sfmask: 0n, // SYSCALL flag mask
       // Extended Control Register 0 (XCR0) - Controls XSAVE/XRSTOR
-      xcr0: 0x07n, // Default: X87 (bit 0) + SSE/XMM (bit 1) + AVX/YMM (bit 2) enabled
+      xcr0: 0n, // Initialize to 0 (must be set via XSETBV)
       // Extended Feature Enable Register (EFER) - Model-specific register
       efer: 0n, // Default: all bits cleared
       // YMM registers (16 x 256-bit) - Upper 128 bits of each XMM register
