@@ -18,6 +18,10 @@ class InterruptHandler {
   init() {
     console.log('Interrupt Handler: Initializing...');
     
+    // Initialize IDT in memory (if CPU has IDT base)
+    this.idtBase = null;
+    this.idtLimit = 0;
+    
     // Register common interrupt handlers
     this.registerHandler(0x00, this.handleDivideError.bind(this));
     this.registerHandler(0x01, this.handleDebug.bind(this));
@@ -42,6 +46,116 @@ class InterruptHandler {
     // Software interrupts
     this.registerHandler(0x80, this.handleSystemCall.bind(this)); // Linux syscall
     this.registerHandler(0x2E, this.handleSystemCall.bind(this)); // Windows syscall
+    
+    // Setup default IDT if CPU has IDT info
+    this.setupDefaultIDT();
+  }
+
+  /**
+   * Setup default IDT in memory
+   * Creates IDT entries for all registered handlers
+   */
+  setupDefaultIDT() {
+    if (!this.memory || !this.cpu) {
+      return;
+    }
+    
+    // Allocate IDT (256 entries * 16 bytes = 4096 bytes)
+    const idtSize = 256 * 16;
+    const idtBase = 0x1000n; // Place IDT at 0x1000
+    
+    // Check if CPU has IDT base set
+    if (this.cpu.idt && this.cpu.idt.base) {
+      this.idtBase = BigInt(this.cpu.idt.base);
+      this.idtLimit = this.cpu.idt.limit || 0xFFFF;
+    } else {
+      // Use default location
+      this.idtBase = idtBase;
+      this.idtLimit = idtSize - 1;
+      
+      // Initialize IDT entries
+      for (let i = 0; i < 256; i++) {
+        this.setIDTEntry(i, 0n, 0, 0, false);
+      }
+      
+      console.log(`Interrupt Handler: Default IDT setup at 0x${this.idtBase.toString(16)}`);
+    }
+  }
+
+  /**
+   * Set IDT entry
+   * @param {number} vector - Interrupt vector (0-255)
+   * @param {bigint} handlerAddress - Handler address
+   * @param {number} selector - Code segment selector
+   * @param {number} type - Gate type (0xE = interrupt, 0xF = trap)
+   * @param {boolean} present - Present flag
+   */
+  setIDTEntry(vector, handlerAddress, selector = 0x08, type = 0xE, present = true) {
+    if (!this.memory || vector < 0 || vector > 255) {
+      return;
+    }
+    
+    if (this.idtBase === null) {
+      this.setupDefaultIDT();
+    }
+    
+    const entryAddr = Number(this.idtBase) + (vector * 16);
+    
+    // IDT entry format (16 bytes):
+    // Offset 0-1: Handler offset (low 16 bits)
+    // Offset 2-3: Code segment selector
+    // Offset 4: IST (Interrupt Stack Table) - 0
+    // Offset 5: Type and attributes
+    //   Bit 0-3: Gate type (0xE = interrupt, 0xF = trap)
+    //   Bit 4: Storage segment (0 for interrupt gates)
+    //   Bit 5-6: DPL (Descriptor Privilege Level) - 0
+    //   Bit 7: Present (1 = present)
+    // Offset 6-7: Handler offset (bits 16-31)
+    // Offset 8-15: Handler offset (bits 32-63) - for 64-bit
+    
+    const offsetLow = Number(handlerAddress & 0xFFFFn);
+    const offsetMid = Number((handlerAddress >> 16n) & 0xFFFFn);
+    const offsetHigh = Number((handlerAddress >> 32n) & 0xFFFFFFFFn);
+    
+    const attributes = (present ? 0x80 : 0x00) | (type & 0x0F);
+    
+    // Write IDT entry
+    this.memory.writeWord(entryAddr, offsetLow);
+    this.memory.writeWord(entryAddr + 2, selector);
+    this.memory.writeByte(entryAddr + 4, 0); // IST
+    this.memory.writeByte(entryAddr + 5, attributes);
+    this.memory.writeWord(entryAddr + 6, offsetMid);
+    this.memory.writeDword(entryAddr + 8, offsetHigh);
+  }
+
+  /**
+   * Get IDT entry
+   * @param {number} vector - Interrupt vector
+   * @returns {Object|null} - IDT entry info or null
+   */
+  getIDTEntry(vector) {
+    if (!this.memory || this.idtBase === null || vector < 0 || vector > 255) {
+      return null;
+    }
+    
+    const entryAddr = Number(this.idtBase) + (vector * 16);
+    
+    const offsetLow = this.memory.readWord(entryAddr);
+    const selector = this.memory.readWord(entryAddr + 2);
+    const attributes = this.memory.readByte(entryAddr + 5);
+    const offsetMid = this.memory.readWord(entryAddr + 6);
+    const offsetHigh = this.memory.readDword(entryAddr + 8);
+    
+    const handlerAddress = BigInt(offsetLow) | (BigInt(offsetMid) << 16n) | (BigInt(offsetHigh) << 32n);
+    const present = (attributes & 0x80) !== 0;
+    const type = attributes & 0x0F;
+    
+    return {
+      handlerAddress,
+      selector,
+      type,
+      present,
+    };
   }
 
   /**
@@ -126,7 +240,17 @@ class InterruptHandler {
   }
 
   handleInvalidOpcode(errorCode) {
-    console.error('Interrupt: Invalid Opcode (0x06)');
+    const rip = this.cpu.registers.rip || 0n;
+    console.error(`Interrupt: Invalid Opcode (0x06) at RIP=0x${rip.toString(16)}`);
+    
+    // Try to skip the invalid instruction
+    // This is a simplified approach - in reality, we'd decode and skip properly
+    if (this.cpu && this.cpu.registers) {
+      // Advance RIP by 1 byte (minimal skip)
+      // A real handler would decode the instruction to skip it properly
+      this.cpu.registers.rip += 1n;
+      console.log(`Invalid Opcode: Skipped instruction, RIP now 0x${this.cpu.registers.rip.toString(16)}`);
+    }
   }
 
   handleDeviceNotAvailable(errorCode) {
@@ -150,7 +274,17 @@ class InterruptHandler {
   }
 
   handleGeneralProtection(errorCode) {
-    console.error('Interrupt: General Protection Fault (0x0D)');
+    console.error(`Interrupt: General Protection Fault (0x0D) - Error Code: 0x${errorCode.toString(16)}`);
+    
+    // GP fault can occur for many reasons:
+    // - Invalid segment access
+    // - Privilege violation
+    // - Invalid memory access
+    // - Null segment selector
+    
+    // Try to recover if possible
+    // For now, just log the error
+    // In a real system, this would check the error code and handle accordingly
   }
 
   handlePageFault(errorCode) {
