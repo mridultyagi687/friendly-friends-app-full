@@ -57,22 +57,30 @@ class InterruptHandler {
    * Handle interrupt
    * @param {number} vector - Interrupt vector
    * @param {number} errorCode - Error code (if applicable)
+   * @returns {boolean} - True if handled successfully
    */
   handleInterrupt(vector, errorCode = 0) {
-    console.log(`Interrupt Handler: Handling interrupt 0x${vector.toString(16)}`);
-
     const handler = this.interruptHandlers.get(vector);
     if (handler) {
-      // Save current state
-      this.saveState();
+      try {
+        // Save current state
+        this.saveState();
 
-      // Call handler
-      handler(errorCode);
+        // Call handler
+        const result = handler(errorCode);
 
-      // Restore state (if handler didn't modify it)
-      // this.restoreState();
+        // Restore state (if handler didn't modify it)
+        // this.restoreState();
+        
+        // Return result if handler returned one, otherwise true
+        return result !== false;
+      } catch (e) {
+        console.error(`Interrupt Handler: Error handling interrupt 0x${vector.toString(16)}:`, e);
+        return false;
+      }
     } else {
       console.warn(`Interrupt Handler: No handler for interrupt 0x${vector.toString(16)}`);
+      return false;
     }
   }
 
