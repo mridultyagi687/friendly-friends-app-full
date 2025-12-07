@@ -16,12 +16,23 @@ class GraphicsOutputProtocol {
     this.protocolGuid = null;
     this.protocolInstalled = false;
     
-    // Define installProtocol as instance method immediately
-    this.installProtocol = () => {
+    // Define installProtocol as instance method immediately - use arrow function to preserve 'this'
+    // Also define as a regular function property to ensure it's always available
+    const self = this;
+    this.installProtocol = function installProtocol() {
       console.log('GOP: Installing Graphics Output Protocol');
-      this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
-      this.protocolInstalled = true;
+      self.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+      self.protocolInstalled = true;
     };
+    
+    // Also add it to the prototype as a backup (though instance method should take precedence)
+    if (!GraphicsOutputProtocol.prototype.installProtocol) {
+      GraphicsOutputProtocol.prototype.installProtocol = function() {
+        console.log('GOP: Installing Graphics Output Protocol (prototype fallback)');
+        this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+        this.protocolInstalled = true;
+      };
+    }
     
     this.currentMode = {
       maxMode: 1,
@@ -51,12 +62,26 @@ class GraphicsOutputProtocol {
   init() {
     console.log('GOP: Initializing Graphics Output Protocol...');
     
-    // Ensure installProtocol method exists (defensive)
+    // Ensure installProtocol method exists (defensive) - multiple fallback strategies
     if (typeof this.installProtocol !== 'function') {
+      console.warn('GOP: installProtocol missing in init(), adding fallback');
+      const self = this;
       this.installProtocol = function() {
-        console.log('GOP: Installing Graphics Output Protocol (fallback)');
-        this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
-        this.protocolInstalled = true;
+        console.log('GOP: Installing Graphics Output Protocol (fallback in init)');
+        self.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+        self.protocolInstalled = true;
+      };
+    }
+    
+    // Verify it's actually a function
+    if (typeof this.installProtocol !== 'function') {
+      console.error('GOP: installProtocol still not a function after fallback!');
+      // Last resort: assign directly
+      const self = this;
+      this.installProtocol = () => {
+        console.log('GOP: Installing Graphics Output Protocol (last resort)');
+        self.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+        self.protocolInstalled = true;
       };
     }
     

@@ -73,8 +73,18 @@ class CustomEmulator {
     // Initialize ACPI tables (needs memory)
     this.acpi.init();
     
-    // Initialize UEFI firmware (needs memory, CPU, GOP, ACPI, storage)
-    this.uefi = new UEFIFirmware(this.memory, this.cpu, this.gop, this.acpi, this.storage);
+    // Ensure GOP installProtocol is always available before passing to UEFI
+    if (this.gop && typeof this.gop.installProtocol !== 'function') {
+      console.warn('Emulator: GOP installProtocol missing in init(), adding fallback');
+      this.gop.installProtocol = function() {
+        console.log('GOP: Installing Graphics Output Protocol (fallback in init)');
+        this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+        this.protocolInstalled = true;
+      };
+    }
+    
+    // Initialize UEFI firmware (needs memory, CPU, GOP, ACPI, storage, vgaDevice)
+    this.uefi = new UEFIFirmware(this.memory, this.cpu, this.gop, this.acpi, this.storage, this.vga);
     await this.uefi.init();
     
     await this.tpm.init();

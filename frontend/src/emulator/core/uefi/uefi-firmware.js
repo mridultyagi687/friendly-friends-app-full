@@ -178,19 +178,44 @@ class UEFIFirmware {
     console.log('UEFI: DXE Phase - Driver execution');
     // Expose GOP protocol
     if (this.gop) {
-      // Ensure installProtocol exists - add it if missing (defensive)
+      // Multiple layers of defensive checks
+      if (!this.gop) {
+        console.error('UEFI: GOP is null or undefined');
+        return;
+      }
+      
+      // Check if installProtocol exists - add it if missing (defensive)
       if (typeof this.gop.installProtocol !== 'function') {
-        console.warn('UEFI: GOP installProtocol missing, adding fallback');
-        this.gop.installProtocol = function() {
-          console.log('GOP: Installing Graphics Output Protocol (fallback)');
-          this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
-          this.protocolInstalled = true;
-        };
+        console.warn('UEFI: GOP installProtocol missing, adding fallback', {
+          gopType: typeof this.gop,
+          gopKeys: Object.keys(this.gop || {}),
+          hasInstallProtocol: 'installProtocol' in (this.gop || {})
+        });
+        
+        // Try prototype method first
+        if (typeof this.gop.constructor?.prototype?.installProtocol === 'function') {
+          this.gop.installProtocol = this.gop.constructor.prototype.installProtocol.bind(this.gop);
+        } else {
+          // Add instance method
+          const gopRef = this.gop;
+          this.gop.installProtocol = function() {
+            console.log('GOP: Installing Graphics Output Protocol (fallback in dxePhase)');
+            gopRef.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+            gopRef.protocolInstalled = true;
+          };
+        }
+      }
+      
+      // Final check before calling
+      if (typeof this.gop.installProtocol !== 'function') {
+        console.error('UEFI: GOP installProtocol still not a function after fallback attempts');
+        return; // Don't throw, just skip GOP installation
       }
       
       // Now call it
       try {
         this.gop.installProtocol();
+        console.log('UEFI: GOP protocol installed successfully');
       } catch (error) {
         console.error('UEFI: Error installing GOP protocol:', error);
         // Don't throw - continue boot process
