@@ -268,10 +268,11 @@ class InstructionExecutor {
     const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
     const memAddr = this.calculateAddress(instruction);
     const memValue = this.readMemory(memAddr, operandSize);
-    const regValue = this.cpu.registers[reg];
+    const regValue = this.cpu.registers[reg] || 0n;
 
-    // Perform addition
-    const result = regValue + memValue;
+    // Perform addition (ensure both are BigInt)
+    const result = (typeof regValue === 'bigint' ? regValue : BigInt(regValue)) + 
+                   (typeof memValue === 'bigint' ? memValue : BigInt(memValue));
     this.cpu.registers[reg] = result;
 
     // Update flags including overflow
