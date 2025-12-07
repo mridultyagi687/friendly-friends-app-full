@@ -1650,6 +1650,15 @@ class InstructionExecutor {
 
     let eax, ebx, ecx, edx;
 
+    // Consistent CPU model: Intel Core i7-8700K (Coffee Lake)
+    // Family 6, Model 158 (0x9E), Stepping 10 (0xA)
+    const CPU_FAMILY = 6;
+    const CPU_MODEL = 0x9E; // 158 decimal
+    const CPU_STEPPING = 0xA; // 10 decimal
+    const CPU_EXTENDED_FAMILY = 0;
+    const CPU_EXTENDED_MODEL = 0x9;
+    const CPU_TYPE = 0; // Original OEM
+
     switch (input) {
       case 0: // Get vendor string and maximum basic function
         // Return "GenuineIntel"
@@ -1660,49 +1669,100 @@ class InstructionExecutor {
         break;
 
       case 1: // Get processor info and feature bits (CRITICAL for Windows)
-        // Intel Core i7-8700K (Coffee Lake) - Family 6, Model 158 (0x9E), Stepping 10 (0xA)
         // EAX format: [31:20] Reserved, [19:16] Extended Family, [15:8] Extended Model,
-        //            [7:4] Family, [3:0] Model, [11:8] Type, [7:0] Stepping
-        eax = 0x000906EA; // Family 6, Extended Family 0, Model 0x9E, Extended Model 0x9, Stepping 0xA
+        //            [7:4] Family, [3:0] Stepping, [13:12] Type, [11:8] Model
+        eax = (CPU_EXTENDED_FAMILY << 16) | 
+              (CPU_EXTENDED_MODEL << 8) | 
+              (CPU_FAMILY << 4) | 
+              CPU_STEPPING;
+        eax |= (CPU_TYPE << 12); // Type in bits 13:12
         
         // EBX: Brand Index, CLFLUSH line size, Logical processors, APIC ID
         ebx = 0x00080800; // 8 logical processors per package, CLFLUSH size 8 (64 bytes)
         
-        // ECX feature flags (Windows 10/11 checks these):
-        // Bit 0: SSE3, Bit 1: PCLMULQDQ, Bit 2: DTES64, Bit 3: MONITOR, Bit 4: DS-CPL,
-        // Bit 5: VMX, Bit 6: SMX, Bit 7: EIST, Bit 8: TM2, Bit 9: SSSE3,
-        // Bit 10: CNXT-ID, Bit 11: SDBG, Bit 12: FMA, Bit 13: CMPXCHG16B (CRITICAL),
-        // Bit 14: xTPR Update Control, Bit 15: PDCM, Bit 16: PCID, Bit 17: DCA,
-        // Bit 18: SSE4.1, Bit 19: SSE4.2, Bit 20: x2APIC, Bit 21: MOVBE,
-        // Bit 22: POPCNT, Bit 23: TSC-Deadline, Bit 24: AES, Bit 25: XSAVE,
-        // Bit 26: OSXSAVE, Bit 27: AVX, Bit 28: F16C, Bit 29: RDRAND, Bit 30: Not used, Bit 31: Hypervisor
-        ecx = 0x7FFAFBFF | 
-              (1 << 13) |  // CMPXCHG16B (CRITICAL - Windows BSODs without this)
-              (1 << 12) |  // FMA
-              (1 << 9) |   // SSSE3
-              (1 << 18) |  // SSE4.1
-              (1 << 19) |  // SSE4.2
+        // ECX feature flags - ONLY advertise fully implemented features:
+        // Bit 0: SSE3 - NOT implemented (no SSE3-specific instructions)
+        // Bit 1: PCLMULQDQ - NOT implemented
+        // Bit 2: DTES64 - NOT implemented
+        // Bit 3: MONITOR - NOT implemented
+        // Bit 4: DS-CPL - NOT implemented
+        // Bit 5: VMX - NOT implemented
+        // Bit 6: SMX - NOT implemented
+        // Bit 7: EIST - NOT implemented
+        // Bit 8: TM2 - NOT implemented
+        // Bit 9: SSSE3 - NOT implemented (no SSSE3-specific instructions)
+        // Bit 10: CNXT-ID - NOT implemented
+        // Bit 11: SDBG - NOT implemented
+        // Bit 12: FMA - NOT implemented
+        // Bit 13: CMPXCHG16B - ✅ IMPLEMENTED (executeCMPXCHG16B)
+        // Bit 14: xTPR Update Control - NOT implemented
+        // Bit 15: PDCM - NOT implemented
+        // Bit 16: PCID - NOT implemented
+        // Bit 17: DCA - NOT implemented
+        // Bit 18: SSE4.1 - NOT implemented (no SSE4.1-specific instructions)
+        // Bit 19: SSE4.2 - NOT implemented (no SSE4.2-specific instructions)
+        // Bit 20: x2APIC - NOT implemented
+        // Bit 21: MOVBE - ✅ IMPLEMENTED (executeMOVBE)
+        // Bit 22: POPCNT - ✅ IMPLEMENTED (executePOPCNT)
+        // Bit 23: TSC-Deadline - NOT implemented
+        // Bit 24: AES - NOT implemented
+        // Bit 25: XSAVE - ✅ IMPLEMENTED (executeXSAVE)
+        // Bit 26: OSXSAVE - ✅ IMPLEMENTED (OS supports XSAVE)
+        // Bit 27: AVX - PARTIALLY (YMM registers exist, but no AVX arithmetic)
+        // Bit 28: F16C - NOT implemented
+        // Bit 29: RDRAND - ✅ IMPLEMENTED (executeRDRAND)
+        // Bit 30: Not used
+        // Bit 31: Hypervisor - NOT implemented
+        ecx = (1 << 13) |  // CMPXCHG16B (CRITICAL - Windows BSODs without this)
+              (1 << 21) |  // MOVBE
               (1 << 22) |  // POPCNT
               (1 << 25) |  // XSAVE
               (1 << 26) |  // OSXSAVE
-              (1 << 27) |  // AVX
-              (1 << 28) |  // F16C
               (1 << 29);   // RDRAND
+        // Note: AVX (bit 27) not set - YMM registers exist but AVX instructions not fully implemented
         
-        // EDX feature flags (Windows 10/11 checks these):
-        // Bit 0: FPU, Bit 1: VME, Bit 2: DE, Bit 3: PSE, Bit 4: TSC,
-        // Bit 5: MSR, Bit 6: PAE, Bit 7: MCE, Bit 8: CX8, Bit 9: APIC,
-        // Bit 11: SEP, Bit 12: MTRR, Bit 13: PGE, Bit 14: MCA, Bit 15: CMOV,
-        // Bit 16: PAT, Bit 17: PSE-36, Bit 18: PSN, Bit 19: CLFSH,
-        // Bit 21: DS, Bit 22: ACPI, Bit 23: MMX, Bit 24: FXSR,
-        // Bit 25: SSE, Bit 26: SSE2 (CRITICAL), Bit 27: SS, Bit 28: HTT,
-        // Bit 29: TM, Bit 30: IA64, Bit 31: PBE
-        edx = 0xBFEBFBFF | 
-              (1 << 6) |   // PAE (Physical Address Extension)
-              (1 << 23) |  // MMX
+        // EDX feature flags - ONLY advertise fully implemented features:
+        // Bit 0: FPU - ✅ IMPLEMENTED (FPU registers exist)
+        // Bit 1: VME - NOT implemented
+        // Bit 2: DE - NOT implemented
+        // Bit 3: PSE - NOT implemented
+        // Bit 4: TSC - ✅ IMPLEMENTED (RDTSC)
+        // Bit 5: MSR - ✅ IMPLEMENTED (RDMSR/WRMSR)
+        // Bit 6: PAE - ✅ IMPLEMENTED (CR4.PAE)
+        // Bit 7: MCE - NOT implemented
+        // Bit 8: CX8 - NOT implemented
+        // Bit 9: APIC - ✅ IMPLEMENTED (APIC exists)
+        // Bit 11: SEP (SYSENTER/SYSEXIT) - ✅ IMPLEMENTED (executeSYSENTER/SYSEXIT)
+        // Bit 12: MTRR - NOT implemented
+        // Bit 13: PGE - NOT implemented
+        // Bit 14: MCA - NOT implemented
+        // Bit 15: CMOV - ✅ IMPLEMENTED (executeCMOV)
+        // Bit 16: PAT - NOT implemented
+        // Bit 17: PSE-36 - NOT implemented
+        // Bit 18: PSN - NOT implemented
+        // Bit 19: CLFSH - NOT implemented
+        // Bit 21: DS - NOT implemented
+        // Bit 22: ACPI - ✅ IMPLEMENTED (ACPI tables)
+        // Bit 23: MMX - NOT implemented (no MMX instructions)
+        // Bit 24: FXSR - ✅ IMPLEMENTED (FXSAVE/FXRSTOR)
+        // Bit 25: SSE - ✅ IMPLEMENTED (XMM registers, MOVUPS, MOVDQU, PXOR, PAND, POR)
+        // Bit 26: SSE2 - ✅ IMPLEMENTED (MOVDQA, MOVDQU, PADD, PSUB)
+        // Bit 27: SS - NOT implemented
+        // Bit 28: HTT - NOT implemented (single core)
+        // Bit 29: TM - NOT implemented
+        // Bit 30: IA64 - NOT implemented
+        // Bit 31: PBE - NOT implemented
+        edx = (1 << 0) |   // FPU
+              (1 << 4) |   // TSC
+              (1 << 5) |   // MSR
+              (1 << 6) |   // PAE
+              (1 << 9) |   // APIC
+              (1 << 11) |  // SEP (SYSENTER/SYSEXIT)
+              (1 << 15) |  // CMOV
+              (1 << 22) |  // ACPI
+              (1 << 24) |  // FXSR
               (1 << 25) |  // SSE
-              (1 << 26) |  // SSE2 (CRITICAL - Windows requires this)
-              (1 << 28);   // HTT (Hyper-Threading Technology)
+              (1 << 26);   // SSE2 (CRITICAL - Windows requires this)
         break;
 
       case 2: // Cache and TLB information
@@ -1745,46 +1805,48 @@ class InstructionExecutor {
 
       case 7: // Extended features (subleaf in ECX) - CRITICAL for Windows 10/11
         if (subleaf === 0) {
-          // EBX: Extended feature flags (Windows checks these extensively)
-          // Bit 0: FSGSBASE, Bit 1: IA32_TSC_ADJUST, Bit 2: SGX, Bit 3: BMI1,
-          // Bit 4: HLE, Bit 5: AVX2 (CRITICAL), Bit 6: FDP_EXCPTN_ONLY,
-          // Bit 7: SMEP, Bit 8: BMI2, Bit 9: Enhanced REP MOVSB/STOSB,
-          // Bit 10: INVPCID, Bit 11: RTM, Bit 12: PQM, Bit 13: FPU CS/DS,
-          // Bit 14: MPX, Bit 15: PQE, Bit 16: AVX512F, Bit 17: AVX512DQ,
-          // Bit 18: RDSEED, Bit 19: ADX, Bit 20: SMAP, Bit 21: AVX512IFMA,
-          // Bit 22: PCOMMIT, Bit 23: CLFLUSHOPT, Bit 24: CLWB, Bit 25: INTEL_PT,
-          // Bit 26: AVX512PF, Bit 27: AVX512ER, Bit 28: AVX512CD, Bit 29: SHA,
-          // Bit 30: AVX512BW, Bit 31: AVX512VL
-          ebx = (1 << 3) |   // BMI1
-               (1 << 5) |   // AVX2 (CRITICAL - Windows 11 requires this)
-               (1 << 8) |   // BMI2
-               (1 << 9) |   // Enhanced REP MOVSB/STOSB
+          // EBX: Extended feature flags - ONLY advertise fully implemented features:
+          // Bit 0: FSGSBASE - NOT implemented
+          // Bit 1: IA32_TSC_ADJUST - NOT implemented
+          // Bit 2: SGX - NOT implemented
+          // Bit 3: BMI1 - NOT implemented (no BMI1 instructions)
+          // Bit 4: HLE - NOT implemented
+          // Bit 5: AVX2 - NOT implemented (no AVX2 instructions)
+          // Bit 6: FDP_EXCPTN_ONLY - NOT implemented
+          // Bit 7: SMEP - ✅ IMPLEMENTED (CR4.SMEP bit honored)
+          // Bit 8: BMI2 - NOT implemented (no BMI2 instructions)
+          // Bit 9: Enhanced REP MOVSB/STOSB - ✅ IMPLEMENTED (REP prefix for MOVS/STOS)
+          // Bit 10: INVPCID - NOT implemented
+          // Bit 11: RTM - NOT implemented
+          // Bit 12: PQM - NOT implemented
+          // Bit 13: FPU CS/DS - NOT implemented
+          // Bit 14: MPX - NOT implemented
+          // Bit 15: PQE - NOT implemented
+          // Bit 16: AVX512F - NOT implemented
+          // Bit 17: AVX512DQ - NOT implemented
+          // Bit 18: RDSEED - ✅ IMPLEMENTED (executeRDSEED)
+          // Bit 19: ADX - NOT implemented
+          // Bit 20: SMAP - ✅ IMPLEMENTED (CR4.SMAP bit honored)
+          // Bit 21: AVX512IFMA - NOT implemented
+          // Bit 22: PCOMMIT - NOT implemented
+          // Bit 23: CLFLUSHOPT - NOT implemented
+          // Bit 24: CLWB - NOT implemented
+          // Bit 25: INTEL_PT - NOT implemented
+          // Bit 26: AVX512PF - NOT implemented
+          // Bit 27: AVX512ER - NOT implemented
+          // Bit 28: AVX512CD - NOT implemented
+          // Bit 29: SHA - NOT implemented
+          // Bit 30: AVX512BW - NOT implemented
+          // Bit 31: AVX512VL - NOT implemented
+          ebx = (1 << 7) |   // SMEP (CR4.SMEP honored)
+               (1 << 9) |   // Enhanced REP MOVSB/STOSB (REP prefix implemented)
                (1 << 18) |  // RDSEED
-               (1 << 19) |  // ADX
-               (1 << 29);   // SHA
+               (1 << 20);   // SMAP (CR4.SMAP honored)
             
-          // ECX: Extended feature flags
-          // Bit 0: PREFETCHWT1, Bit 1: AVX512VBMI, Bit 2: UMIP,
-          // Bit 3: PKU, Bit 4: OSPKE, Bit 5: WAITPKG, Bit 6: AVX512_VBMI2,
-          // Bit 7: CET_SS, Bit 8: GFNI, Bit 9: VAES, Bit 10: VPCLMULQDQ,
-          // Bit 11: AVX512_VNNI, Bit 12: AVX512_BITALG, Bit 13: TME_EN,
-          // Bit 14: AVX512_VPOPCNTDQ, Bit 15: Reserved, Bit 16: LA57,
-          // Bit 17: MAWAU, Bit 18: RDPID, Bit 19: KL, Bit 20: BUS_LOCK_DETECT,
-          // Bit 21: CLDEMOTE, Bit 22: Reserved, Bit 23: MOVDIRI, Bit 24: MOVDIR64B,
-          // Bit 25: ENQCMD, Bit 26: SGX_LC, Bit 27: PKS, Bit 28: Reserved,
-          // Bit 29: AVX512_4VNNIW, Bit 30: AVX512_4FMAPS, Bit 31: FSREP,
-          ecx = 0; // Most extended features not needed for Windows 10/11
+          // ECX: Extended feature flags - all NOT implemented
+          ecx = 0;
             
-          // EDX: Extended feature flags
-          // Bit 0: Reserved, Bit 1: Reserved, Bit 2: AVX512_4VNNIW,
-          // Bit 3: AVX512_4FMAPS, Bit 4: Fast Short REP MOV, Bit 5: UINTR,
-          // Bit 6: Reserved, Bit 7: Reserved, Bit 8: Reserved, Bit 9: Reserved,
-          // Bit 10: Reserved, Bit 11: Reserved, Bit 12: Reserved, Bit 13: Reserved,
-          // Bit 14: Reserved, Bit 15: Reserved, Bit 16: Reserved, Bit 17: Reserved,
-          // Bit 18: Reserved, Bit 19: Reserved, Bit 20: Reserved, Bit 21: Reserved,
-          // Bit 22: Reserved, Bit 23: Reserved, Bit 24: Reserved, Bit 25: Reserved,
-          // Bit 26: Reserved, Bit 27: Reserved, Bit 28: Reserved, Bit 29: Reserved,
-          // Bit 30: Reserved, Bit 31: Reserved
+          // EDX: Extended feature flags - all NOT implemented
           edx = 0;
             
           // EAX: Maximum sub-leaf supported
@@ -1821,16 +1883,17 @@ class InstructionExecutor {
         if (subleaf === 0) {
           // EAX: Valid bits of lower 32 bits of XCR0
           // Bit 0 = X87 FPU, Bit 1 = SSE/XMM, Bit 2 = AVX/YMM
-          eax = 0x00000007; // X87 (bit 0) + SSE/XMM (bit 1) + AVX/YMM (bit 2)
+          // Only advertise what's implemented: X87 + SSE/XMM (AVX not fully implemented)
+          eax = 0x00000003; // X87 (bit 0) + SSE/XMM (bit 1) - AVX/YMM (bit 2) NOT set
           // EBX: Maximum size of XSAVE/XRSTOR area (in bytes)
-          // Header (64) + X87 (512) + XMM (256) + YMM upper (256) = 1088 bytes
-          ebx = 0x00000440; // 1088 bytes (0x440)
+          // Header (64) + X87 (512) + XMM (256) = 832 bytes (no YMM)
+          ebx = 0x00000340; // 832 bytes (0x340)
           // ECX: Valid bits of upper 32 bits of XCR0 (currently none)
           ecx = 0x00000000;
           // EDX: Valid bits of upper 32 bits of XCR0 (currently none)
           edx = 0x00000000;
         } else if (subleaf === 1) {
-          // XSAVE feature flags
+          // XSAVE feature flags - all NOT implemented
           eax = 0x00000000;
           ebx = 0x00000000;
           ecx = 0x00000000;
@@ -1848,39 +1911,84 @@ class InstructionExecutor {
         break;
 
       case 0x80000001: // Extended processor info and feature bits (CRITICAL for Windows)
-        // EAX: Extended processor signature
-        eax = 0x00000000;
+        // EAX: Extended processor signature - same as leaf 1
+        eax = (CPU_EXTENDED_FAMILY << 16) | 
+              (CPU_EXTENDED_MODEL << 8) | 
+              (CPU_FAMILY << 4) | 
+              CPU_STEPPING;
+        eax |= (CPU_TYPE << 12);
         
         // EBX: Reserved
         ebx = 0x00000000;
         
-        // ECX: Extended feature flags
-        // Bit 0: LAHF/SAHF in 64-bit mode (CRITICAL - Windows requires this)
-        // Bit 1: CMP Legacy, Bit 2: SVM, Bit 3: Extended APIC,
-        // Bit 4: AltMovCr8, Bit 5: LZCNT, Bit 6: SSE4A, Bit 7: MisAlignSSE,
-        // Bit 8: PREFETCHW, Bit 9: OSVW, Bit 10: IBS, Bit 11: XOP,
-        // Bit 12: SKINIT, Bit 13: WDT, Bit 14: Reserved, Bit 15: LWP,
-        // Bit 16: FMA4, Bit 17: TCE, Bit 18: Reserved, Bit 19: NodeId,
-        // Bit 20: Reserved, Bit 21: TBM, Bit 22: TopoExt, Bit 23: PerfCtrExtCore,
-        // Bit 24: PerfCtrExtNB, Bit 25: Reserved, Bit 26: DataBreakpoint,
-        // Bit 27: Performance TSC, Bit 28: PerfCtrExtLLC, Bit 29: Reserved,
-        // Bit 30: Reserved, Bit 31: Reserved
-        ecx = (1 << 0) |   // LAHF/SAHF in 64-bit mode (CRITICAL)
-              (1 << 5) |   // LZCNT
-              (1 << 8);    // PREFETCHW
+        // ECX: Extended feature flags - ONLY advertise fully implemented features:
+        // Bit 0: LAHF/SAHF in 64-bit mode - NOT explicitly implemented (simple instructions, assume present)
+        // Bit 1: CMP Legacy - NOT implemented
+        // Bit 2: SVM - NOT implemented
+        // Bit 3: Extended APIC - NOT implemented
+        // Bit 4: AltMovCr8 - NOT implemented
+        // Bit 5: LZCNT - ✅ IMPLEMENTED (executeLZCNT)
+        // Bit 6: SSE4A - NOT implemented
+        // Bit 7: MisAlignSSE - NOT implemented
+        // Bit 8: PREFETCHW - NOT implemented
+        // Bit 9: OSVW - NOT implemented
+        // Bit 10: IBS - NOT implemented
+        // Bit 11: XOP - NOT implemented
+        // Bit 12: SKINIT - NOT implemented
+        // Bit 13: WDT - NOT implemented
+        // Bit 14: Reserved
+        // Bit 15: LWP - NOT implemented
+        // Bit 16: FMA4 - NOT implemented
+        // Bit 17: TCE - NOT implemented
+        // Bit 18: Reserved
+        // Bit 19: NodeId - NOT implemented
+        // Bit 20-31: Reserved or NOT implemented
+        ecx = (1 << 5);    // LZCNT
+        // Note: LAHF/SAHF (bit 0) not set - not explicitly implemented
         
-        // EDX: Extended feature flags
-        // Bit 0: FPU, Bit 1: VME, Bit 2: DE, Bit 3: PSE, Bit 4: TSC,
-        // Bit 5: MSR, Bit 6: PAE, Bit 7: MCE, Bit 8: CX8, Bit 9: APIC,
-        // Bit 11: SYSCALL/SYSRET (CRITICAL - Windows uses this),
-        // Bit 12: MTRR, Bit 13: PGE, Bit 14: MCA, Bit 15: CMOV,
-        // Bit 16: PAT, Bit 17: PSE-36, Bit 19: CLFSH, Bit 20: NX (CRITICAL - Windows requires this),
-        // Bit 21: DS, Bit 22: ACPI, Bit 23: MMX, Bit 24: FXSR,
-        // Bit 25: SSE, Bit 26: SSE2, Bit 27: HTT, Bit 28: Long Mode (CRITICAL),
-        // Bit 29: 3DNow! Extensions, Bit 30: 3DNow!, Bit 31: Reserved
-        edx = 0xBFEBFBFF |
+        // EDX: Extended feature flags - ONLY advertise fully implemented features:
+        // Bit 0: FPU - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 1: VME - NOT implemented
+        // Bit 2: DE - NOT implemented
+        // Bit 3: PSE - NOT implemented
+        // Bit 4: TSC - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 5: MSR - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 6: PAE - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 7: MCE - NOT implemented
+        // Bit 8: CX8 - NOT implemented
+        // Bit 9: APIC - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 11: SYSCALL/SYSRET - ✅ IMPLEMENTED (executeSYSCALL/SYSRET)
+        // Bit 12: MTRR - NOT implemented
+        // Bit 13: PGE - NOT implemented
+        // Bit 14: MCA - NOT implemented
+        // Bit 15: CMOV - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 16: PAT - NOT implemented
+        // Bit 17: PSE-36 - NOT implemented
+        // Bit 19: CLFSH - NOT implemented
+        // Bit 20: NX - ✅ IMPLEMENTED (EFER.NXE, page execute disable)
+        // Bit 21: DS - NOT implemented
+        // Bit 22: ACPI - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 23: MMX - NOT implemented (same as leaf 1)
+        // Bit 24: FXSR - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 25: SSE - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 26: SSE2 - ✅ IMPLEMENTED (same as leaf 1)
+        // Bit 27: HTT - NOT implemented (same as leaf 1)
+        // Bit 28: Long Mode - ✅ IMPLEMENTED (EFER.LME, 64-bit mode)
+        // Bit 29: 3DNow! Extensions - NOT implemented
+        // Bit 30: 3DNow! - NOT implemented
+        // Bit 31: Reserved
+        edx = (1 << 0) |   // FPU
+              (1 << 4) |   // TSC
+              (1 << 5) |   // MSR
+              (1 << 6) |   // PAE
+              (1 << 9) |   // APIC
               (1 << 11) |  // SYSCALL/SYSRET (CRITICAL)
+              (1 << 15) |  // CMOV
               (1 << 20) |  // NX (No-Execute bit - CRITICAL for Windows)
+              (1 << 22) |  // ACPI
+              (1 << 24) |  // FXSR
+              (1 << 25) |  // SSE
+              (1 << 26) |  // SSE2
               (1 << 28);   // Long Mode (64-bit support - CRITICAL)
         break;
 
