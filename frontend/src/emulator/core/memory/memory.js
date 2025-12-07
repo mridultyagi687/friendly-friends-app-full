@@ -22,9 +22,18 @@ class MemoryManager {
     // Virtual memory manager
     this.virtualMemory = new VirtualMemoryManager(this);
     this.pagingEnabled = false; // Paging disabled by default
+    this.cpu = null; // Will be set by emulator for page fault handling
     
     console.log(`Memory: Initialized with ${this.size / (1024 * 1024 * 1024)}GB addressable space`);
     console.log(`Memory: Using sparse paging (max ${this.maxAllocatedPages * this.pageSize / (1024 * 1024)}MB physical allocation)`);
+  }
+
+  /**
+   * Set CPU reference for page fault handling
+   * @param {CPU} cpu - CPU instance
+   */
+  setCPU(cpu) {
+    this.cpu = cpu;
   }
 
   /**
