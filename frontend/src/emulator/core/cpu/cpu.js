@@ -51,6 +51,14 @@ class CPU {
       lstar: 0n, // Long mode SYSCALL target
       cstar: 0n, // Compatibility mode SYSCALL target
       sfmask: 0n, // SYSCALL flag mask
+      // Extended Control Register 0 (XCR0) - Controls XSAVE/XRSTOR
+      xcr0: 0x07n, // Default: X87 (bit 0) + SSE/XMM (bit 1) + AVX/YMM (bit 2) enabled
+      // YMM registers (16 x 256-bit) - Upper 128 bits of each XMM register
+      // Lower 128 bits are in XMM registers, upper 128 bits are here
+      ymm0: 0n, ymm1: 0n, ymm2: 0n, ymm3: 0n,
+      ymm4: 0n, ymm5: 0n, ymm6: 0n, ymm7: 0n,
+      ymm8: 0n, ymm9: 0n, ymm10: 0n, ymm11: 0n,
+      ymm12: 0n, ymm13: 0n, ymm14: 0n, ymm15: 0n,
     };
 
     this.running = false;

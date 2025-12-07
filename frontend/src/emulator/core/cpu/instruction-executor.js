@@ -1820,12 +1820,14 @@ class InstructionExecutor {
       case 0x0D: // Processor Extended State Enumeration
         if (subleaf === 0) {
           // EAX: Valid bits of lower 32 bits of XCR0
-          eax = 0x00000007; // X87, SSE, AVX
-          // EBX: Maximum size of XSAVE/XRSTOR area
-          ebx = 0x00000240; // 576 bytes (X87 + SSE + AVX)
-          // ECX: Valid bits of upper 32 bits of XCR0
+          // Bit 0 = X87 FPU, Bit 1 = SSE/XMM, Bit 2 = AVX/YMM
+          eax = 0x00000007; // X87 (bit 0) + SSE/XMM (bit 1) + AVX/YMM (bit 2)
+          // EBX: Maximum size of XSAVE/XRSTOR area (in bytes)
+          // Header (64) + X87 (512) + XMM (256) + YMM upper (256) = 1088 bytes
+          ebx = 0x00000440; // 1088 bytes (0x440)
+          // ECX: Valid bits of upper 32 bits of XCR0 (currently none)
           ecx = 0x00000000;
-          // EDX: Valid bits of upper 32 bits of XCR0
+          // EDX: Valid bits of upper 32 bits of XCR0 (currently none)
           edx = 0x00000000;
         } else if (subleaf === 1) {
           // XSAVE feature flags
@@ -2222,18 +2224,19 @@ class InstructionExecutor {
 
   /**
    * Save extended state (XSAVE)
+   * Properly saves X87, XMM (SSE), and YMM (AVX) state based on XCR0
    */
   saveExtendedState(memAddr, size, xcr0) {
     // XSAVE header (64 bytes)
-    // XSTATE_BV (8 bytes) - which components are saved
+    // XSTATE_BV (8 bytes) - which components are saved (must match XCR0)
     let xstateBv = 0n;
-    if (xcr0 & 0x01n) xstateBv |= 0x01n; // X87
-    if (xcr0 & 0x02n) xstateBv |= 0x02n; // SSE
-    if (xcr0 & 0x04n) xstateBv |= 0x04n; // AVX
-    if (xcr0 & 0x08n) xstateBv |= 0x08n; // AVX512
+    if (xcr0 & 0x01n) xstateBv |= 0x01n; // X87 FPU
+    if (xcr0 & 0x02n) xstateBv |= 0x02n; // SSE/XMM registers
+    if (xcr0 & 0x04n) xstateBv |= 0x04n; // AVX/YMM registers
+    if (xcr0 & 0x08n) xstateBv |= 0x08n; // AVX512/ZMM registers
     
     this.memory.writeQword(memAddr, xstateBv);
-    this.memory.writeQword(memAddr + 8, 0n); // XCOMP_BV (compressed)
+    this.memory.writeQword(memAddr + 8, 0n); // XCOMP_BV (compressed format, not used)
     
     // Reserved (48 bytes)
     for (let i = 16; i < 64; i++) {
@@ -2242,28 +2245,38 @@ class InstructionExecutor {
     
     let offset = 64;
     
-    // Save X87 state if enabled
+    // Save X87 state if enabled (bit 0)
     if (xcr0 & 0x01n) {
       this.saveFPUState(memAddr + offset, 512);
       offset += 512;
     }
     
-    // Save SSE state if enabled
+    // Save SSE/XMM state if enabled (bit 1)
+    // Note: XMM registers are saved as part of the FPU state area in FXSAVE format
+    // But in XSAVE, they're saved separately if XCR0 bit 1 is set
     if (xcr0 & 0x02n) {
-      // XMM registers (already saved in FPU state area)
-      // Just update offset
-      offset += 256; // XMM registers
+      // Save XMM registers (16 x 128-bit = 256 bytes)
+      // These are the lower 128 bits of YMM registers
+      for (let i = 0; i < 16; i++) {
+        const xmmReg = `xmm${i}`;
+        const xmmValue = this.cpu.registers[xmmReg] || 0n;
+        // Write 128-bit value (16 bytes) - lower 64 bits, then upper 64 bits
+        this.memory.writeQword(memAddr + offset, xmmValue & 0xFFFFFFFFFFFFFFFFn);
+        this.memory.writeQword(memAddr + offset + 8, (xmmValue >> 64n) & 0xFFFFFFFFFFFFFFFFn);
+        offset += 16;
+      }
     }
     
-    // Save AVX state if enabled (YMM registers)
+    // Save AVX/YMM state if enabled (bit 2)
+    // YMM registers are 256-bit: lower 128 bits are XMM, upper 128 bits are YMM extension
     if (xcr0 & 0x04n) {
-      // YMM registers (256-bit, extends XMM)
+      // Save YMM upper 128 bits (16 x 128-bit = 256 bytes)
       for (let i = 0; i < 16; i++) {
-        // Upper 128 bits of YMM (XMM is lower 128 bits)
-        // For now, write zeros (YMM not fully implemented)
-        for (let j = 0; j < 16; j++) {
-          this.memory.writeByte(memAddr + offset + j, 0);
-        }
+        const ymmReg = `ymm${i}`;
+        const ymmValue = this.cpu.registers[ymmReg] || 0n;
+        // Write upper 128 bits of YMM (16 bytes)
+        this.memory.writeQword(memAddr + offset, ymmValue & 0xFFFFFFFFFFFFFFFFn);
+        this.memory.writeQword(memAddr + offset + 8, (ymmValue >> 64n) & 0xFFFFFFFFFFFFFFFFn);
         offset += 16;
       }
     }
@@ -2271,55 +2284,81 @@ class InstructionExecutor {
 
   /**
    * Restore extended state (XRSTOR)
+   * Properly restores X87, XMM (SSE), and YMM (AVX) state based on XCR0 and XSTATE_BV
    */
   restoreExtendedState(memAddr, size, xcr0) {
-    // Read XSTATE_BV
+    // Read XSTATE_BV - indicates which components are present in the save area
     const xstateBv = this.memory.readQword(memAddr);
     
     let offset = 64;
     
-    // Restore X87 state if present
+    // Restore X87 state if present and enabled in XCR0
     if ((xstateBv & 0x01n) && (xcr0 & 0x01n)) {
       this.restoreFPUState(memAddr + offset, 512);
       offset += 512;
     }
     
-    // Restore SSE state if present
+    // Restore SSE/XMM state if present and enabled in XCR0
     if ((xstateBv & 0x02n) && (xcr0 & 0x02n)) {
-      // XMM registers
-      offset += 256;
+      // Restore XMM registers (16 x 128-bit = 256 bytes)
+      // These are the lower 128 bits of YMM registers
+      for (let i = 0; i < 16; i++) {
+        const xmmReg = `xmm${i}`;
+        const low = this.memory.readQword(memAddr + offset);
+        const high = this.memory.readQword(memAddr + offset + 8);
+        this.cpu.registers[xmmReg] = low | (high << 64n);
+        offset += 16;
+      }
     }
     
-    // Restore AVX state if present
+    // Restore AVX/YMM state if present and enabled in XCR0
     if ((xstateBv & 0x04n) && (xcr0 & 0x04n)) {
-      // YMM registers (upper 128 bits)
-      offset += 256;
+      // Restore YMM upper 128 bits (16 x 128-bit = 256 bytes)
+      for (let i = 0; i < 16; i++) {
+        const ymmReg = `ymm${i}`;
+        const low = this.memory.readQword(memAddr + offset);
+        const high = this.memory.readQword(memAddr + offset + 8);
+        this.cpu.registers[ymmReg] = low | (high << 64n);
+        offset += 16;
+      }
     }
   }
 
   /**
    * Get XCR0 (Extended Control Register 0)
+   * XCR0 controls which extended states are saved/restored by XSAVE/XRSTOR
    */
   getXCR0() {
     // XCR0 bits:
     // 0 = X87 FPU
-    // 1 = SSE
-    // 2 = AVX
-    // 3 = AVX512
-    // Default: enable X87 and SSE
-    return 0x03n; // X87 + SSE enabled
+    // 1 = SSE/XMM registers
+    // 2 = AVX/YMM registers (upper 128 bits of XMM)
+    // 3 = AVX512/ZMM registers
+    // Return the actual XCR0 register value
+    return this.cpu.registers.xcr0 || 0x07n; // Default: X87 + SSE + AVX enabled
+  }
+
+  /**
+   * Set XCR0 (Extended Control Register 0)
+   * This would normally be done via XSETBV instruction, but we'll provide a helper
+   */
+  setXCR0(value) {
+    // Validate XCR0 value (only allow supported bits)
+    const validBits = 0x07n; // X87, SSE, AVX (bits 0, 1, 2)
+    this.cpu.registers.xcr0 = value & validBits;
   }
 
   /**
    * Calculate XSAVE size based on XCR0
+   * Returns the total size needed for XSAVE/XRSTOR based on enabled features
    */
   calculateXSAVESize(xcr0) {
-    let size = 64; // Header
+    let size = 64; // XSAVE header (always present)
     
-    if (xcr0 & 0x01n) size += 512; // X87
-    if (xcr0 & 0x02n) size += 256; // SSE (XMM)
-    if (xcr0 & 0x04n) size += 256; // AVX (YMM upper)
-    if (xcr0 & 0x08n) size += 1024; // AVX512
+    if (xcr0 & 0x01n) size += 512; // X87 FPU state (512 bytes)
+    if (xcr0 & 0x02n) size += 256; // SSE/XMM registers (16 x 128-bit = 256 bytes)
+    if (xcr0 & 0x04n) size += 256; // AVX/YMM upper 128 bits (16 x 128-bit = 256 bytes)
+    if (xcr0 & 0x08n) size += 1024; // AVX512/ZMM registers (not implemented)
     
     return size;
   }
@@ -2664,6 +2703,7 @@ class InstructionExecutor {
 
   /**
    * Execute XGETBV instruction (Get Extended Control Register)
+   * Reads the XCR register specified in ECX and returns the value in EDX:EAX
    */
   executeXGETBV(instruction) {
     // XGETBV reads XCR register specified in ECX, returns value in EDX:EAX
@@ -2671,10 +2711,12 @@ class InstructionExecutor {
     
     if (xcrNumber === 0) {
       // XCR0 - Extended Control Register 0
+      // XCR0 controls which extended states are managed by XSAVE/XRSTOR
       const xcr0 = this.getXCR0();
-      // Return in EDX:EAX (64-bit value)
+      // Return in EDX:EAX (64-bit value, but XCR0 is only 32 bits)
+      // Lower 32 bits in EAX, upper 32 bits (all zeros) in EDX
       this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | (xcr0 & 0xFFFFFFFFn);
-      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | ((xcr0 >> 32n) & 0xFFFFFFFFn);
+      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n); // Upper 32 bits are always 0 for XCR0
     } else {
       // Unknown XCR - return 0
       this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n);
