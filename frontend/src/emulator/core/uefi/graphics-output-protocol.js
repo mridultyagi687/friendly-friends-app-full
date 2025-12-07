@@ -16,14 +16,26 @@ class GraphicsOutputProtocol {
     this.protocolGuid = null;
     this.protocolInstalled = false;
     
-    // Define installProtocol as instance method immediately - use arrow function to preserve 'this'
-    // Also define as a regular function property to ensure it's always available
+    // Define installProtocol as instance method immediately - use named function for better debugging
+    // Use arrow function to preserve 'this' context
     const self = this;
     this.installProtocol = function installProtocol() {
       console.log('GOP: Installing Graphics Output Protocol');
       self.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
       self.protocolInstalled = true;
     };
+    
+    // Make it non-configurable and non-writable to prevent deletion/overwriting
+    try {
+      Object.defineProperty(this, 'installProtocol', {
+        value: this.installProtocol,
+        writable: false,
+        configurable: false,
+        enumerable: true
+      });
+    } catch (e) {
+      console.warn('GOP: Could not make installProtocol non-writable:', e);
+    }
     
     // Also add it to the prototype as a backup (though instance method should take precedence)
     if (!GraphicsOutputProtocol.prototype.installProtocol) {
