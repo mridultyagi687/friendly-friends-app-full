@@ -15,6 +15,10 @@ class GraphicsOutputProtocol {
     this.graphicsFramebufferAddress = 0xE0000000; // Graphics framebuffer address
     this.protocolGuid = null;
     this.protocolInstalled = false;
+    
+    // Define installProtocol immediately in constructor to ensure it's always available
+    this.installProtocol = this.installProtocol.bind(this);
+    
     this.currentMode = {
       maxMode: 1,
       mode: 0,
