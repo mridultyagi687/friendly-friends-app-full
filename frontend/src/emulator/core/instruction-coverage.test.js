@@ -327,21 +327,23 @@ describe('Instruction Coverage Tests', () => {
       cpu.registers.rdi = 0x2000n; // Destination
       cpu.registers.rcx = 10n; // Count
       cpu.registers.rip = 0n; // Initialize RIP
+      cpu.registers.rflags = 0n; // Clear flags (ZF = 0)
       memory.writeByte(0x1000, 0xAA);
       
       const instruction = {
         opcode: { mnemonic: 'MOVSB', length: 1 },
         length: 1,
         prefixes: { rep: 'rep' },
+        rex: null,
       };
       
       executor.executeMOVS(instruction);
       expect(memory.readByte(0x2000)).toBe(0xAA);
-      expect(cpu.registers.rsi).toBe(0x1001n);
-      expect(cpu.registers.rdi).toBe(0x2001n);
-      // REP prefix handling is not implemented in executeMOVS - it just executes once
-      // So RCX won't be decremented
-      expect(cpu.registers.rcx).toBe(10n); // RCX unchanged (REP not implemented)
+      // With REP prefix, should execute 10 times (RCX = 10)
+      // After all iterations, RCX should be 0
+      expect(cpu.registers.rcx).toBe(0n); // RCX decremented by REP
+      expect(cpu.registers.rsi).toBe(0x100An); // RSI incremented 10 times
+      expect(cpu.registers.rdi).toBe(0x200An); // RDI incremented 10 times
     });
 
     it('should execute STOSB', () => {
@@ -349,19 +351,21 @@ describe('Instruction Coverage Tests', () => {
       cpu.registers.rdi = 0x2000n; // Destination
       cpu.registers.rcx = 5n; // Count
       cpu.registers.rip = 0n; // Initialize RIP
+      cpu.registers.rflags = 0n; // Clear flags (ZF = 0)
       
       const instruction = {
         opcode: { mnemonic: 'STOSB', length: 1 },
         length: 1,
         prefixes: { rep: 'rep' },
+        rex: null,
       };
       
       executor.executeSTOS(instruction);
       expect(memory.readByte(0x2000)).toBe(0x42);
-      expect(cpu.registers.rdi).toBe(0x2001n);
-      // REP prefix handling is not implemented in executeSTOS - it just executes once
-      // So RCX won't be decremented
-      expect(cpu.registers.rcx).toBe(5n); // RCX unchanged (REP not implemented)
+      // With REP prefix, should execute 5 times (RCX = 5)
+      // After all iterations, RCX should be 0
+      expect(cpu.registers.rcx).toBe(0n); // RCX decremented by REP
+      expect(cpu.registers.rdi).toBe(0x2005n); // RDI incremented 5 times
     });
   });
 
