@@ -433,7 +433,7 @@ class UEFIFirmware {
    * @param {bigint} descriptorVersion - Pointer to descriptor version
    * @returns {number} - EFI_STATUS code
    */
-  getMemoryMap(memoryMapSize, memoryMap, mapKey, descriptorSize, descriptorVersion) {
+  getMemoryMap(memoryMapSize, memoryMap, mapKey, descriptorSize, descriptorVersionPtr) {
     console.log('UEFI: Get Memory Map called');
     
     // Memory map descriptor structure (EFI_MEMORY_DESCRIPTOR):
@@ -444,7 +444,7 @@ class UEFIFirmware {
     // - Attribute (UINT64)
     
     const descriptorSizeValue = 48; // 48 bytes per descriptor
-    const descriptorVersion = 1;
+    const descriptorVersionValue = 1;
     
     // Create memory map descriptors
     const descriptors = [];
@@ -508,7 +508,7 @@ class UEFIFirmware {
     this.memory.writeDword(Number(memoryMapSize), requiredSize);
     this.memory.writeQword(Number(mapKey), this.memoryMapKey);
     this.memory.writeDword(Number(descriptorSize), descriptorSizeValue);
-    this.memory.writeDword(Number(descriptorVersion), descriptorVersion);
+    this.memory.writeDword(Number(descriptorVersionPtr), descriptorVersionValue);
     
     console.log(`UEFI: Memory map returned (${descriptors.length} descriptors, ${requiredSize} bytes)`);
     

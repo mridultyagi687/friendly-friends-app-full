@@ -52,6 +52,7 @@ class CustomEmulator {
     
     // Initialize components in order
     this.memory.init();
+    this.memory.setCPU(this.cpu); // Set CPU reference for page fault handling
     this.cpu.memory = this.memory;
     this.cpu.init();
     
