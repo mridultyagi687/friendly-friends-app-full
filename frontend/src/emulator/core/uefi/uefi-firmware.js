@@ -178,19 +178,22 @@ class UEFIFirmware {
     console.log('UEFI: DXE Phase - Driver execution');
     // Expose GOP protocol
     if (this.gop) {
-      // Check if installProtocol method exists (defensive check)
-      if (this.gop && typeof this.gop.installProtocol === 'function') {
-        try {
-          this.gop.installProtocol();
-        } catch (error) {
-          console.warn('UEFI: Error installing GOP protocol:', error);
-        }
-      } else {
-        console.warn('UEFI: GOP installProtocol not available', {
-          gop: this.gop,
-          hasGop: !!this.gop,
-          type: typeof this.gop?.installProtocol
-        });
+      // Ensure installProtocol exists - add it if missing (defensive)
+      if (typeof this.gop.installProtocol !== 'function') {
+        console.warn('UEFI: GOP installProtocol missing, adding fallback');
+        this.gop.installProtocol = function() {
+          console.log('GOP: Installing Graphics Output Protocol (fallback)');
+          this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+          this.protocolInstalled = true;
+        };
+      }
+      
+      // Now call it
+      try {
+        this.gop.installProtocol();
+      } catch (error) {
+        console.error('UEFI: Error installing GOP protocol:', error);
+        // Don't throw - continue boot process
       }
     } else {
       console.warn('UEFI: GOP not initialized');

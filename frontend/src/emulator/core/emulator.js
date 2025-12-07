@@ -96,6 +96,16 @@ class CustomEmulator {
     console.log('Emulator: Starting...');
     this.running = true;
     
+    // Ensure GOP installProtocol is available (defensive check)
+    if (this.gop && typeof this.gop.installProtocol !== 'function') {
+      console.warn('Emulator: GOP installProtocol missing, adding fallback');
+      this.gop.installProtocol = function() {
+        console.log('GOP: Installing Graphics Output Protocol (fallback)');
+        this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97';
+        this.protocolInstalled = true;
+      };
+    }
+    
     // Initialize graphics early (before boot manager)
     if (this.gop) {
       this.gop.setMode(0, 640, 480);
@@ -104,7 +114,12 @@ class CustomEmulator {
     }
     
     // Start UEFI boot process (pass emulator instance for ISO/EFI access)
-    await this.uefi.boot(this);
+    try {
+      await this.uefi.boot(this);
+    } catch (error) {
+      console.error('Emulator: Failed to start emulator:', error);
+      throw error; // Re-throw so caller can handle it
+    }
     
     // After UEFI hands off to boot manager, start CPU execution
     // TODO: Run in Web Worker for better performance
