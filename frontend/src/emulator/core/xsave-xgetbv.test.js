@@ -16,6 +16,39 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
   let decoder;
   let executor;
 
+  // Helper function to log diagnostic information on test failure
+  function logTestDiagnostics(testName, instruction = null) {
+    console.error(`\n=== Test Failure Diagnostics: ${testName} ===`);
+    console.error(`CPUID leaf 0xD:`, cpu.cpuid.leaf0xD || 'Not initialized');
+    console.error(`cpu.xcr0: 0x${cpu.registers.xcr0.toString(16)}`);
+    console.error(`cpu.xsave_allowed_mask: 0x${(cpu.xsave_allowed_mask || 0n).toString(16)}`);
+    
+    if (instruction) {
+      console.error(`Instruction decode width: ${instruction.width || 'undefined'}`);
+      console.error(`Instruction opcode: ${instruction.opcode?.mnemonic || 'undefined'}`);
+    }
+    
+    // Try to read XSAVE header if memory is accessible
+    try {
+      const headerAddr = 0x3000; // Common test buffer address
+      const headerBytes = [];
+      for (let i = 0; i < 16; i++) {
+        try {
+          headerBytes.push(memory.readByte(headerAddr + 512 + i));
+        } catch (e) {
+          break;
+        }
+      }
+      if (headerBytes.length > 0) {
+        const headerHex = headerBytes.map(b => b.toString(16).padStart(2, '0')).join(' ');
+        console.error(`First 16 bytes of XSAVE header (offset 512): ${headerHex}`);
+      }
+    } catch (e) {
+      // Ignore if we can't read header
+    }
+    console.error('==========================================\n');
+  }
+
   beforeEach(() => {
     memory = new MemoryManager();
     memory.init();
@@ -47,9 +80,10 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       cpu.registers.rip = 0x1000n;
       
       // Write instruction bytes to memory
+      // XSETBV: 0x0F 0x01 0xD1 (mod=3, reg=2, rm=1)
       memory.writeByte(0x1000, 0x0F);
       memory.writeByte(0x1001, 0x01);
-      memory.writeByte(0x1002, 0xD1); // mod=3, reg=0, rm=1 (XSETBV)
+      memory.writeByte(0x1002, 0xD1); // mod=3, reg=2, rm=1 (XSETBV)
       
       const instruction = decoder.decode();
       expect(instruction).toBeDefined();
@@ -57,6 +91,9 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       expect(instruction.opcode.mnemonic).toBe('LGDT');
       
       const success = executor.execute(instruction);
+      if (!success || cpu.registers.xcr0 !== 0x3n) {
+        logTestDiagnostics('should set XCR0 to 0x3 (bits 0 & 1) when CPL=0', instruction);
+      }
       expect(success).toBe(true);
       expect(cpu.registers.xcr0).toBe(0x3n);
     });
@@ -65,17 +102,20 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       const handleInterruptSpy = vi.spyOn(cpu.interruptHandler, 'handleInterrupt');
       
       cpu.registers.rcx = 0n;
-      cpu.registers.rax = (1 << 10) | 0x3n; // Reserved bit 10 set
+      cpu.registers.rax = (1n << 10n) | 0x3n; // Reserved bit 10 set
       cpu.registers.rdx = 0n;
       cpu.registers.rip = 0x1000n;
       
       memory.writeByte(0x1000, 0x0F);
       memory.writeByte(0x1001, 0x01);
-      memory.writeByte(0x1002, 0xD1);
+      memory.writeByte(0x1002, 0xD1); // mod=3, reg=2, rm=1 (XSETBV)
       
       const instruction = decoder.decode();
       const success = executor.execute(instruction);
       
+      if (success || !handleInterruptSpy.mock.calls.some(call => call[0] === 13 && call[1] === 0)) {
+        logTestDiagnostics('should raise #GP when XSETBV attempted with reserved bits set', instruction);
+      }
       expect(success).toBe(false);
       expect(handleInterruptSpy).toHaveBeenCalledWith(13, 0); // #GP fault
       expect(cpu.registers.xcr0).toBe(0n); // Should not be changed
@@ -100,6 +140,9 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       const instruction = decoder.decode();
       const success = executor.execute(instruction);
       
+      if (!success || (cpu.registers.rax & 0xFFFFFFFFn) !== 0x7n) {
+        logTestDiagnostics('should return XCR0 value in EDX:EAX after valid XSETBV', instruction);
+      }
       expect(success).toBe(true);
       expect(cpu.registers.rax & 0xFFFFFFFFn).toBe(0x7n);
       expect(cpu.registers.rdx & 0xFFFFFFFFn).toBe(0n); // Upper 32 bits should be 0
@@ -164,10 +207,14 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       cpu.registers.mxcsr = 0x1F80;
       
       // Execute XSAVE
+      // Instruction format: 0x0F 0xAE 0x20 [disp32]
+      // 0x20 = mod=0, reg=4, rm=0 = [EAX] + disp32
+      // Set EAX to 0 so address = disp32 = bufferAddr
+      cpu.registers.rax = 0n;
       cpu.registers.rip = 0x1000n;
       memory.writeByte(0x1000, 0x0F);
       memory.writeByte(0x1001, 0xAE);
-      memory.writeByte(0x1002, 0x20); // mod=0, reg=4, rm=0 (XSAVE [mem])
+      memory.writeByte(0x1002, 0x20); // mod=0, reg=4, rm=0 (XSAVE [EAX+disp32])
       memory.writeDword(0x1003, bufferAddr);
       
       let instruction = decoder.decode();
@@ -180,10 +227,11 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       cpu.registers.mxcsr = 0;
       
       // Execute XRSTOR
+      // Keep EAX = 0 for correct address calculation
       cpu.registers.rip = 0x1000n;
       memory.writeByte(0x1000, 0x0F);
       memory.writeByte(0x1001, 0xAE);
-      memory.writeByte(0x1002, 0x28); // mod=0, reg=5, rm=0 (XRSTOR [mem])
+      memory.writeByte(0x1002, 0x28); // mod=0, reg=5, rm=0 (XRSTOR [EAX+disp32])
       memory.writeDword(0x1003, bufferAddr);
       
       instruction = decoder.decode();
@@ -207,10 +255,12 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       cpu.registers.ymm1 = 0xEEEEFFFF00001111n;
       
       // Execute XSAVE
+      // Set EAX to 0 for correct address calculation
+      cpu.registers.rax = 0n;
       cpu.registers.rip = 0x1000n;
       memory.writeByte(0x1000, 0x0F);
       memory.writeByte(0x1001, 0xAE);
-      memory.writeByte(0x1002, 0x20);
+      memory.writeByte(0x1002, 0x20); // mod=0, reg=4, rm=0 (XSAVE [EAX+disp32])
       memory.writeDword(0x1003, bufferAddr);
       
       let instruction = decoder.decode();
@@ -222,10 +272,11 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       cpu.registers.ymm1 = 0n;
       
       // Execute XRSTOR
+      // Keep EAX = 0 for correct address calculation
       cpu.registers.rip = 0x1000n;
       memory.writeByte(0x1000, 0x0F);
       memory.writeByte(0x1001, 0xAE);
-      memory.writeByte(0x1002, 0x28);
+      memory.writeByte(0x1002, 0x28); // mod=0, reg=5, rm=0 (XRSTOR [EAX+disp32])
       memory.writeDword(0x1003, bufferAddr);
       
       instruction = decoder.decode();
@@ -255,15 +306,22 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
       memory.writeQword(bufferAddr + headerOffset, 1n << 10n); // Bit 10 set (unsupported)
       
       // Execute XRSTOR
+      // Instruction format: 0x0F 0xAE 0xA8 [disp32]
+      // 0xA8 = mod=2, reg=5, rm=0 = XRSTOR [RAX+disp32]
+      // Set RAX to 0 so address = disp32 = bufferAddr
+      cpu.registers.rax = 0n;
       cpu.registers.rip = 0x1000n;
       memory.writeByte(0x1000, 0x0F);
       memory.writeByte(0x1001, 0xAE);
-      memory.writeByte(0x1002, 0x28);
+      memory.writeByte(0x1002, 0xA8); // mod=2, reg=5, rm=0 (XRSTOR [RAX+disp32])
       memory.writeDword(0x1003, bufferAddr);
       
       const instruction = decoder.decode();
       const success = executor.execute(instruction);
       
+      if (success || !handleInterruptSpy.mock.calls.some(call => call[0] === 6 && call[1] === 0)) {
+        logTestDiagnostics('should raise #UD when XRSTOR attempted with unsupported xstate_bv bits', instruction);
+      }
       expect(success).toBe(false);
       expect(handleInterruptSpy).toHaveBeenCalledWith(6, 0); // #UD fault
     });
@@ -346,6 +404,15 @@ describe('XCR0 / XGETBV / XSETBV / XSAVE / XRSTOR Tests', () => {
         
         const actualFlags = extractFlags(cpu.registers.rflags);
         const actualResult = cpu.registers.rax & (operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn);
+        
+        if (actualResult !== ref.result || 
+            actualFlags.CF !== ref.CF ||
+            actualFlags.OF !== ref.OF ||
+            actualFlags.ZF !== ref.ZF ||
+            actualFlags.SF !== ref.SF ||
+            actualFlags.AF !== ref.AF) {
+          logTestDiagnostics(`should compute correct flags for 64-bit ADD operations (test case: a=0x${a.toString(16)}, b=0x${b.toString(16)})`, instruction);
+        }
         
         expect(actualResult).toBe(ref.result);
         expect(actualFlags.CF).toBe(ref.CF);

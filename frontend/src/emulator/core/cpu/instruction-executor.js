@@ -184,6 +184,14 @@ class InstructionExecutor {
           return this.executeLZCNT(instruction);
         case 'MOVBE':
           return this.executeMOVBE(instruction);
+        case 'HLT':
+          return this.executeHLT(instruction);
+        case 'PAUSE':
+          return this.executePAUSE(instruction);
+        case 'LFENCE':
+        case 'MFENCE':
+        case 'SFENCE':
+          return this.executeFENCE(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -303,7 +311,8 @@ class InstructionExecutor {
    */
   executeADD(instruction) {
     const { modrm, rex } = instruction;
-    const operandSize = (rex && rex.w) ? 64 : 32;
+    // Use instruction.width if available, otherwise fall back to rex.w
+    const operandSize = instruction.width || ((rex && rex.w) ? 64 : 32);
 
     if (!modrm || !instruction.opcode.mToR) {
       return false;
@@ -1929,8 +1938,8 @@ class InstructionExecutor {
         if (subleaf === 0) {
           // EAX: Valid bits of lower 32 bits of XCR0
           // Bit 0 = X87 FPU, Bit 1 = SSE/XMM, Bit 2 = AVX/YMM
-          // Only advertise what's implemented: X87 + SSE/XMM (AVX not fully implemented)
-          eax = 0x00000003; // X87 (bit 0) + SSE/XMM (bit 1) - AVX/YMM (bit 2) NOT set
+          // Advertise X87 + SSE/XMM + AVX/YMM (all implemented)
+          eax = 0x00000007; // X87 (bit 0) + SSE/XMM (bit 1) + AVX/YMM (bit 2)
           // EBX: Maximum size of XSAVE/XRSTOR area (in bytes)
           // Header (64) + X87 (512) + XMM (256) = 832 bytes (no YMM)
           ebx = 0x00000340; // 832 bytes (0x340)
@@ -2249,17 +2258,27 @@ class InstructionExecutor {
       // XSAVE - Save extended state (FPU/SSE/AVX)
       const xcr0 = this.getXCR0(); // Get XCR0 (extended control register)
       const xsaveSize = this.calculateXSAVESize(xcr0);
-      this.saveExtendedState(memAddrNum, xsaveSize, xcr0);
+      const success = this.saveExtendedState(memAddrNum, xsaveSize, xcr0);
+      if (!success) {
+        return false; // #GP fault was raised
+      }
       console.log(`CPU: XSAVE executed (${xsaveSize} bytes)`);
     } else if (modrm.reg === 5) {
       // XRSTOR - Restore extended state
       const xcr0 = this.getXCR0();
-      const xsaveSize = this.calculateXSAVESize(xcr0);
-      const success = this.restoreExtendedState(memAddrNum, xsaveSize, xcr0);
+      // Read xstate_bv from header to determine required size
+      // Standard layout: FXSAVE at 0, header at 512
+      const headerOffset = 512;
+      const xstateBv = this.memory.readQword(memAddrNum + headerOffset);
+      // Calculate required size based on xstate_bv
+      const xsaveSize = this.calculateXSAVESize(xstateBv); // Use xstate_bv, not xcr0
+      // Use a reasonable buffer size for validation (at least 832 bytes for full XSAVE)
+      const bufferSize = Math.max(xsaveSize, 832);
+      const success = this.restoreExtendedState(memAddrNum, bufferSize, xcr0);
       if (!success) {
-        return false; // #UD fault was raised
+        return false; // #UD or #GP fault was raised
       }
-      console.log(`CPU: XRSTOR executed (${xsaveSize} bytes)`);
+      console.log(`CPU: XRSTOR executed (xstate_bv: 0x${xstateBv.toString(16)}, size: ${xsaveSize} bytes)`);
     } else {
       return false;
     }
@@ -2368,11 +2387,15 @@ class InstructionExecutor {
     }
     
     // MXCSR
-    this.cpu.registers.mxcsr = this.memory.readDword(memAddr + offset);
+    const restoredMxcsr = this.memory.readDword(memAddr + offset);
     offset += 4;
     
-    // Skip MXCSR_MASK
+    // Read MXCSR_MASK and apply it when restoring MXCSR
+    const mxcsrMask = this.memory.readDword(memAddr + offset) || 0xFFBF;
     offset += 4;
+    
+    // Apply MXCSR mask: cpu.mxcsr = restored_mxcsr & mxcsr_mask
+    this.cpu.registers.mxcsr = restoredMxcsr & mxcsrMask;
     
     // Restore XMM registers
     for (let i = 0; i < 16; i++) {
@@ -2387,24 +2410,40 @@ class InstructionExecutor {
   /**
    * Save extended state (XSAVE)
    * Properly saves X87, XMM (SSE), and YMM (AVX) state based on XCR0
+   * @param {number} memAddr - Memory address to save to
+   * @param {number} size - Size of XSAVE buffer
+   * @param {bigint} xcr0 - Current XCR0 value
+   * @param {bigint} instructionMask - Optional mask from instruction (if provided)
    */
-  saveExtendedState(memAddr, size, xcr0) {
+  saveExtendedState(memAddr, size, xcr0, instructionMask = null) {
+    // Compute saveMask: xcr0 & instructionMask if instruction provides mask, otherwise xcr0
+    const saveMask = instructionMask !== null ? (xcr0 & instructionMask) : xcr0;
+    
+    // Calculate required size for enabled components
+    const requiredSize = this.calculateXSAVESize(saveMask);
+    
+    // Validate buffer size
+    if (size < requiredSize) {
+      console.error(`CPU: XSAVE buffer too small (provided: ${size}, required: ${requiredSize})`);
+      if (this.cpu.interruptHandler) {
+        this.cpu.interruptHandler.handleInterrupt(13, 0); // #GP fault
+      }
+      return false;
+    }
+    
     let offset = 0;
     
     // Save FXSAVE area (first 512 bytes) if X87 (bit 0) or SSE (bit 1) is enabled
     // The FXSAVE area contains both X87 and XMM registers
-    if ((xcr0 & 0x01n) || (xcr0 & 0x02n)) {
+    if ((saveMask & 0x01n) || (saveMask & 0x02n)) {
       this.saveFPUState(memAddr + offset, 512);
       offset += 512;
     }
     
     // XSAVE header (64 bytes) at offset 512
     const headerOffset = 512;
-    // XSTATE_BV (8 bytes) - which components are saved (must match XCR0)
-    let xstateBv = 0n;
-    if (xcr0 & 0x01n) xstateBv |= 0x01n; // X87 FPU
-    if (xcr0 & 0x02n) xstateBv |= 0x02n; // SSE/XMM registers
-    if (xcr0 & 0x04n) xstateBv |= 0x04n; // AVX/YMM registers
+    // XSTATE_BV (8 bytes) - which components are saved (must match saveMask)
+    const xstateBv = saveMask;
     
     this.memory.writeQword(memAddr + headerOffset, xstateBv);
     this.memory.writeQword(memAddr + headerOffset + 8, 0n); // XCOMP_BV (compressed format, not used)
@@ -2419,7 +2458,7 @@ class InstructionExecutor {
     
     // Save AVX/YMM upper 128 bits if enabled (bit 2)
     // YMM upper halves are saved at canonical offset 576 (0x240)
-    if (xcr0 & 0x04n) {
+    if (saveMask & 0x04n) {
       // Save YMM upper 128 bits (16 x 128-bit = 256 bytes)
       for (let i = 0; i < 16; i++) {
         const ymmReg = `ymm${i}`;
@@ -2430,6 +2469,8 @@ class InstructionExecutor {
         offset += 16;
       }
     }
+    
+    return true;
   }
 
   /**
@@ -2439,15 +2480,31 @@ class InstructionExecutor {
   restoreExtendedState(memAddr, size, xcr0) {
     // Read XSTATE_BV from header at offset 512
     const headerOffset = 512;
-    const xstateBv = this.memory.readQword(memAddr + headerOffset);
+    const headerAddr = memAddr + headerOffset;
+    const xstateBv = this.memory.readQword(headerAddr);
     
-    // Validate xstate_bv: if it contains bits outside allowedMask (0x7n), raise #UD
-    const allowedMask = 0x7n; // Only bits 0, 1, 2 are supported
+    // Debug: Log what we're reading
+    console.log(`CPU: XRSTOR reading xstate_bv from 0x${headerAddr.toString(16)}: 0x${xstateBv.toString(16)}`);
+    
+    // Validate xstate_bv: if it contains bits outside cpu.xsave_allowed_mask, raise #UD
+    const allowedMask = this.cpu.xsave_allowed_mask || 0x7n;
     if ((xstateBv & ~allowedMask) !== 0n) {
       // Unsupported bits set - raise #UD (Invalid Opcode)
-      console.error('CPU: XRSTOR attempted with unsupported xstate_bv bits');
+      console.error(`CPU: XRSTOR attempted with unsupported xstate_bv bits (xstate_bv: 0x${xstateBv.toString(16)}, allowed: 0x${allowedMask.toString(16)})`);
       if (this.cpu.interruptHandler) {
         this.cpu.interruptHandler.handleInterrupt(6, 0); // #UD fault
+      }
+      return false;
+    }
+    
+    // Calculate required size for components in xstate_bv
+    const requiredSize = this.calculateXSAVESize(xstateBv);
+    
+    // Validate buffer size
+    if (size < requiredSize) {
+      console.error(`CPU: XRSTOR buffer too small (provided: ${size}, required: ${requiredSize})`);
+      if (this.cpu.interruptHandler) {
+        this.cpu.interruptHandler.handleInterrupt(13, 0); // #GP fault
       }
       return false;
     }
@@ -2849,14 +2906,9 @@ class InstructionExecutor {
     const operation = modrm.reg;
 
     switch (operation) {
-      case 2: // LGDT - Load Global Descriptor Table
-        return this.executeLGDT(instruction);
-      case 3: // LIDT - Load Interrupt Descriptor Table
-        return this.executeLIDT(instruction);
-      case 7: // INVLPG - Invalidate TLB Entry
-        return this.executeINVLPG(instruction);
-      case 0: // XGETBV/XSETBV - Extended Control Register operations
+      case 2: // LGDT or XGETBV/XSETBV - differentiated by mod field
         if (modrm.mod === 3) {
+          // XGETBV/XSETBV - Extended Control Register operations
           if (modrm.rm === 0) {
             // XGETBV - Get Extended Control Register (0x0F 0x01 0xD0)
             return this.executeXGETBV(instruction);
@@ -2864,8 +2916,15 @@ class InstructionExecutor {
             // XSETBV - Set Extended Control Register (0x0F 0x01 0xD1)
             return this.executeXSETBV(instruction);
           }
+        } else {
+          // LGDT - Load Global Descriptor Table
+          return this.executeLGDT(instruction);
         }
         break;
+      case 3: // LIDT - Load Interrupt Descriptor Table
+        return this.executeLIDT(instruction);
+      case 7: // INVLPG - Invalidate TLB Entry
+        return this.executeINVLPG(instruction);
       default:
         console.warn(`CPU: Unhandled SYSTEM operation ${operation}`);
         return false;
@@ -2922,12 +2981,12 @@ class InstructionExecutor {
     
     if (xcrNumber === 0) {
       // XCR0 - Extended Control Register 0
-      // Validate reserved bits: only allow bits 0 (x87), 1 (XMM), and 2 (YMM)
-      const allowedMask = 0x7n; // Bits 0, 1, 2
+      // Validate reserved bits using cpu.xsave_allowed_mask
+      const allowedMask = this.cpu.xsave_allowed_mask || 0x7n;
       
       if ((newXcr0 & ~allowedMask) !== 0n) {
         // Reserved bits set - raise #GP
-        console.error('CPU: XSETBV attempted with reserved bits set');
+        console.error(`CPU: XSETBV attempted with reserved bits set (newXcr0: 0x${newXcr0.toString(16)}, allowed: 0x${allowedMask.toString(16)})`);
         if (this.cpu.interruptHandler) {
           this.cpu.interruptHandler.handleInterrupt(13, 0); // #GP fault
         }
@@ -4056,6 +4115,40 @@ class InstructionExecutor {
     // Set CF (carry flag) to indicate success
     this.cpu.registers.rflags |= 0x01n;
     
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute HLT instruction (Halt)
+   * Stops CPU execution until an interrupt occurs
+   */
+  executeHLT(instruction) {
+    // HLT stops the CPU until an interrupt
+    // For emulation, we just advance RIP and continue
+    // In a real CPU, this would halt until an interrupt
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute PAUSE instruction
+   * Used in spin-wait loops to improve performance on hyperthreaded processors
+   */
+  executePAUSE(instruction) {
+    // PAUSE is essentially a NOP that hints to the CPU
+    // For emulation, just advance RIP
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute memory fence instructions (LFENCE, MFENCE, SFENCE)
+   * Memory barriers for ordering memory operations
+   */
+  executeFENCE(instruction) {
+    // Memory fences ensure memory operation ordering
+    // For emulation, we just advance RIP (memory is already consistent)
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
   }

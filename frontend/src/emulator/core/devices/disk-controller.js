@@ -152,6 +152,159 @@ class DiskController {
   }
 
   /**
+   * Process AHCI command queue
+   * Handles command list processing with proper error recovery
+   */
+  async processCommandQueue(portNumber) {
+    const port = this.ports[portNumber];
+    if (!port || !port.commandList) {
+      return false;
+    }
+    
+    const port0Base = this.ahciBase + 0x100 + (portNumber * 0x80);
+    const ci = this.readRegister(port0Base + this.portRegisters.ci); // Command Issue register
+    
+    if (ci === 0) {
+      return true; // No commands pending
+    }
+    
+    // Process each pending command (bit set in CI)
+    for (let slot = 0; slot < 32; slot++) {
+      if (ci & (1 << slot)) {
+        const success = await this.processCommand(portNumber, slot);
+        if (!success) {
+          // Set error bit in TFD (Task File Data)
+          const tfd = this.readRegister(port0Base + this.portRegisters.tfd);
+          this.writeRegister(port0Base + this.portRegisters.tfd, tfd | 0x01); // Error bit
+          this.writeRegister(port0Base + this.portRegisters.serr, 0x01); // Set error in SERR
+        }
+        // Clear command issue bit
+        this.writeRegister(port0Base + this.portRegisters.ci, ci & ~(1 << slot));
+      }
+    }
+    
+    return true;
+  }
+
+  /**
+   * Process single AHCI command
+   */
+  async processCommand(portNumber, slot) {
+    const port = this.ports[portNumber];
+    if (!port || !port.commandList) {
+      return false;
+    }
+    
+    // Command list entry is 32 bytes at commandList + (slot * 32)
+    const cmdBase = port.commandList + (slot * 32);
+    
+    // Read command header (first 8 bytes)
+    const cmdFlags = this.memory.readDword(cmdBase);
+    const prdtl = (cmdFlags >> 16) & 0xFFFF; // PRDT length
+    const prdbc = this.memory.readDword(cmdBase + 4); // PRD byte count
+    
+    // Read command FIS (Frame Information Structure) - 20 bytes at offset 0x40
+    const fisBase = port.fisBase;
+    const fisType = this.memory.readByte(fisBase);
+    
+    if (fisType === 0x27) { // Register FIS - Host to Device
+      // Extract command details
+      const command = this.memory.readByte(fisBase + 2);
+      const feature = this.memory.readByte(fisBase + 3);
+      const lbaLow = this.memory.readByte(fisBase + 4);
+      const lbaMid = this.memory.readByte(fisBase + 5);
+      const lbaHigh = this.memory.readByte(fisBase + 6);
+      const device = this.memory.readByte(fisBase + 7);
+      const countLow = this.memory.readByte(fisBase + 12);
+      const countHigh = this.memory.readByte(fisBase + 13);
+      
+      const lba = lbaLow | (lbaMid << 8) | ((lbaHigh & 0x0F) << 16) | ((device & 0xE0) << 24);
+      const sectorCount = countLow | (countHigh << 8);
+      
+      // Read PRDT (Physical Region Descriptor Table)
+      const prdtBase = cmdBase + 0x80; // PRDT starts at offset 0x80 in command table
+      const bufferAddress = this.memory.readQword(prdtBase);
+      const bufferSize = (this.memory.readDword(prdtBase + 8) & 0x3FFFF) + 1; // Lower 18 bits
+      
+      // Execute command
+      if (command === 0x20 || command === 0x24) { // READ SECTORS or READ SECTORS EXT
+        return await this.readSectors(portNumber, lba, sectorCount, Number(bufferAddress));
+      } else if (command === 0x30 || command === 0x34) { // WRITE SECTORS or WRITE SECTORS EXT
+        return await this.writeSectors(portNumber, lba, sectorCount, Number(bufferAddress));
+      } else if (command === 0xEC) { // IDENTIFY DEVICE
+        return await this.identifyDevice(portNumber, Number(bufferAddress));
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Identify device (ATA command)
+   */
+  async identifyDevice(portNumber, bufferAddress) {
+    const port = this.ports[portNumber];
+    if (!port) {
+      return false;
+    }
+    
+    // Create IDENTIFY DEVICE response (512 bytes = 256 words)
+    const identifyData = new Uint16Array(256);
+    
+    // Fill with device information
+    const stats = this.storage.getStats();
+    const totalSectors = Math.floor(stats.totalSize / 512);
+    
+    // Word 0: General configuration
+    identifyData[0] = 0x0040; // ATA device, not removable
+    
+    // Word 1: Number of logical cylinders (obsolete)
+    identifyData[1] = 0x0000;
+    
+    // Word 6: Number of logical heads (obsolete)
+    identifyData[6] = 0x0000;
+    
+    // Word 60-61: Total number of user addressable sectors (LBA28)
+    const lba28 = totalSectors > 0x0FFFFFFF ? 0x0FFFFFFF : totalSectors;
+    identifyData[60] = lba28 & 0xFFFF;
+    identifyData[61] = (lba28 >> 16) & 0xFFFF;
+    
+    // Word 100-103: Total number of user addressable sectors (LBA48)
+    identifyData[100] = Number(totalSectors & 0xFFFFn);
+    identifyData[101] = Number((totalSectors >> 16n) & 0xFFFFn);
+    identifyData[102] = Number((totalSectors >> 32n) & 0xFFFFn);
+    identifyData[103] = Number((totalSectors >> 48n) & 0xFFFFn);
+    
+    // Word 83: LBA48 support
+    identifyData[83] = 0x0400; // LBA48 supported
+    
+    // Serial number (word 10-19): "EMULATOR-DISK"
+    const serial = 'EMULATOR-DISK';
+    for (let i = 0; i < 10; i++) {
+      const char1 = i * 2 < serial.length ? serial.charCodeAt(i * 2) : 0x20;
+      const char2 = i * 2 + 1 < serial.length ? serial.charCodeAt(i * 2 + 1) : 0x20;
+      identifyData[10 + i] = char1 | (char2 << 8);
+    }
+    
+    // Model number (word 27-46): "FRIENDLY FRIENDS DISK"
+    const model = 'FRIENDLY FRIENDS DISK';
+    for (let i = 0; i < 20; i++) {
+      const char1 = i * 2 < model.length ? model.charCodeAt(i * 2) : 0x20;
+      const char2 = i * 2 + 1 < model.length ? model.charCodeAt(i * 2 + 1) : 0x20;
+      identifyData[27 + i] = char1 | (char2 << 8);
+    }
+    
+    // Write to memory (little-endian word format)
+    for (let i = 0; i < 256; i++) {
+      const word = identifyData[i];
+      this.memory.writeByte(bufferAddress + i * 2, word & 0xFF);
+      this.memory.writeByte(bufferAddress + i * 2 + 1, (word >> 8) & 0xFF);
+    }
+    
+    return true;
+  }
+
+  /**
    * Read from disk
    * @param {number} portNumber - Port number
    * @param {number} lba - Logical Block Address

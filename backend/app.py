@@ -168,7 +168,7 @@ app.config.update(
         "connect_args": {
             "connect_timeout": 10,
             "sslmode": "require",
-        } if DATABASE_URL else {}
+        } if DATABASE_URL else {echo:true Database_Failed}
     },
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     JSON_SORT_KEYS=False,

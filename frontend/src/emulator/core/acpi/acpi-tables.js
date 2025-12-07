@@ -34,17 +34,17 @@ class ACPITables {
     // Create XSDT (Extended System Description Table) - uses 64-bit pointers
     this.createXSDT(xsdtAddress, [fadtAddress, dsdtAddress, madtAddress]);
     
+    // Discover PCI devices FIRST (needed for DSDT)
+    this.discoverPCIDevices();
+    
     // Create FADT (Fixed ACPI Description Table)
     this.createFADT(fadtAddress, dsdtAddress);
     
-    // Create DSDT (Differentiated System Description Table) - minimal valid AML
+    // Create DSDT (Differentiated System Description Table) - complete AML with PCI devices
     this.createDSDT(dsdtAddress);
     
     // Create MADT (Multiple APIC Description Table) - with Local APIC entry
     this.createMADT(madtAddress);
-    
-    // Discover PCI devices
-    this.discoverPCIDevices();
     
     // Build device tree
     this.buildDeviceTree();
@@ -311,18 +311,21 @@ class ACPITables {
 
   /**
    * Create DSDT (Differentiated System Description Table)
-   * Minimal valid DSDT with basic AML code
+   * Complete DSDT with PCI device definitions for Windows 11
    */
   createDSDT(dsdtAddress) {
-    // DSDT structure: Header (36 bytes) + minimal AML code
+    // DSDT structure: Header (36 bytes) + complete AML code
     const signature = 'DSDT'; // 4 bytes
-    const length = 200; // Minimal DSDT size
     const revision = 2; // ACPI 2.0
     const oemId = 'FRIEND '; // 6 bytes
     const oemTableId = 'EMULATOR'; // 8 bytes
     const oemRevision = 1;
     const creatorId = 'FRIE'; // 4 bytes
     const creatorRevision = 1;
+    
+    // Build complete AML code
+    const amlCode = this.buildCompleteAML();
+    const length = 36 + amlCode.length; // Header + AML
     
     let offset = 0;
     
@@ -371,28 +374,9 @@ class ACPITables {
     this.writeUInt32(dsdtAddress + offset, creatorRevision);
     offset += 4;
     
-    // Minimal AML (ACPI Machine Language) code
-    // AML starts at offset 36
-    // Minimal valid DSDT: DefinitionBlock with empty scope
-    // DefinitionBlock signature: 0x10 (NameOp) + "DSDT" + Package
-    // For minimal DSDT, we'll use a simple scope definition
-    
-    // Write minimal AML: Scope(\_SB) { } 
-    // 0x10 = ScopeOp, 0x5F 0x53 0x42 0x00 = "\_SB", 0x00 = NullName, 0x79 = NoopOp
-    const minimalAML = [
-      0x10, 0x5F, 0x53, 0x42, 0x00, // Scope(\_SB)
-      0x79, // NoopOp (empty scope)
-    ];
-    
-    for (let i = 0; i < minimalAML.length && offset < length; i++) {
-      this.memory.writeByte(dsdtAddress + offset, minimalAML[i]);
-      offset++;
-    }
-    
-    // Fill rest with zeros
-    while (offset < length) {
-      this.memory.writeByte(dsdtAddress + offset, 0);
-      offset++;
+    // Write complete AML code
+    for (let i = 0; i < amlCode.length; i++) {
+      this.memory.writeByte(dsdtAddress + offset + i, amlCode[i]);
     }
     
     // Calculate checksum
@@ -404,7 +388,166 @@ class ACPITables {
     this.memory.writeByte(dsdtAddress + 8, checksum);
     
     this.tables.dsdt = dsdtAddress;
-    console.log(`ACPI: DSDT created at 0x${dsdtAddress.toString(16)}`);
+    console.log(`ACPI: DSDT created at 0x${dsdtAddress.toString(16)} with ${amlCode.length} bytes of AML`);
+  }
+
+  /**
+   * Build complete AML code for DSDT
+   * Includes: DefinitionBlock, Scope(\_SB), PCI bus, and device definitions
+   */
+  buildCompleteAML() {
+    const aml = [];
+    
+    // DefinitionBlock signature (minimal - just scope)
+    // Scope(\_SB) {
+    aml.push(0x10); // ScopeOp
+    aml.push(0x5F, 0x53, 0x42, 0x00); // "\_SB"
+    
+    // PCI0 device definition
+    // Device(PCI0) {
+    aml.push(0x5B); // DeviceOp
+    aml.push(0x50, 0x43, 0x49, 0x30, 0x00); // "PCI0"
+    
+    // _HID (Hardware ID) = "PNP0A08" (PCI Express Root Bridge)
+    aml.push(0x08); // NameOp
+    aml.push(0x5F, 0x48, 0x49, 0x44, 0x00); // "_HID"
+    aml.push(0x0C); // StringPrefix
+    aml.push(0x07); // String length
+    aml.push(0x50, 0x4E, 0x50, 0x30, 0x41, 0x30, 0x38); // "PNP0A08"
+    aml.push(0x00); // NullChar
+    
+    // _CID (Compatible ID) = "PNP0A03" (PCI Bus)
+    aml.push(0x08); // NameOp
+    aml.push(0x5F, 0x43, 0x49, 0x44, 0x00); // "_CID"
+    aml.push(0x0C); // StringPrefix
+    aml.push(0x07); // String length
+    aml.push(0x50, 0x4E, 0x50, 0x30, 0x41, 0x30, 0x33); // "PNP0A03"
+    aml.push(0x00); // NullChar
+    
+    // _ADR (Address) = 0x00000000 (bus 0, device 0, function 0)
+    aml.push(0x08); // NameOp
+    aml.push(0x5F, 0x41, 0x44, 0x52, 0x00); // "_ADR"
+    aml.push(0x0A); // DWordPrefix
+    aml.push(0x00, 0x00, 0x00, 0x00); // 0x00000000
+    
+    // _CRS (Current Resource Settings) - PCI configuration space
+    aml.push(0x08); // NameOp
+    aml.push(0x5F, 0x43, 0x52, 0x53, 0x00); // "_CRS"
+    aml.push(0x11); // BufferOp
+    aml.push(0x0A); // Buffer length (10 bytes)
+    aml.push(0x47); // WordBusNumber
+    aml.push(0x01); // Min
+    aml.push(0x00, 0x00); // Max (0)
+    aml.push(0x00, 0x00); // Length (0 = all buses)
+    aml.push(0x86); // QWordMemory
+    aml.push(0x00); // Resource producer, non-cacheable
+    aml.push(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00); // Min address (0)
+    aml.push(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00); // Max address (0)
+    aml.push(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00); // Address length (0)
+    aml.push(0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00); // Granularity (0)
+    
+    // Add PCI devices (SATA, VGA)
+    for (const pciDevice of this.pciDevices) {
+      this.addPCIDeviceToAML(aml, pciDevice);
+    }
+    
+    // End Device(PCI0)
+    aml.push(0x29); // EndOp
+    
+    // End Scope(\_SB)
+    aml.push(0x29); // EndOp
+    
+    return aml;
+  }
+
+  /**
+   * Add PCI device definition to AML
+   */
+  addPCIDeviceToAML(aml, pciDevice) {
+    const deviceName = this.getPCIDeviceName(pciDevice);
+    
+    // Device(SATA) or Device(GFX0)
+    aml.push(0x5B); // DeviceOp
+    // Device name (4 bytes + null)
+    const nameBytes = [];
+    for (let i = 0; i < 4; i++) {
+      nameBytes.push(deviceName.charCodeAt(i) || 0x5F); // '_' if shorter
+    }
+    nameBytes.push(0x00); // Null terminator
+    aml.push(...nameBytes);
+    
+    // _ADR (Address) = (bus << 16) | (device << 8) | function
+    aml.push(0x08); // NameOp
+    aml.push(0x5F, 0x41, 0x44, 0x52, 0x00); // "_ADR"
+    aml.push(0x0A); // DWordPrefix
+    const adr = (pciDevice.bus << 16) | (pciDevice.device << 8) | pciDevice.function;
+    aml.push(adr & 0xFF);
+    aml.push((adr >> 8) & 0xFF);
+    aml.push((adr >> 16) & 0xFF);
+    aml.push((adr >> 24) & 0xFF);
+    
+    // _HID (Hardware ID) based on device class
+    aml.push(0x08); // NameOp
+    aml.push(0x5F, 0x48, 0x49, 0x44, 0x00); // "_HID"
+    aml.push(0x0C); // StringPrefix
+    
+    let hidString = '';
+    if (pciDevice.classCode === 0x010601) {
+      hidString = 'PNP0600'; // SATA Controller
+    } else if (pciDevice.classCode === 0x030000) {
+      hidString = 'PNP0303'; // VGA Controller
+    } else {
+      hidString = 'PNP0A00'; // Generic PCI device
+    }
+    
+    aml.push(hidString.length);
+    for (let i = 0; i < hidString.length; i++) {
+      aml.push(hidString.charCodeAt(i));
+    }
+    aml.push(0x00); // NullChar
+    
+    // _CRS (Current Resource Settings) - Memory and IRQ resources
+    aml.push(0x08); // NameOp
+    aml.push(0x5F, 0x43, 0x52, 0x53, 0x00); // "_CRS"
+    aml.push(0x11); // BufferOp
+    
+    // Calculate buffer size: 1 byte length + memory descriptors + IRQ descriptor
+    const bufferSize = 1 + 24 + 3; // Memory (24 bytes) + IRQ (3 bytes)
+    aml.push(bufferSize);
+    
+    // Memory resource (MMIO base address)
+    if (pciDevice.baseAddress0) {
+      aml.push(0x87); // QWordMemory (64-bit)
+      aml.push(0x00); // Resource producer, non-cacheable
+      const baseAddr = BigInt(pciDevice.baseAddress0);
+      // Min address
+      for (let i = 0; i < 8; i++) {
+        aml.push(Number((baseAddr >> BigInt(i * 8)) & 0xFFn));
+      }
+      // Max address (same as min for fixed)
+      for (let i = 0; i < 8; i++) {
+        aml.push(Number((baseAddr >> BigInt(i * 8)) & 0xFFn));
+      }
+      // Address length (1MB)
+      const length = 0x100000n;
+      for (let i = 0; i < 8; i++) {
+        aml.push(Number((length >> BigInt(i * 8)) & 0xFFn));
+      }
+      // Granularity (0)
+      for (let i = 0; i < 8; i++) {
+        aml.push(0);
+      }
+    }
+    
+    // IRQ resource
+    if (pciDevice.interruptLine) {
+      aml.push(0x22); // IRQ descriptor
+      aml.push(0x04); // Flags: edge-triggered, active high
+      aml.push(pciDevice.interruptLine); // IRQ number
+    }
+    
+    // End Device
+    aml.push(0x29); // EndOp
   }
 
   /**

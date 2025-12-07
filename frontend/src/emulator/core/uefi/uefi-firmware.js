@@ -9,19 +9,25 @@
 
 import FileIOProtocol from './file-io-protocol.js';
 import BlockIOProtocol from './block-io-protocol.js';
+import SimpleTextInputProtocol from './text-input-protocol.js';
+import SimpleTextOutputProtocol from './text-output-protocol.js';
 
 class UEFIFirmware {
-  constructor(memory, cpu, gop, acpi, storage) {
+  constructor(memory, cpu, gop, acpi, storage, vgaDevice) {
     this.memory = memory;
     this.cpu = cpu;
     this.gop = gop; // Graphics Output Protocol
     this.acpi = acpi; // ACPI tables
     this.storage = storage; // Storage device
+    this.vgaDevice = vgaDevice; // VGA device for text output
     this.initialized = false;
     
     // Protocols
     this.fileIO = null;
     this.blockIO = null;
+    this.conIn = null; // Simple Text Input Protocol
+    this.conOut = null; // Simple Text Output Protocol
+    this.stdErr = null; // Simple Text Output Protocol (stderr)
     this.bootServices = {
       // UEFI Boot Services (simplified)
       allocatePool: this.allocatePool.bind(this),
@@ -43,10 +49,23 @@ class UEFIFirmware {
       restoreTPL: this.restoreTPL.bind(this),
     };
     this.runtimeServices = {
-      // UEFI Runtime Services (simplified)
+      // UEFI Runtime Services
       getTime: this.getTime.bind(this),
       setTime: this.setTime.bind(this),
+      getWakeupTime: this.getWakeupTime.bind(this),
+      setWakeupTime: this.setWakeupTime.bind(this),
+      setVirtualAddressMap: this.setVirtualAddressMap.bind(this),
+      convertPointer: this.convertPointer.bind(this),
+      getVariable: this.getVariable.bind(this),
+      getNextVariableName: this.getNextVariableName.bind(this),
+      setVariable: this.setVariable.bind(this),
+      getNextHighMonotonicCount: this.getNextHighMonotonicCount.bind(this),
+      resetSystem: this.resetSystem.bind(this),
     };
+    
+    // Runtime variables storage
+    this.runtimeVariables = new Map();
+    this.variableNames = [];
     this.efiSystemTable = null;
     this.bootServicesExited = false;
     this.memoryMapKey = 0x12345678n; // Memory map key
@@ -75,6 +94,16 @@ class UEFIFirmware {
       await this.blockIO.init();
     }
     
+    // Initialize Text Input/Output Protocols
+    this.conIn = new SimpleTextInputProtocol();
+    this.conOut = new SimpleTextOutputProtocol(this.memory, this.vgaDevice);
+    this.stdErr = new SimpleTextOutputProtocol(this.memory, this.vgaDevice);
+    
+    // Initialize console handles
+    this.consoleInHandle = 0x1000n;
+    this.consoleOutHandle = 0x2000n;
+    this.standardErrorHandle = 0x3000n;
+    
     // TODO: Load OVMF firmware binary
     // For now, we set up basic UEFI structures
     
@@ -84,12 +113,12 @@ class UEFIFirmware {
       revision: 0x00020000, // EFI 2.0
       firmwareVendor: 'Friendly Friends Emulator',
       firmwareRevision: 0x00000001,
-      consoleInHandle: null,
-      conIn: null,
-      consoleOutHandle: null,
-      conOut: null,
-      standardErrorHandle: null,
-      stdErr: null,
+      consoleInHandle: this.consoleInHandle,
+      conIn: this.conIn,
+      consoleOutHandle: this.consoleOutHandle,
+      conOut: this.conOut,
+      standardErrorHandle: this.standardErrorHandle,
+      stdErr: this.stdErr,
       runtimeServices: this.runtimeServices,
       bootServices: this.bootServices,
     };
@@ -149,11 +178,16 @@ class UEFIFirmware {
     console.log('UEFI: DXE Phase - Driver execution');
     // Expose GOP protocol
     if (this.gop) {
-      this.gop.installProtocol();
+      if (typeof this.gop.installProtocol === 'function') {
+        this.gop.installProtocol();
+      } else {
+        console.warn('UEFI: GOP installProtocol not available');
+      }
     }
     // Expose ACPI tables
     if (this.acpi) {
-      this.acpi.installRSDP();
+      // ACPI tables are already initialized, RSDP is already in memory
+      console.log('UEFI: ACPI tables available');
     }
     // Expose File I/O and Block I/O protocols
     if (this.fileIO) {
@@ -161,6 +195,13 @@ class UEFIFirmware {
     }
     if (this.blockIO) {
       console.log('UEFI: Block I/O Protocol available');
+    }
+    // Expose Text Input/Output protocols
+    if (this.conIn) {
+      console.log('UEFI: Simple Text Input Protocol available');
+    }
+    if (this.conOut) {
+      console.log('UEFI: Simple Text Output Protocol available');
     }
   }
 
@@ -262,9 +303,28 @@ class UEFIFirmware {
             const loadInfo = emulator.efiParser.loadIntoMemory(bootFile, 0x1000000);
             console.log(`UEFI: Boot manager loaded at 0x${loadInfo.entryPoint.toString(16)}`);
             
-            // Set CPU entry point
+            // Set CPU entry point and prepare for execution
             if (emulator.cpu) {
               emulator.cpu.registers.rip = BigInt(loadInfo.entryPoint);
+              
+              // Set up UEFI calling convention (x64):
+              // RCX = ImageHandle (handle to loaded image)
+              // RDX = SystemTable (pointer to EFI System Table)
+              const imageHandle = 0x5000000n; // Allocated handle for boot manager
+              const systemTableAddress = this.getSystemTableAddress();
+              
+              emulator.cpu.registers.rcx = imageHandle;
+              emulator.cpu.registers.rdx = systemTableAddress;
+              
+              // Set up stack (x64 calling convention)
+              // Stack should be 16-byte aligned
+              const stackBase = 0x7FFFFFF0n; // High memory stack
+              emulator.cpu.registers.rsp = stackBase;
+              emulator.cpu.registers.rbp = stackBase;
+              
+              console.log(`UEFI: Boot manager entry point set to 0x${loadInfo.entryPoint.toString(16)}`);
+              console.log(`UEFI: ImageHandle = 0x${imageHandle.toString(16)}`);
+              console.log(`UEFI: SystemTable = 0x${systemTableAddress.toString(16)}`);
             }
             
             bootManagerLoaded = true;
@@ -393,6 +453,138 @@ class UEFIFirmware {
   setTime(time) {
     // TODO: Set system time
     console.log('UEFI: Set time', time);
+    return 0; // EFI_SUCCESS
+  }
+
+  /**
+   * UEFI Runtime Service: Get Wakeup Time
+   */
+  getWakeupTime(enabled, pending, time) {
+    // Not implemented - return EFI_UNSUPPORTED
+    return 0x80000003; // EFI_UNSUPPORTED
+  }
+
+  /**
+   * UEFI Runtime Service: Set Wakeup Time
+   */
+  setWakeupTime(enable, time) {
+    // Not implemented - return EFI_UNSUPPORTED
+    return 0x80000003; // EFI_UNSUPPORTED
+  }
+
+  /**
+   * UEFI Runtime Service: Set Virtual Address Map
+   */
+  setVirtualAddressMap(memoryMapSize, descriptorSize, descriptorVersion, virtualMap) {
+    console.log('UEFI: Set Virtual Address Map');
+    // For now, just acknowledge - full implementation would require page table updates
+    return 0; // EFI_SUCCESS
+  }
+
+  /**
+   * UEFI Runtime Service: Convert Pointer
+   */
+  convertPointer(debugDisposition, address) {
+    // For now, return address as-is (no conversion needed)
+    return { success: true, address };
+  }
+
+  /**
+   * UEFI Runtime Service: Get Variable
+   */
+  getVariable(variableName, vendorGuid, attributes, dataSize, data) {
+    const key = `${variableName}:${vendorGuid}`;
+    const variable = this.runtimeVariables.get(key);
+    
+    if (!variable) {
+      return 0x80000002; // EFI_NOT_FOUND
+    }
+    
+    if (dataSize < variable.data.length) {
+      return 0x80000005; // EFI_BUFFER_TOO_SMALL
+    }
+    
+    // Write variable data to memory
+    if (data && this.memory) {
+      for (let i = 0; i < variable.data.length; i++) {
+        this.memory.writeByte(Number(data) + i, variable.data[i]);
+      }
+    }
+    
+    if (attributes) {
+      this.memory.writeDword(Number(attributes), variable.attributes);
+    }
+    
+    if (dataSize) {
+      this.memory.writeQword(Number(dataSize), BigInt(variable.data.length));
+    }
+    
+    return 0; // EFI_SUCCESS
+  }
+
+  /**
+   * UEFI Runtime Service: Get Next Variable Name
+   */
+  getNextVariableName(variableNameSize, variableName, vendorGuid) {
+    // Return next variable name from list
+    // Simplified implementation
+    return 0x80000002; // EFI_NOT_FOUND (no more variables)
+  }
+
+  /**
+   * UEFI Runtime Service: Set Variable
+   */
+  setVariable(variableName, vendorGuid, attributes, dataSize, data) {
+    const key = `${variableName}:${vendorGuid}`;
+    const dataArray = new Uint8Array(Number(dataSize));
+    
+    // Read variable data from memory
+    if (data && this.memory) {
+      for (let i = 0; i < dataSize; i++) {
+        dataArray[i] = this.memory.readByte(Number(data) + i);
+      }
+    }
+    
+    this.runtimeVariables.set(key, {
+      name: variableName,
+      vendorGuid,
+      attributes: Number(attributes),
+      data: dataArray,
+    });
+    
+    if (!this.variableNames.includes(key)) {
+      this.variableNames.push(key);
+    }
+    
+    console.log(`UEFI: Set Variable ${variableName}`);
+    return 0; // EFI_SUCCESS
+  }
+
+  /**
+   * UEFI Runtime Service: Get Next High Monotonic Count
+   */
+  getNextHighMonotonicCount(highCount) {
+    // Return monotonically increasing counter
+    if (!this.monotonicCount) {
+      this.monotonicCount = 0n;
+    }
+    this.monotonicCount++;
+    
+    if (highCount && this.memory) {
+      this.memory.writeQword(Number(highCount), this.monotonicCount);
+    }
+    
+    return 0; // EFI_SUCCESS
+  }
+
+  /**
+   * UEFI Runtime Service: Reset System
+   */
+  resetSystem(resetType, resetStatus, dataSize, resetData) {
+    console.log(`UEFI: Reset System (type: ${resetType})`);
+    // For emulation, we could trigger a reset
+    // For now, just log
+    return 0; // EFI_SUCCESS
   }
 
   /**

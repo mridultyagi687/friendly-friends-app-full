@@ -70,6 +70,11 @@ class CPU {
     this.interruptHandler = null; // Will be initialized
     this.instructionCount = 0;
     this.maxInstructions = 1000000; // Safety limit
+    
+    // XSAVE configuration (initialized from CPUID leaf 0xD)
+    this.xsave_area_size = 0x300n; // Default fallback
+    this.xsave_allowed_mask = 0x7n; // Default fallback (bits 0, 1, 2)
+    this.cpuid = {}; // CPUID cache
   }
 
   /**
@@ -89,7 +94,90 @@ class CPU {
       this.executor = new InstructionExecutor(this, this.memory);
       this.interruptHandler = new InterruptHandler(this, this.memory);
       this.interruptHandler.init();
+      
+      // Initialize CPUID leaf 0xD configuration
+      this.initCPUIDLeaf0D();
     }
+  }
+
+  /**
+   * Initialize CPUID leaf 0xD configuration
+   * Reads CPUID leaf 0xD to determine XSAVE area size and allowed XCR0 mask
+   */
+  initCPUIDLeaf0D() {
+    if (!this.executor) {
+      // Fallback if executor not ready
+      this.setCPUIDLeaf0DFallback();
+      return;
+    }
+
+    try {
+      // Simulate CPUID leaf 0xD, subleaf 0 by directly calling the executor's CPUID handler
+      const savedRax = this.registers.rax;
+      const savedRbx = this.registers.rbx;
+      const savedRcx = this.registers.rcx;
+      const savedRdx = this.registers.rdx;
+      
+      this.registers.rax = 0x0Dn;
+      this.registers.rcx = 0n; // Subleaf 0
+      
+      // Call CPUID handler directly
+      const instruction = { opcode: { mnemonic: 'CPUID' }, length: 2 };
+      this.executor.executeCPUID(instruction);
+      
+      // Read results
+      const eax = Number(this.registers.rax & 0xFFFFFFFFn);
+      const ebx = Number(this.registers.rbx & 0xFFFFFFFFn);
+      
+      // Restore registers
+      this.registers.rax = savedRax;
+      this.registers.rbx = savedRbx;
+      this.registers.rcx = savedRcx;
+      this.registers.rdx = savedRdx;
+      
+      // Extract XSAVE configuration
+      const valid_xcr0_mask = eax; // EAX contains valid XCR0 bits
+      const xsave_area_size = ebx; // EBX contains XSAVE area size
+      
+      if (xsave_area_size > 0 && valid_xcr0_mask > 0) {
+        this.xsave_area_size = BigInt(xsave_area_size);
+        this.xsave_allowed_mask = BigInt(valid_xcr0_mask);
+        this.cpuid.leaf0xD = {
+          xsave_area_size: xsave_area_size,
+          valid_xcr0_mask: valid_xcr0_mask,
+          comp_offsets: {
+            fxsave: 0,
+            xstate_header: 512,
+            ymm_upper: 640
+          }
+        };
+        console.log(`CPU: CPUID leaf 0xD initialized (area_size: 0x${this.xsave_area_size.toString(16)}, allowed_mask: 0x${this.xsave_allowed_mask.toString(16)})`);
+      } else {
+        // Fallback if CPUID.D returns invalid values
+        this.setCPUIDLeaf0DFallback();
+      }
+    } catch (error) {
+      console.warn('CPU: Failed to read CPUID leaf 0xD, using fallback:', error);
+      this.setCPUIDLeaf0DFallback();
+    }
+  }
+
+  /**
+   * Set CPUID leaf 0xD fallback values
+   */
+  setCPUIDLeaf0DFallback() {
+    this.cpuid.leaf0xD = {
+      xsave_area_size: 0x300,
+      valid_xcr0_mask: 0x7,
+      comp_offsets: {
+        fxsave: 0,
+        xstate_header: 512,
+        ymm_upper: 640
+      }
+    };
+    this.xsave_allowed_mask = 0x7n;
+    this.xsave_area_size = 0x300n;
+    console.warn('CPU: Auto-provisioned minimal CPUID.D fallback');
   }
 
   /**
@@ -136,6 +224,16 @@ class CPU {
       console.error('CPU: Error executing instruction:', error);
       return false;
     }
+  }
+
+  /**
+   * Step CPU (execute single instruction) - for testing
+   */
+  step() {
+    if (!this.running) {
+      this.running = true;
+    }
+    return this.executeInstruction();
   }
 
   /**

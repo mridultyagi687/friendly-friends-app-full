@@ -204,6 +204,29 @@ class GraphicsOutputProtocol {
   getFramebufferAddress() {
     return this.graphicsFramebufferAddress;
   }
+
+  /**
+   * Install protocol (register with UEFI system)
+   * This makes the protocol available via locateProtocol
+   */
+  installProtocol() {
+    console.log('GOP: Installing Graphics Output Protocol');
+    // Protocol is now available via UEFI firmware's locateProtocol
+    this.protocolGuid = '9042a9de-23dc-4a38-96fb-7afed6c0cd97'; // EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID
+    this.protocolInstalled = true;
+  }
+
+  /**
+   * Get protocol interface (for locateProtocol)
+   */
+  getProtocolInterface() {
+    return {
+      queryMode: this.queryMode.bind(this),
+      setMode: this.setMode.bind(this),
+      blt: this.blit.bind(this),
+      mode: this.getMode.bind(this),
+    };
+  }
 }
 
 export default GraphicsOutputProtocol;

@@ -25,6 +25,23 @@ class InstructionDecoder {
     // Parse instruction prefix bytes
     let offset = 0;
     const prefixes = this.parsePrefixes(instructionBytes, offset);
+    
+    // Check if this is PAUSE instruction (0xF3 0x90)
+    if (prefixes.pause) {
+      return {
+        prefixes: {},
+        rex: { present: false },
+        opcode: { mnemonic: 'PAUSE', length: 2, needsModRM: false, hasImmediate: false },
+        modrm: null,
+        sib: null,
+        immediate: null,
+        displacement: null,
+        length: 2,
+        bytes: instructionBytes.slice(0, 2),
+        width: 64,
+      };
+    }
+    
     offset = prefixes.offset;
 
     // Parse REX prefix (x86-64)
@@ -62,6 +79,9 @@ class InstructionDecoder {
       offset += modrm.displacementSize;
     }
 
+    // Determine instruction width: rex.w ? 64 : (operandSize ? 16 : 32)
+    const width = rex.w ? 64 : (prefixes.operandSize ? 16 : 32);
+
     return {
       prefixes,
       rex,
@@ -72,6 +92,7 @@ class InstructionDecoder {
       displacement,
       length: offset,
       bytes: instructionBytes.slice(0, offset),
+      width, // Instruction width in bits (16, 32, or 64)
     };
   }
 
@@ -109,6 +130,11 @@ class InstructionDecoder {
       if (byte === 0xF0) {
         prefixes.lock = true;
       } else if (byte === 0xF3) {
+        // Check if this is PAUSE (0xF3 0x90)
+        if (offset + 1 < bytes.length && bytes[offset + 1] === 0x90) {
+          // This is PAUSE instruction, not a REP prefix
+          return { pause: true, offset: offset + 2 };
+        }
         prefixes.rep = 'rep';
       } else if (byte === 0xF2) {
         prefixes.rep = 'repne';
@@ -185,6 +211,7 @@ class InstructionDecoder {
   parseSingleByteOpcode(byte, offset) {
     const opcodes = {
       0x90: { mnemonic: 'NOP', length: 1, needsModRM: false, hasImmediate: false },
+      0xF4: { mnemonic: 'HLT', length: 1, needsModRM: false, hasImmediate: false },
       0xC3: { mnemonic: 'RET', length: 1, needsModRM: false, hasImmediate: false },
       0x48: { mnemonic: 'DEC', length: 1, needsModRM: true, hasImmediate: false }, // REX.W prefix
       0x89: { mnemonic: 'MOV', length: 1, needsModRM: true, hasImmediate: false, rToM: true },
