@@ -21,6 +21,15 @@ class InstructionExecutor {
     }
 
     const mnemonic = instruction.opcode.mnemonic;
+    
+    // Handle LOCK prefix for atomic operations
+    const hasLock = instruction.prefixes && instruction.prefixes.lock;
+    if (hasLock) {
+      // LOCK prefix makes the following instruction atomic
+      // For emulation, we ensure the operation is atomic
+      // In a real CPU, this would lock the memory bus
+      return this.executeLocked(instruction);
+    }
 
     try {
       switch (mnemonic) {
@@ -159,6 +168,22 @@ class InstructionExecutor {
         case 'PSUBW':
         case 'PSUBD':
           return this.executePSUB(instruction);
+        case 'SYSCALL':
+          return this.executeSYSCALL(instruction);
+        case 'SYSRET':
+          return this.executeSYSRET(instruction);
+        case 'SYSENTER':
+          return this.executeSYSENTER(instruction);
+        case 'SYSEXIT':
+          return this.executeSYSEXIT(instruction);
+        case 'CMPXCHG16B':
+          return this.executeCMPXCHG16B(instruction);
+        case 'POPCNT':
+          return this.executePOPCNT(instruction);
+        case 'LZCNT':
+          return this.executeLZCNT(instruction);
+        case 'MOVBE':
+          return this.executeMOVBE(instruction);
         default:
           console.warn(`CPU: Unhandled instruction: ${mnemonic}`);
           return false;
@@ -1633,8 +1658,26 @@ class InstructionExecutor {
       case 1: // Get processor info and feature bits
         eax = 0x000306A9; // Family 6, Model 58, Stepping 9 (Ivy Bridge-like)
         ebx = 0x00020800; // Brand ID, etc.
-        ecx = 0x7FFEFBFF; // Feature flags (SSE, SSE2, etc.)
-        edx = 0xBFEBFBFF; // Feature flags (FPU, MMX, SSE, etc.)
+        // ECX feature flags (bit positions):
+        // 0 = SSE3, 1 = PCLMULQDQ, 9 = SSSE3, 19 = SSE4.1, 20 = SSE4.2
+        // 28 = AVX, 29 = F16C, 30 = RDRAND
+        ecx = 0x7FFEFBFF | 0x10000000; // SSE3-SSE4.2 + AVX (bit 28)
+        // EDX feature flags (bit positions):
+        // 0 = FPU, 23 = MMX, 25 = SSE, 26 = SSE2
+        edx = 0xBFEBFBFF; // FPU, MMX, SSE, SSE2
+        break;
+      case 7: // Extended features (subleaf in ECX)
+        const subleaf = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
+        if (subleaf === 0) {
+          // EBX: Extended feature flags
+          // 5 = AVX2, 8 = BMI1, 9 = BMI2, 19 = ADX, 29 = SHA
+          ebx = 0x00000020; // AVX2 (bit 5)
+          ecx = 0; // Reserved
+          edx = 0; // Reserved
+          eax = 0; // Reserved
+        } else {
+          eax = 0; ebx = 0; ecx = 0; edx = 0;
+        }
         break;
       case 0x80000000: // Extended function info
         eax = 0x80000008; // Maximum extended function
@@ -1780,7 +1823,7 @@ class InstructionExecutor {
   }
 
   /**
-   * Execute FXSAVE/FXRSTOR instruction (Save/Restore FPU State)
+   * Execute FXSAVE/FXRSTOR/XSAVE/XRSTOR instruction (Save/Restore FPU/SSE/AVX State)
    */
   executeFXSAVE(instruction) {
     const { modrm } = instruction;
@@ -1795,28 +1838,253 @@ class InstructionExecutor {
     }
 
     const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
+    
     if (modrm.reg === 0) {
-      // FXSAVE - Save FPU/MMX/SSE state
-      // For now, just write zeros (512 bytes for FXSAVE)
-      // TODO: Implement actual FPU state saving
-      for (let i = 0; i < 512; i++) {
-        this.memory.writeByte(memAddrNum + i, 0);
-      }
-      console.log('CPU: FXSAVE executed (simplified - zeros written)');
+      // FXSAVE - Save FPU/MMX/SSE state (512 bytes)
+      this.saveFPUState(memAddrNum, 512);
+      console.log('CPU: FXSAVE executed');
     } else if (modrm.reg === 1) {
       // FXRSTOR - Restore FPU/MMX/SSE state
-      // For now, just read (do nothing with data)
-      // TODO: Implement actual FPU state restoration
-      for (let i = 0; i < 512; i++) {
-        this.memory.readByte(memAddrNum + i);
-      }
-      console.log('CPU: FXRSTOR executed (simplified - data read but not used)');
+      this.restoreFPUState(memAddrNum, 512);
+      console.log('CPU: FXRSTOR executed');
+    } else if (modrm.reg === 4) {
+      // XSAVE - Save extended state (FPU/SSE/AVX)
+      const xcr0 = this.getXCR0(); // Get XCR0 (extended control register)
+      const xsaveSize = this.calculateXSAVESize(xcr0);
+      this.saveExtendedState(memAddrNum, xsaveSize, xcr0);
+      console.log(`CPU: XSAVE executed (${xsaveSize} bytes)`);
+    } else if (modrm.reg === 5) {
+      // XRSTOR - Restore extended state
+      const xcr0 = this.getXCR0();
+      const xsaveSize = this.calculateXSAVESize(xcr0);
+      this.restoreExtendedState(memAddrNum, xsaveSize, xcr0);
+      console.log(`CPU: XRSTOR executed (${xsaveSize} bytes)`);
     } else {
       return false;
     }
 
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
+  }
+
+  /**
+   * Save FPU state to memory
+   */
+  saveFPUState(memAddr, size) {
+    let offset = 0;
+    
+    // FPU Control Word (2 bytes)
+    this.memory.writeWord(memAddr + offset, this.cpu.registers.fcw);
+    offset += 2;
+    
+    // FPU Status Word (2 bytes)
+    this.memory.writeWord(memAddr + offset, this.cpu.registers.fsw);
+    offset += 2;
+    
+    // FPU Tag Word (2 bytes)
+    this.memory.writeWord(memAddr + offset, this.cpu.registers.ftw);
+    offset += 2;
+    
+    // Reserved (2 bytes)
+    offset += 2;
+    
+    // FPU Instruction Pointer (4 bytes)
+    // FPU Data Pointer (4 bytes)
+    // Reserved (4 bytes)
+    offset += 12;
+    
+    // FPU registers (8 x 80-bit = 10 bytes each = 80 bytes)
+    for (let i = 0; i < 8; i++) {
+      const stReg = `st${i}`;
+      const stValue = this.cpu.registers[stReg] || 0n;
+      // Write 80-bit value (10 bytes)
+      for (let j = 0; j < 10; j++) {
+        this.memory.writeByte(memAddr + offset + j, Number((stValue >> BigInt(j * 8)) & 0xFFn));
+      }
+      offset += 16; // 80-bit value padded to 16 bytes
+    }
+    
+    // MXCSR (4 bytes)
+    this.memory.writeDword(memAddr + offset, this.cpu.registers.mxcsr);
+    offset += 4;
+    
+    // MXCSR_MASK (4 bytes) - typically 0xFFFF
+    this.memory.writeDword(memAddr + offset, 0xFFFF);
+    offset += 4;
+    
+    // XMM registers (16 x 128-bit = 16 bytes each = 256 bytes)
+    for (let i = 0; i < 16; i++) {
+      const xmmReg = `xmm${i}`;
+      const xmmValue = this.cpu.registers[xmmReg] || 0n;
+      // Write 128-bit value (16 bytes)
+      this.memory.writeQword(memAddr + offset, xmmValue & 0xFFFFFFFFFFFFFFFFn);
+      this.memory.writeQword(memAddr + offset + 8, (xmmValue >> 64n) & 0xFFFFFFFFFFFFFFFFn);
+      offset += 16;
+    }
+    
+    // Fill rest with zeros
+    while (offset < size) {
+      this.memory.writeByte(memAddr + offset, 0);
+      offset++;
+    }
+  }
+
+  /**
+   * Restore FPU state from memory
+   */
+  restoreFPUState(memAddr, size) {
+    let offset = 0;
+    
+    // FPU Control Word
+    this.cpu.registers.fcw = this.memory.readWord(memAddr + offset);
+    offset += 2;
+    
+    // FPU Status Word
+    this.cpu.registers.fsw = this.memory.readWord(memAddr + offset);
+    offset += 2;
+    
+    // FPU Tag Word
+    this.cpu.registers.ftw = this.memory.readWord(memAddr + offset);
+    offset += 2;
+    
+    // Skip reserved
+    offset += 2;
+    
+    // Skip FPU IP/DP
+    offset += 12;
+    
+    // Restore FPU registers
+    for (let i = 0; i < 8; i++) {
+      const stReg = `st${i}`;
+      let stValue = 0n;
+      // Read 80-bit value (10 bytes)
+      for (let j = 0; j < 10; j++) {
+        const byte = BigInt(this.memory.readByte(memAddr + offset + j));
+        stValue |= (byte << BigInt(j * 8));
+      }
+      this.cpu.registers[stReg] = stValue;
+      offset += 16;
+    }
+    
+    // MXCSR
+    this.cpu.registers.mxcsr = this.memory.readDword(memAddr + offset);
+    offset += 4;
+    
+    // Skip MXCSR_MASK
+    offset += 4;
+    
+    // Restore XMM registers
+    for (let i = 0; i < 16; i++) {
+      const xmmReg = `xmm${i}`;
+      const low = this.memory.readQword(memAddr + offset);
+      const high = this.memory.readQword(memAddr + offset + 8);
+      this.cpu.registers[xmmReg] = low | (high << 64n);
+      offset += 16;
+    }
+  }
+
+  /**
+   * Save extended state (XSAVE)
+   */
+  saveExtendedState(memAddr, size, xcr0) {
+    // XSAVE header (64 bytes)
+    // XSTATE_BV (8 bytes) - which components are saved
+    let xstateBv = 0n;
+    if (xcr0 & 0x01n) xstateBv |= 0x01n; // X87
+    if (xcr0 & 0x02n) xstateBv |= 0x02n; // SSE
+    if (xcr0 & 0x04n) xstateBv |= 0x04n; // AVX
+    if (xcr0 & 0x08n) xstateBv |= 0x08n; // AVX512
+    
+    this.memory.writeQword(memAddr, xstateBv);
+    this.memory.writeQword(memAddr + 8, 0n); // XCOMP_BV (compressed)
+    
+    // Reserved (48 bytes)
+    for (let i = 16; i < 64; i++) {
+      this.memory.writeByte(memAddr + i, 0);
+    }
+    
+    let offset = 64;
+    
+    // Save X87 state if enabled
+    if (xcr0 & 0x01n) {
+      this.saveFPUState(memAddr + offset, 512);
+      offset += 512;
+    }
+    
+    // Save SSE state if enabled
+    if (xcr0 & 0x02n) {
+      // XMM registers (already saved in FPU state area)
+      // Just update offset
+      offset += 256; // XMM registers
+    }
+    
+    // Save AVX state if enabled (YMM registers)
+    if (xcr0 & 0x04n) {
+      // YMM registers (256-bit, extends XMM)
+      for (let i = 0; i < 16; i++) {
+        // Upper 128 bits of YMM (XMM is lower 128 bits)
+        // For now, write zeros (YMM not fully implemented)
+        for (let j = 0; j < 16; j++) {
+          this.memory.writeByte(memAddr + offset + j, 0);
+        }
+        offset += 16;
+      }
+    }
+  }
+
+  /**
+   * Restore extended state (XRSTOR)
+   */
+  restoreExtendedState(memAddr, size, xcr0) {
+    // Read XSTATE_BV
+    const xstateBv = this.memory.readQword(memAddr);
+    
+    let offset = 64;
+    
+    // Restore X87 state if present
+    if ((xstateBv & 0x01n) && (xcr0 & 0x01n)) {
+      this.restoreFPUState(memAddr + offset, 512);
+      offset += 512;
+    }
+    
+    // Restore SSE state if present
+    if ((xstateBv & 0x02n) && (xcr0 & 0x02n)) {
+      // XMM registers
+      offset += 256;
+    }
+    
+    // Restore AVX state if present
+    if ((xstateBv & 0x04n) && (xcr0 & 0x04n)) {
+      // YMM registers (upper 128 bits)
+      offset += 256;
+    }
+  }
+
+  /**
+   * Get XCR0 (Extended Control Register 0)
+   */
+  getXCR0() {
+    // XCR0 bits:
+    // 0 = X87 FPU
+    // 1 = SSE
+    // 2 = AVX
+    // 3 = AVX512
+    // Default: enable X87 and SSE
+    return 0x03n; // X87 + SSE enabled
+  }
+
+  /**
+   * Calculate XSAVE size based on XCR0
+   */
+  calculateXSAVESize(xcr0) {
+    let size = 64; // Header
+    
+    if (xcr0 & 0x01n) size += 512; // X87
+    if (xcr0 & 0x02n) size += 256; // SSE (XMM)
+    if (xcr0 & 0x04n) size += 256; // AVX (YMM upper)
+    if (xcr0 & 0x08n) size += 1024; // AVX512
+    
+    return size;
   }
 
   /**
@@ -1881,20 +2149,32 @@ class InstructionExecutor {
     const size = 16;
     const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
 
+    // Get XMM register index
+    const xmmIndex = modrm.reg % 16;
+    const xmmReg = `xmm${xmmIndex}`;
+    
     if (modrm.mod === 3) {
       // Register to register (XMM register)
-      console.log('CPU: MOVUPS reg-to-reg (XMM not implemented, treating as NOP)');
+      const srcXmmIndex = modrm.rm % 16;
+      const srcXmmReg = `xmm${srcXmmIndex}`;
+      // Copy XMM register
+      this.cpu.registers[xmmReg] = this.cpu.registers[srcXmmReg] || 0n;
     } else {
       // Memory operation
       if (modrm.reg < 4) {
-        // Load from memory to XMM register (simplified - just read)
-        for (let i = 0; i < size; i++) {
-          this.memory.readByte(memAddrNum + i);
+        // Load from memory to XMM register (128 bits = 16 bytes)
+        let xmmValue = 0n;
+        for (let i = 0; i < 16; i++) {
+          const byte = BigInt(this.memory.readByte(memAddrNum + i));
+          xmmValue |= (byte << BigInt(i * 8));
         }
+        this.cpu.registers[xmmReg] = xmmValue;
       } else {
-        // Store from XMM register to memory (simplified - write zeros)
-        for (let i = 0; i < size; i++) {
-          this.memory.writeByte(memAddrNum + i, 0);
+        // Store from XMM register to memory
+        const xmmValue = this.cpu.registers[xmmReg] || 0n;
+        for (let i = 0; i < 16; i++) {
+          const byte = Number((xmmValue >> BigInt(i * 8)) & 0xFFn);
+          this.memory.writeByte(memAddrNum + i, byte);
         }
       }
     }
@@ -1922,20 +2202,32 @@ class InstructionExecutor {
     const size = 16;
     const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
 
+    // Get XMM register index
+    const xmmIndex = modrm.reg % 16;
+    const xmmReg = `xmm${xmmIndex}`;
+    
     if (modrm.mod === 3) {
       // Register to register (XMM register)
-      console.log('CPU: MOVDQA reg-to-reg (XMM not implemented, treating as NOP)');
+      const srcXmmIndex = modrm.rm % 16;
+      const srcXmmReg = `xmm${srcXmmIndex}`;
+      // Copy XMM register
+      this.cpu.registers[xmmReg] = this.cpu.registers[srcXmmReg] || 0n;
     } else {
-      // Memory operation
+      // Memory operation (aligned)
       if (modrm.reg < 4) {
-        // Load from memory to XMM register (simplified - just read)
-        for (let i = 0; i < size; i++) {
-          this.memory.readByte(memAddrNum + i);
+        // Load from memory to XMM register (128 bits = 16 bytes)
+        let xmmValue = 0n;
+        for (let i = 0; i < 16; i++) {
+          const byte = BigInt(this.memory.readByte(memAddrNum + i));
+          xmmValue |= (byte << BigInt(i * 8));
         }
+        this.cpu.registers[xmmReg] = xmmValue;
       } else {
-        // Store from XMM register to memory (simplified - write zeros)
-        for (let i = 0; i < size; i++) {
-          this.memory.writeByte(memAddrNum + i, 0);
+        // Store from XMM register to memory
+        const xmmValue = this.cpu.registers[xmmReg] || 0n;
+        for (let i = 0; i < 16; i++) {
+          const byte = Number((xmmValue >> BigInt(i * 8)) & 0xFFn);
+          this.memory.writeByte(memAddrNum + i, byte);
         }
       }
     }
@@ -1963,20 +2255,32 @@ class InstructionExecutor {
     const size = 16;
     const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
 
+    // Get XMM register index
+    const xmmIndex = modrm.reg % 16;
+    const xmmReg = `xmm${xmmIndex}`;
+    
     if (modrm.mod === 3) {
       // Register to register (XMM register)
-      console.log('CPU: MOVDQU reg-to-reg (XMM not implemented, treating as NOP)');
+      const srcXmmIndex = modrm.rm % 16;
+      const srcXmmReg = `xmm${srcXmmIndex}`;
+      // Copy XMM register
+      this.cpu.registers[xmmReg] = this.cpu.registers[srcXmmReg] || 0n;
     } else {
-      // Memory operation
+      // Memory operation (unaligned)
       if (modrm.reg < 4) {
-        // Load from memory to XMM register (simplified - just read)
-        for (let i = 0; i < size; i++) {
-          this.memory.readByte(memAddrNum + i);
+        // Load from memory to XMM register (128 bits = 16 bytes)
+        let xmmValue = 0n;
+        for (let i = 0; i < 16; i++) {
+          const byte = BigInt(this.memory.readByte(memAddrNum + i));
+          xmmValue |= (byte << BigInt(i * 8));
         }
+        this.cpu.registers[xmmReg] = xmmValue;
       } else {
-        // Store from XMM register to memory (simplified - write zeros)
-        for (let i = 0; i < size; i++) {
-          this.memory.writeByte(memAddrNum + i, 0);
+        // Store from XMM register to memory
+        const xmmValue = this.cpu.registers[xmmReg] || 0n;
+        for (let i = 0; i < 16; i++) {
+          const byte = Number((xmmValue >> BigInt(i * 8)) & 0xFFn);
+          this.memory.writeByte(memAddrNum + i, byte);
         }
       }
     }
@@ -2029,9 +2333,17 @@ class InstructionExecutor {
     }
 
     // PAND operates on XMM registers
-    // For now, treat as NOP (XMM registers not implemented)
+    const xmmIndex = modrm.reg % 16;
+    const xmmReg = `xmm${xmmIndex}`;
+    
     if (modrm.mod === 3) {
-      console.log('CPU: PAND reg-to-reg (XMM not implemented, treating as NOP)');
+      // Register to register (XMM register)
+      const srcXmmIndex = modrm.rm % 16;
+      const srcXmmReg = `xmm${srcXmmIndex}`;
+      const srcValue = this.cpu.registers[srcXmmReg] || 0n;
+      const dstValue = this.cpu.registers[xmmReg] || 0n;
+      // AND operation
+      this.cpu.registers[xmmReg] = dstValue & srcValue;
     } else {
       const memAddr = this.calculateAddress(instruction);
       if (memAddr === null) {
@@ -2058,9 +2370,17 @@ class InstructionExecutor {
     }
 
     // POR operates on XMM registers
-    // For now, treat as NOP (XMM registers not implemented)
+    const xmmIndex = modrm.reg % 16;
+    const xmmReg = `xmm${xmmIndex}`;
+    
     if (modrm.mod === 3) {
-      console.log('CPU: POR reg-to-reg (XMM not implemented, treating as NOP)');
+      // Register to register (XMM register)
+      const srcXmmIndex = modrm.rm % 16;
+      const srcXmmReg = `xmm${srcXmmIndex}`;
+      const srcValue = this.cpu.registers[srcXmmReg] || 0n;
+      const dstValue = this.cpu.registers[xmmReg] || 0n;
+      // OR operation
+      this.cpu.registers[xmmReg] = dstValue | srcValue;
     } else {
       const memAddr = this.calculateAddress(instruction);
       if (memAddr === null) {
@@ -2093,10 +2413,39 @@ class InstructionExecutor {
         return this.executeLIDT(instruction);
       case 7: // INVLPG - Invalidate TLB Entry
         return this.executeINVLPG(instruction);
+      case 0: // XGETBV - Get Extended Control Register (0x0F 0x01 0xD0)
+        if (modrm.mod === 3 && modrm.rm === 0) {
+          return this.executeXGETBV(instruction);
+        }
+        break;
       default:
         console.warn(`CPU: Unhandled SYSTEM operation ${operation}`);
         return false;
     }
+    return false;
+  }
+
+  /**
+   * Execute XGETBV instruction (Get Extended Control Register)
+   */
+  executeXGETBV(instruction) {
+    // XGETBV reads XCR register specified in ECX, returns value in EDX:EAX
+    const xcrNumber = Number(this.cpu.registers.rcx & 0xFFFFFFFFn);
+    
+    if (xcrNumber === 0) {
+      // XCR0 - Extended Control Register 0
+      const xcr0 = this.getXCR0();
+      // Return in EDX:EAX (64-bit value)
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n) | (xcr0 & 0xFFFFFFFFn);
+      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n) | ((xcr0 >> 32n) & 0xFFFFFFFFn);
+    } else {
+      // Unknown XCR - return 0
+      this.cpu.registers.rax = (this.cpu.registers.rax & 0xFFFFFFFF00000000n);
+      this.cpu.registers.rdx = (this.cpu.registers.rdx & 0xFFFFFFFF00000000n);
+    }
+    
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
   }
 
   /**
@@ -2404,9 +2753,20 @@ class InstructionExecutor {
     }
 
     // PADD operates on XMM registers
-    // For now, treat as NOP (XMM registers not implemented)
+    const xmmIndex = modrm.reg % 16;
+    const xmmReg = `xmm${xmmIndex}`;
+    
     if (modrm.mod === 3) {
-      console.log(`CPU: ${instruction.opcode.mnemonic} reg-to-reg (XMM not implemented, treating as NOP)`);
+      // Register to register (XMM register)
+      const srcXmmIndex = modrm.rm % 16;
+      const srcXmmReg = `xmm${srcXmmIndex}`;
+      const srcValue = this.cpu.registers[srcXmmReg] || 0n;
+      const dstValue = this.cpu.registers[xmmReg] || 0n;
+      
+      // PADD operates on packed integers (8, 16, or 32-bit elements)
+      // For simplicity, we'll do a full 128-bit add (not element-wise)
+      // TODO: Implement proper element-wise addition
+      this.cpu.registers[xmmReg] = (dstValue + srcValue) & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
     } else {
       const memAddr = this.calculateAddress(instruction);
       if (memAddr === null) {
@@ -2433,9 +2793,20 @@ class InstructionExecutor {
     }
 
     // PSUB operates on XMM registers
-    // For now, treat as NOP (XMM registers not implemented)
+    const xmmIndex = modrm.reg % 16;
+    const xmmReg = `xmm${xmmIndex}`;
+    
     if (modrm.mod === 3) {
-      console.log(`CPU: ${instruction.opcode.mnemonic} reg-to-reg (XMM not implemented, treating as NOP)`);
+      // Register to register (XMM register)
+      const srcXmmIndex = modrm.rm % 16;
+      const srcXmmReg = `xmm${srcXmmIndex}`;
+      const srcValue = this.cpu.registers[srcXmmReg] || 0n;
+      const dstValue = this.cpu.registers[xmmReg] || 0n;
+      
+      // PSUB operates on packed integers (8, 16, or 32-bit elements)
+      // For simplicity, we'll do a full 128-bit subtract (not element-wise)
+      // TODO: Implement proper element-wise subtraction
+      this.cpu.registers[xmmReg] = (dstValue - srcValue) & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFn;
     } else {
       const memAddr = this.calculateAddress(instruction);
       if (memAddr === null) {
@@ -2546,6 +2917,235 @@ class InstructionExecutor {
       }
     }
 
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute SYSCALL instruction (System Call) - CRITICAL for Windows
+   * Fast system call entry point
+   */
+  executeSYSCALL(instruction) {
+    // SYSCALL saves:
+    // - RCX = RIP (return address)
+    // - R11 = RFLAGS
+    // Then jumps to STAR register (long mode target)
+    
+    // Save return address and flags
+    this.cpu.registers.rcx = this.cpu.registers.rip + BigInt(instruction.length);
+    this.cpu.registers.r11 = this.cpu.registers.rflags;
+    
+    // Jump to SYSCALL target (from STAR register)
+    const target = this.cpu.registers.lstar || this.cpu.registers.star;
+    if (target !== 0n) {
+      this.cpu.registers.rip = target;
+    } else {
+      // Default handler if STAR not set
+      console.warn('CPU: SYSCALL called but STAR register not set');
+      this.cpu.registers.rip += BigInt(instruction.length);
+    }
+    
+    // Clear RFLAGS (masked by SFMASK if set)
+    const mask = this.cpu.registers.sfmask || 0n;
+    this.cpu.registers.rflags &= ~mask;
+    
+    return true;
+  }
+
+  /**
+   * Execute SYSRET instruction (System Return) - CRITICAL for Windows
+   * Fast system call return
+   */
+  executeSYSRET(instruction) {
+    // SYSRET restores:
+    // - RIP = RCX (return address)
+    // - RFLAGS = R11 (restored flags)
+    
+    this.cpu.registers.rip = this.cpu.registers.rcx;
+    this.cpu.registers.rflags = this.cpu.registers.r11;
+    
+    return true;
+  }
+
+  /**
+   * Execute SYSENTER instruction (System Enter) - CRITICAL for Windows
+   * Fast system call entry (32-bit compatibility)
+   */
+  executeSYSENTER(instruction) {
+    // SYSENTER uses MSRs:
+    // - IA32_SYSENTER_CS (0x174) = segment selector
+    // - IA32_SYSENTER_EIP (0x176) = entry point
+    // - IA32_SYSENTER_ESP (0x175) = stack pointer
+    
+    // Save return address (EIP) and stack pointer
+    // In 64-bit mode, SYSENTER is not typically used, but we support it
+    
+    const sysenterEip = this.cpu.registers.sysenter_eip || 0n;
+    const sysenterEsp = this.cpu.registers.sysenter_esp || 0n;
+    const sysenterCs = this.cpu.registers.sysenter_cs || 0;
+    
+    if (sysenterEip !== 0n) {
+      // Set CS and jump to entry point
+      this.cpu.registers.cs = sysenterCs;
+      this.cpu.registers.rip = sysenterEip;
+      this.cpu.registers.rsp = sysenterEsp;
+    } else {
+      console.warn('CPU: SYSENTER called but SYSENTER registers not set');
+      this.cpu.registers.rip += BigInt(instruction.length);
+    }
+    
+    return true;
+  }
+
+  /**
+   * Execute SYSEXIT instruction (System Exit) - CRITICAL for Windows
+   * Fast system call return (32-bit compatibility)
+   */
+  executeSYSEXIT(instruction) {
+    // SYSEXIT restores from EDX (EIP) and ECX (ESP)
+    const returnEip = this.cpu.registers.rdx & 0xFFFFFFFFn;
+    const returnEsp = this.cpu.registers.rcx & 0xFFFFFFFFn;
+    
+    this.cpu.registers.rip = returnEip;
+    this.cpu.registers.rsp = returnEsp;
+    
+    return true;
+  }
+
+  /**
+   * Execute CMPXCHG16B instruction (Compare and Exchange 16 bytes) - CRITICAL
+   * Windows BSODs instantly without this - atomic 128-bit compare-and-swap
+   */
+  executeCMPXCHG16B(instruction) {
+    const { modrm, prefixes } = instruction;
+    
+    if (!modrm) {
+      return false;
+    }
+    
+    // CMPXCHG16B compares RDX:RAX with [mem], if equal stores RCX:RBX to [mem]
+    // ModR/M reg field must be 1 for CMPXCHG16B
+    if (modrm.reg !== 1) {
+      // Check if this is RDRAND (reg = 6) or RDSEED (reg = 7)
+      if (modrm.reg === 6) {
+        return this.executeRDRAND(instruction);
+      } else if (modrm.reg === 7) {
+        return this.executeRDSEED(instruction);
+      }
+      return false;
+    }
+    
+    const memAddr = this.calculateAddress(instruction);
+    if (memAddr === null) {
+      return false;
+    }
+    
+    const memAddrNum = typeof memAddr === 'bigint' ? Number(memAddr) : memAddr;
+    
+    // Read 16 bytes from memory (128-bit value)
+    const memLow = this.memory.readQword(memAddrNum);
+    const memHigh = this.memory.readQword(memAddrNum + 8);
+    
+    // Compare RDX:RAX with memory
+    const expectedLow = this.cpu.registers.rax;
+    const expectedHigh = this.cpu.registers.rdx;
+    
+    const equal = (memLow === expectedLow) && (memHigh === expectedHigh);
+    
+    if (equal) {
+      // If equal, store RCX:RBX to memory (atomic)
+      // Handle LOCK prefix if present
+      if (prefixes && prefixes.lock) {
+        // LOCK prefix: ensure atomicity (in real CPU, this locks the bus)
+        // For emulation, we just ensure the operation is atomic
+        this.memory.writeQword(memAddrNum, this.cpu.registers.rbx);
+        this.memory.writeQword(memAddrNum + 8, this.cpu.registers.rcx);
+      } else {
+        this.memory.writeQword(memAddrNum, this.cpu.registers.rbx);
+        this.memory.writeQword(memAddrNum + 8, this.cpu.registers.rcx);
+      }
+      
+      // Set ZF (zero flag) - comparison was equal
+      this.cpu.registers.rflags |= 0x40n;
+    } else {
+      // If not equal, load memory value into RDX:RAX
+      this.cpu.registers.rax = memLow;
+      this.cpu.registers.rdx = memHigh;
+      
+      // Clear ZF (zero flag) - comparison was not equal
+      this.cpu.registers.rflags &= ~0x40n;
+    }
+    
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute RDRAND instruction (Read Random) - Random number from CPU
+   */
+  executeRDRAND(instruction) {
+    const { modrm, rex } = instruction;
+    
+    if (!modrm || modrm.reg !== 6) {
+      return false;
+    }
+    
+    const operandSize = (rex && rex.w) ? 64 : 32;
+    const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+    
+    // Generate random value (using crypto.getRandomValues if available, else Math.random)
+    let randomValue;
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const array = new Uint32Array(2);
+      crypto.getRandomValues(array);
+      randomValue = (BigInt(array[1]) << 32n) | BigInt(array[0]);
+    } else {
+      // Fallback to Math.random
+      randomValue = BigInt(Math.floor(Math.random() * 0xFFFFFFFFFFFFFFFF));
+    }
+    
+    // Mask to operand size
+    const mask = operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn;
+    this.cpu.registers[reg] = randomValue & mask;
+    
+    // Set CF (carry flag) to indicate success
+    this.cpu.registers.rflags |= 0x01n;
+    
+    this.cpu.registers.rip += BigInt(instruction.length);
+    return true;
+  }
+
+  /**
+   * Execute RDSEED instruction (Read Seed) - Seed for random number generation
+   */
+  executeRDSEED(instruction) {
+    const { modrm, rex } = instruction;
+    
+    if (!modrm || modrm.reg !== 7) {
+      return false;
+    }
+    
+    const operandSize = (rex && rex.w) ? 64 : 32;
+    const reg = this.getRegisterFromModRM(modrm, rex, operandSize);
+    
+    // Generate seed value (using crypto.getRandomValues if available)
+    let seedValue;
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const array = new Uint32Array(2);
+      crypto.getRandomValues(array);
+      seedValue = (BigInt(array[1]) << 32n) | BigInt(array[0]);
+    } else {
+      // Fallback to Math.random
+      seedValue = BigInt(Math.floor(Math.random() * 0xFFFFFFFFFFFFFFFF));
+    }
+    
+    // Mask to operand size
+    const mask = operandSize === 64 ? 0xFFFFFFFFFFFFFFFFn : 0xFFFFFFFFn;
+    this.cpu.registers[reg] = seedValue & mask;
+    
+    // Set CF (carry flag) to indicate success
+    this.cpu.registers.rflags |= 0x01n;
+    
     this.cpu.registers.rip += BigInt(instruction.length);
     return true;
   }

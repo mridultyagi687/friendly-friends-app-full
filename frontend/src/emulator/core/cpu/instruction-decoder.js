@@ -315,6 +315,30 @@ class InstructionDecoder {
       if (sseOpcode) {
         return { ...sseOpcode, offset, sse: true };
       }
+      
+      // Three-byte opcodes with F3 prefix (0xF3 0x0F 0x38/0x3A)
+      if (offset + 2 < bytes.length) {
+        const thirdByte = bytes[offset + 2];
+        if (secondByte === 0x38) {
+          // POPCNT (0xF3 0x0F 0x38 0xF5)
+          if (thirdByte === 0xF5) {
+            return { mnemonic: 'POPCNT', length: 3, needsModRM: true, hasImmediate: false, offset };
+          }
+        } else if (secondByte === 0x3A) {
+          // LZCNT (0xF3 0x0F 0x3A 0xBD)
+          if (thirdByte === 0xBD) {
+            return { mnemonic: 'LZCNT', length: 3, needsModRM: true, hasImmediate: false, offset };
+          }
+        }
+      }
+    }
+    
+    // MOVBE (0x0F 0x38 0xF0/F1) - Move with byte swap
+    if (offset + 2 < bytes.length && secondByte === 0x38) {
+      const thirdByte = bytes[offset + 2];
+      if (thirdByte === 0xF0 || thirdByte === 0xF1) {
+        return { mnemonic: 'MOVBE', length: 3, needsModRM: true, hasImmediate: false, offset };
+      }
     }
     
     // Conditional move instructions (0x0F 0x40-0x4F)
@@ -345,7 +369,9 @@ class InstructionDecoder {
 
     // Standard SSE instructions (no prefix or with 0xF2)
     const twoByteOpcodes = {
-      0x01: { mnemonic: 'LGDT', length: 2, needsModRM: true, hasImmediate: false }, // LGDT/LIDT/SGDT/SIDT (0x0F 0x01, mod field selects)
+      0x01: { mnemonic: 'LGDT', length: 2, needsModRM: true, hasImmediate: false }, // LGDT/LIDT/SGDT/SIDT/XGETBV (0x0F 0x01, mod field selects)
+      0x05: { mnemonic: 'SYSCALL', length: 2, needsModRM: false, hasImmediate: false }, // SYSCALL (0x0F 0x05) - CRITICAL
+      0x07: { mnemonic: 'SYSRET', length: 2, needsModRM: false, hasImmediate: false }, // SYSRET (0x0F 0x07) - CRITICAL
       0x10: { mnemonic: 'MOVUPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVUPS (0x0F 0x10)
       0x11: { mnemonic: 'MOVUPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVUPS store (0x0F 0x11)
       0x20: { mnemonic: 'MOV_CR', length: 2, needsModRM: true, hasImmediate: false }, // MOV CR (0x0F 0x20)
@@ -356,11 +382,14 @@ class InstructionDecoder {
       0x29: { mnemonic: 'MOVAPS', length: 2, needsModRM: true, hasImmediate: false }, // MOVAPS store (0x0F 0x29)
       0x30: { mnemonic: 'WRMSR', length: 2, needsModRM: false, hasImmediate: false }, // WRMSR (0x0F 0x30)
       0x32: { mnemonic: 'RDMSR', length: 2, needsModRM: false, hasImmediate: false }, // RDMSR (0x0F 0x32)
+      0x34: { mnemonic: 'SYSENTER', length: 2, needsModRM: false, hasImmediate: false }, // SYSENTER (0x0F 0x34) - CRITICAL
+      0x35: { mnemonic: 'SYSEXIT', length: 2, needsModRM: false, hasImmediate: false }, // SYSEXIT (0x0F 0x35) - CRITICAL
       0x84: { mnemonic: 'JZ', length: 2, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
       0x85: { mnemonic: 'JNZ', length: 2, needsModRM: false, hasImmediate: true, immediateSize: 4, relative: true },
       0xA2: { mnemonic: 'CPUID', length: 2, needsModRM: false, hasImmediate: false }, // CPUID
       0x31: { mnemonic: 'RDTSC', length: 2, needsModRM: false, hasImmediate: false }, // RDTSC
-      0xAE: { mnemonic: 'FXSAVE', length: 2, needsModRM: true, hasImmediate: false }, // FXSAVE/FXRSTOR (reg field selects)
+      0xAE: { mnemonic: 'FXSAVE', length: 2, needsModRM: true, hasImmediate: false }, // FXSAVE/FXRSTOR/XSAVE/XRSTOR (reg field selects)
+      0xC7: { mnemonic: 'CMPXCHG16B', length: 2, needsModRM: true, hasImmediate: false }, // CMPXCHG16B/RDRAND/RDSEED (0x0F 0xC7, reg field selects) - CRITICAL
     };
 
     const opcode = twoByteOpcodes[secondByte];

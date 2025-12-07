@@ -24,7 +24,33 @@ class CPU {
       // Flags register
       rflags: 0n,
       // Instruction pointer
-      rip: 0n
+      rip: 0n,
+      // XMM registers (16 x 128-bit) - CRITICAL for Windows
+      xmm0: 0n, xmm1: 0n, xmm2: 0n, xmm3: 0n,
+      xmm4: 0n, xmm5: 0n, xmm6: 0n, xmm7: 0n,
+      xmm8: 0n, xmm9: 0n, xmm10: 0n, xmm11: 0n,
+      xmm12: 0n, xmm13: 0n, xmm14: 0n, xmm15: 0n,
+      // MXCSR register (SSE control/status) - CRITICAL
+      mxcsr: 0x1F80, // Default: all exceptions masked, round to nearest
+      // FPU registers (8 x 80-bit) - CRITICAL
+      // Stored as 128-bit values (80-bit mantissa + 16-bit exponent + padding)
+      st0: 0n, st1: 0n, st2: 0n, st3: 0n,
+      st4: 0n, st5: 0n, st6: 0n, st7: 0n,
+      // FPU control word
+      fcw: 0x037F, // Default FPU control word
+      // FPU status word
+      fsw: 0x0000, // Default FPU status word
+      // FPU tag word
+      ftw: 0xFFFF, // All registers empty
+      // SYSENTER registers (for SYSENTER/SYSEXIT)
+      sysenter_cs: 0,
+      sysenter_eip: 0n,
+      sysenter_esp: 0n,
+      // SYSCALL registers (for SYSCALL/SYSRET)
+      star: 0n, // SYSCALL target address register
+      lstar: 0n, // Long mode SYSCALL target
+      cstar: 0n, // Compatibility mode SYSCALL target
+      sfmask: 0n, // SYSCALL flag mask
     };
 
     this.running = false;
