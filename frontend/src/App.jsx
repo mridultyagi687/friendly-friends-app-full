@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { useMobile } from './utils/useMobile';
 import NavBar from './components/NavBar';
 import MobileNavBar from './components/MobileNavBar';
 import BrowserCheck from './components/BrowserCheck';
@@ -38,41 +39,54 @@ const LoadingSpinner = () => (
   </div>
 );
 
+function AppContent() {
+  const isMobile = useMobile();
+  
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <NavBar />
+      <MobileNavBar />
+      <main style={{ 
+        flex: 1, 
+        marginLeft: isMobile ? '0' : '250px',
+        paddingTop: isMobile ? '60px' : '0',
+        paddingBottom: isMobile ? '70px' : '0'
+      }}>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/members" element={<Members />} />
+            <Route path="/todos" element={<TodoList />} />
+            <Route path="/paint" element={<Paint />} />
+            <Route path="/videos" element={<VideoGallery />} />
+            <Route path="/ai-chat" element={<AiChat />} />
+            <Route path="/docs" element={<AiDocs />} />
+            <Route path="/report-bug" element={<BugReporter />} />
+            <Route path="/blog" element={<Blog />} />
+            <Route path="/research" element={<ResearchList />} />
+            <Route path="/research-data" element={<ResearchData />} />
+            <Route path="/reminders" element={<Reminders />} />
+            <Route path="/roles" element={<Roles />} />
+            <Route path="/cloud-pcs" element={<CloudPCs />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/ai-training" element={<AiTraining />} />
+            <Route path="/admin/role-assignment" element={<RoleAssignment />} />
+            <Route path="/admin/robots" element={<Robots />} />
+            <Route path="/" element={<div style={{ padding: '2rem' }}>Welcome to Friendly Friends AI</div>} />
+          </Routes>
+        </Suspense>
+      </main>
+    </div>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ThemeProvider>
           <BrowserCheck>
-            <div style={{ display: 'flex', minHeight: '100vh' }}>
-              <NavBar />
-              <MobileNavBar />
-              <main style={{ flex: 1, marginLeft: '250px' }}>
-                <Suspense fallback={<LoadingSpinner />}>
-                  <Routes>
-                    <Route path="/messages" element={<Messages />} />
-                    <Route path="/members" element={<Members />} />
-                    <Route path="/todos" element={<TodoList />} />
-                    <Route path="/paint" element={<Paint />} />
-                    <Route path="/videos" element={<VideoGallery />} />
-                    <Route path="/ai-chat" element={<AiChat />} />
-                    <Route path="/docs" element={<AiDocs />} />
-                    <Route path="/report-bug" element={<BugReporter />} />
-                    <Route path="/blog" element={<Blog />} />
-                    <Route path="/research" element={<ResearchList />} />
-                    <Route path="/research-data" element={<ResearchData />} />
-                    <Route path="/reminders" element={<Reminders />} />
-                    <Route path="/roles" element={<Roles />} />
-                    <Route path="/cloud-pcs" element={<CloudPCs />} />
-                    <Route path="/admin" element={<AdminDashboard />} />
-                    <Route path="/admin/ai-training" element={<AiTraining />} />
-                    <Route path="/admin/role-assignment" element={<RoleAssignment />} />
-                    <Route path="/admin/robots" element={<Robots />} />
-                    <Route path="/" element={<div style={{ padding: '2rem' }}>Welcome to Friendly Friends AI</div>} />
-                  </Routes>
-                </Suspense>
-              </main>
-            </div>
+            <AppContent />
           </BrowserCheck>
         </ThemeProvider>
       </AuthProvider>

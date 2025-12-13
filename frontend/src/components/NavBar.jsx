@@ -5,10 +5,17 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAppTour } from './AppTour';
 import { hasRole } from '../utils/roleUtils';
 import { canAccessFeature } from '../utils/roleEnforcement';
+import { useMobile } from '../utils/useMobile';
 import SidebarAiChat from './ai/SidebarAiChat';
 import logo from '../assets/friendly-friends-logo.png';
 
 function NavBar() {
+  const isMobile = useMobile();
+  
+  // Only render on desktop (hide on mobile)
+  if (isMobile) {
+    return null;
+  }
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();

@@ -3,10 +3,17 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { canAccessFeature } from '../utils/roleEnforcement';
+import { useMobile } from '../utils/useMobile';
 import SidebarAiChat from './ai/SidebarAiChat';
 import logo from '../assets/friendly-friends-logo.png';
 
 function MobileNavBar() {
+  const isMobile = useMobile();
+  
+  // Only render on mobile devices
+  if (!isMobile) {
+    return null;
+  }
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
