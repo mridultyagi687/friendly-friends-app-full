@@ -3825,17 +3825,22 @@ def get_robot_info(robot_name: str):
             if robot_name == "quraky":
                 try:
                     admin = db.session.query(User).filter_by(is_admin=True).first()
-                    if admin:
-                        new_robot = Robot(
-                            name='quraky',
-                            description='Quraky robot for AI commands',
-                            created_by=admin.id,
-                            is_active=True
-                        )
-                        db.session.add(new_robot)
-                        db.session.commit()
-                        logger.info("Auto-created quraky robot")
-                        robot = new_robot
+                    # Fallback to first user if no admin exists
+                    if not admin:
+                        admin = db.session.query(User).first()
+                    # Last resort: use user_id = 1
+                    user_id = admin.id if admin else 1
+                    
+                    new_robot = Robot(
+                        name='quraky',
+                        description='Quraky robot for AI commands',
+                        created_by=user_id,
+                        is_active=True
+                    )
+                    db.session.add(new_robot)
+                    db.session.commit()
+                    logger.info(f"Auto-created quraky robot (created_by: {user_id})")
+                    robot = new_robot
                 except Exception as create_error:
                     logger.exception(f"Error auto-creating quraky robot: {create_error}")
                     db.session.rollback()
@@ -3901,17 +3906,22 @@ def process_robot_command(robot_name: str):
             if robot_name == "quraky":
                 try:
                     admin = db.session.query(User).filter_by(is_admin=True).first()
-                    if admin:
-                        new_robot = Robot(
-                            name='quraky',
-                            description='Quraky robot for AI commands',
-                            created_by=admin.id,
-                            is_active=True
-                        )
-                        db.session.add(new_robot)
-                        db.session.commit()
-                        logger.info("Auto-created quraky robot")
-                        robot = new_robot
+                    # Fallback to first user if no admin exists
+                    if not admin:
+                        admin = db.session.query(User).first()
+                    # Last resort: use user_id = 1
+                    user_id = admin.id if admin else 1
+                    
+                    new_robot = Robot(
+                        name='quraky',
+                        description='Quraky robot for AI commands',
+                        created_by=user_id,
+                        is_active=True
+                    )
+                    db.session.add(new_robot)
+                    db.session.commit()
+                    logger.info(f"Auto-created quraky robot (created_by: {user_id})")
+                    robot = new_robot
                 except Exception as create_error:
                     logger.exception(f"Error auto-creating quraky robot: {create_error}")
                     db.session.rollback()
