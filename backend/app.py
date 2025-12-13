@@ -3897,7 +3897,27 @@ def process_robot_command(robot_name: str):
     try:
         robot = db.session.query(Robot).filter_by(name=robot_name).first()
         if not robot:
-            return jsonify({"error": "Robot not found"}), 404
+            # Auto-create quraky robot if it doesn't exist (one-time setup)
+            if robot_name == "quraky":
+                try:
+                    admin = db.session.query(User).filter_by(is_admin=True).first()
+                    if admin:
+                        new_robot = Robot(
+                            name='quraky',
+                            description='Quraky robot for AI commands',
+                            created_by=admin.id,
+                            is_active=True
+                        )
+                        db.session.add(new_robot)
+                        db.session.commit()
+                        logger.info("Auto-created quraky robot")
+                        robot = new_robot
+                except Exception as create_error:
+                    logger.exception(f"Error auto-creating quraky robot: {create_error}")
+                    db.session.rollback()
+            
+            if not robot:
+                return jsonify({"error": "Robot not found"}), 404
         
         if not robot.is_active:
             return jsonify({"error": "Robot is not active"}), 403
