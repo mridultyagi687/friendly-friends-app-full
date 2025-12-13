@@ -816,6 +816,33 @@ class UserSession(TimestampMixin, db.Model):
         return datetime.utcnow() > self.expires_at
 
 
+class Robot(TimestampMixin, db.Model):
+    __tablename__ = "robots"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), unique=True, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    def to_dict(self, include_url: bool = False):
+        data = {
+            "id": self.id,
+            "name": self.name,
+            "created_by": self.created_by,
+            "description": self.description,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+        if include_url:
+            # Get base URL from request if available
+            from flask import request
+            base_url = request.host_url.rstrip('/') if request else ''
+            data["api_url"] = f"{base_url}/api/robots/{self.name}"
+        return data
+
+
 class JoinRequest(TimestampMixin, db.Model):
     __tablename__ = "join_requests"
 
@@ -3719,6 +3746,225 @@ def delete_training_item(training_id: int):
     db.session.delete(training)
     db.session.commit()
     return jsonify({"message": "Training item deleted"})
+
+
+###############################################################################
+# Robots Management (admin only)                                                #
+###############################################################################
+
+
+@app.get("/api/robots")
+@admin_required
+def list_robots():
+    """List all robots - admin only."""
+    try:
+        robots = db.session.query(Robot).order_by(Robot.created_at.desc()).all()
+        return jsonify({"robots": [robot.to_dict(include_url=True) for robot in robots]})
+    except Exception as e:
+        logger.exception(f"Error listing robots: {e}")
+        return jsonify({"error": "Failed to load robots"}), 500
+
+
+@app.post("/api/robots")
+@admin_required
+def create_robot():
+    """Create a new robot - admin only."""
+    try:
+        user = current_user()
+        data = ensure_json_request()
+        name = data.get("name", "").strip()
+        description = data.get("description", "").strip()
+
+        if not name:
+            return jsonify({"error": "Robot name is required"}), 400
+
+        # Check if robot with this name already exists
+        existing = db.session.query(Robot).filter_by(name=name).first()
+        if existing:
+            return jsonify({"error": "A robot with this name already exists"}), 400
+
+        robot = Robot(
+            name=name,
+            description=description,
+            created_by=user.id,
+            is_active=True,
+        )
+        db.session.add(robot)
+        db.session.commit()
+        return jsonify({"message": "Robot created", "robot": robot.to_dict(include_url=True)})
+    except Exception as e:
+        logger.exception(f"Error creating robot: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to create robot"}), 500
+
+
+@app.delete("/api/robots/<int:robot_id>")
+@admin_required
+def delete_robot(robot_id: int):
+    """Delete a robot - admin only."""
+    try:
+        robot = db.session.get(Robot, robot_id)
+        if not robot:
+            return jsonify({"error": "Robot not found"}), 404
+        db.session.delete(robot)
+        db.session.commit()
+        return jsonify({"message": "Robot deleted"})
+    except Exception as e:
+        logger.exception(f"Error deleting robot: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete robot"}), 500
+
+
+@app.get("/api/robots/<robot_name>")
+def get_robot_info(robot_name: str):
+    """Get robot information by name. Public endpoint for robots to check their status."""
+    try:
+        robot = db.session.query(Robot).filter_by(name=robot_name).first()
+        if not robot:
+            return jsonify({"error": "Robot not found"}), 404
+        return jsonify({"robot": robot.to_dict(include_url=True)})
+    except Exception as e:
+        logger.exception(f"Error getting robot info: {e}")
+        return jsonify({"error": "Failed to get robot info"}), 500
+
+
+@app.post("/api/robots/<robot_name>/vision")
+def receive_robot_vision(robot_name: str):
+    """Receive vision data from robot. Robots can POST images here."""
+    try:
+        robot = db.session.query(Robot).filter_by(name=robot_name).first()
+        if not robot:
+            return jsonify({"error": "Robot not found"}), 404
+        
+        if not robot.is_active:
+            return jsonify({"error": "Robot is not active"}), 403
+
+        # Accept image file upload
+        if 'image' not in request.files:
+            return jsonify({"error": "No image file provided"}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+
+        # Save the image temporarily (we'll process it with AI)
+        import tempfile
+        import base64
+        
+        # Read image data
+        image_data = file.read()
+        
+        # Convert to base64 for storage/processing
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        
+        # Store in a simple way (in production, you might want to store in database or file system)
+        # For now, we'll just acknowledge receipt
+        logger.info(f"Received vision from robot {robot_name}, image size: {len(image_data)} bytes")
+        
+        return jsonify({
+            "message": "Vision received",
+            "robot_name": robot_name,
+            "image_size": len(image_data)
+        })
+    except Exception as e:
+        logger.exception(f"Error receiving robot vision: {e}")
+        return jsonify({"error": "Failed to process vision"}), 500
+
+
+@app.post("/api/robots/<robot_name>/command")
+def process_robot_command(robot_name: str):
+    """Process a command from robot (voice/text) and return AI response with action code."""
+    try:
+        robot = db.session.query(Robot).filter_by(name=robot_name).first()
+        if not robot:
+            return jsonify({"error": "Robot not found"}), 404
+        
+        if not robot.is_active:
+            return jsonify({"error": "Robot is not active"}), 403
+
+        data = ensure_json_request()
+        command = data.get("command", "").strip()
+        image_base64 = data.get("image", None)  # Optional: current camera view
+
+        if not command:
+            return jsonify({"error": "Command is required"}), 400
+
+        # Build AI prompt for robot control
+        system_prompt = """You are a robot control AI. When given commands, you must respond with JSON in this exact format:
+{
+  "action": "action_name",
+  "parameters": {"key": "value"},
+  "speak": "Text for robot to speak"
+}
+
+Available actions:
+- move_forward: Move forward (parameters: {"distance": number in cm})
+- move_backward: Move backward (parameters: {"distance": number in cm})
+- turn_left: Turn left (parameters: {"degrees": number})
+- turn_right: Turn right (parameters: {"degrees": number})
+- stop: Stop all movement
+- speak: Just speak (parameters: {"text": "message"})
+- wait: Wait/pause (parameters: {"seconds": number})
+
+Always respond with valid JSON only. The "speak" field should be a friendly response to the user's command."""
+
+        # Build message with optional image context
+        user_message = command
+        if image_base64:
+            # If image is provided, add context about what the robot sees
+            user_message = f"Command: {command}\n\n[Robot has sent a camera image - consider what it sees when responding]"
+
+        messages = [{"role": "user", "content": user_message}]
+
+        try:
+            ai_response = call_openai(messages, system_prompt=system_prompt)
+            
+            # Try to parse the AI response as JSON
+            try:
+                # Clean up the response - remove markdown code blocks if present
+                cleaned_response = ai_response.strip()
+                if cleaned_response.startswith("```json"):
+                    cleaned_response = cleaned_response[7:]
+                if cleaned_response.startswith("```"):
+                    cleaned_response = cleaned_response[3:]
+                if cleaned_response.endswith("```"):
+                    cleaned_response = cleaned_response[:-3]
+                cleaned_response = cleaned_response.strip()
+                
+                action_data = json.loads(cleaned_response)
+                
+                # Validate action_data structure
+                if not isinstance(action_data, dict):
+                    raise ValueError("Response is not a dictionary")
+                if "action" not in action_data:
+                    raise ValueError("Missing 'action' field")
+                
+                # Ensure all required fields exist
+                if "parameters" not in action_data:
+                    action_data["parameters"] = {}
+                if "speak" not in action_data:
+                    action_data["speak"] = "Command processed"
+                
+                return jsonify(action_data)
+            except json.JSONDecodeError as e:
+                logger.warning(f"AI response is not valid JSON: {ai_response}")
+                # Fallback: return a safe default response
+                return jsonify({
+                    "action": "speak",
+                    "parameters": {"text": ai_response},
+                    "speak": ai_response
+                })
+        except Exception as ai_error:
+            logger.exception(f"OpenAI API error: {ai_error}")
+            return jsonify({
+                "action": "speak",
+                "parameters": {"text": "I'm having trouble processing that command. Please try again."},
+                "speak": "I'm having trouble processing that command. Please try again."
+            }), 503
+
+    except Exception as e:
+        logger.exception(f"Error processing robot command: {e}")
+        return jsonify({"error": "Failed to process command"}), 500
 
 
 ###############################################################################

@@ -265,6 +265,16 @@ function NavBar() {
             >
               🎯 Assign Roles
             </Link>
+            <Link 
+              to="/admin/robots" 
+              data-tour="robots"
+              style={{
+                ...adminLinkStyle,
+                ...(isActive('/admin/robots') ? activeLinkStyle : {})
+              }}
+            >
+              🤖 Robots
+            </Link>
           </>
         )}
       </div>
