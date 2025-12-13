@@ -13,17 +13,22 @@ function Robots() {
     name: '',
     description: ''
   });
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Wait for auth to finish loading
+    if (authLoading) {
+      return;
+    }
+    
     if (!user?.is_admin) {
       navigate('/');
       return;
     }
     fetchRobots();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, navigate]);
+  }, [user, navigate, authLoading]);
 
   const fetchRobots = async () => {
     try {
@@ -106,14 +111,28 @@ function Robots() {
     });
   };
 
+  // Show loading while auth is checking
+  if (authLoading || (loading && robots.length === 0 && !error)) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loading}>Loading robots...</div>
+      </div>
+    );
+  }
+
   if (!user?.is_admin) {
     return null;
   }
 
   // Get base URL for API
   const getBaseUrl = () => {
-    const apiBase = api.defaults.baseURL || window.location.origin;
-    return apiBase.replace(/\/$/, '');
+    try {
+      const apiBase = api.defaults?.baseURL || (typeof window !== 'undefined' ? window.location.origin : '');
+      return apiBase.replace(/\/$/, '');
+    } catch (e) {
+      console.error('Error getting base URL:', e);
+      return typeof window !== 'undefined' ? window.location.origin : '';
+    }
   };
 
   return (
@@ -210,7 +229,13 @@ function Robots() {
               <div style={styles.headerCell}>Actions</div>
             </div>
             {robots.map((robot) => {
-              const apiUrl = robot.api_url || `${getBaseUrl()}/api/robots/${robot.name}`;
+              let apiUrl;
+              try {
+                apiUrl = robot.api_url || `${getBaseUrl()}/api/robots/${robot.name || ''}`;
+              } catch (e) {
+                console.error('Error generating API URL:', e);
+                apiUrl = `/api/robots/${robot.name || ''}`;
+              }
               return (
                 <div key={robot.id} style={styles.tableRow}>
                   <div style={styles.cell}>
