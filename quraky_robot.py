@@ -12,15 +12,25 @@ API_URL = "https://friendly-friends-app-full.onrender.com/api/robots/quraky/comm
 
 def send_command(command):
     """Send a command to the quraky robot AI."""
-    if not command or not command.strip():
-        print("❌ Error: Command cannot be empty")
+    # Validate command
+    if command is None:
+        print("❌ Error: Command is None")
         return None
     
-    command = command.strip()
+    # Convert to string and strip
+    command = str(command).strip()
     
-    # Prepare the request
+    # Check if empty after stripping
+    if not command:
+        print("❌ Error: Command cannot be empty or whitespace only")
+        return None
+    
+    # Prepare the request - ensure command is a non-empty string
     payload = {"command": command}
     headers = {"Content-Type": "application/json"}
+    
+    # Debug: show what we're sending
+    print(f"📤 Sending: '{command}' (length: {len(command)})")
     
     try:
         # Send the request
@@ -49,15 +59,19 @@ if __name__ == "__main__":
     while True:
         try:
             # Get command from user
-            command = input("What should Quarky do? ").strip()
+            user_input = input("What should Quarky do? ")
+            
+            # Strip whitespace
+            command = user_input.strip() if user_input else ""
             
             # Check for quit
             if command.lower() in ['quit', 'exit', 'q']:
                 print("👋 Goodbye!")
                 break
             
-            # Skip empty commands
+            # Skip empty commands with warning
             if not command:
+                print("⚠️  Please enter a command (or 'quit' to exit)")
                 continue
             
             # Send command
@@ -66,7 +80,12 @@ if __name__ == "__main__":
             # Display result
             if result:
                 if "error" in result:
-                    print(f">> Error: {result['error']}")
+                    error_msg = result['error']
+                    print(f">> Error: {error_msg}")
+                    # If command is required error, show debug info
+                    if "Command is required" in error_msg:
+                        print(f"   Debug: Command sent was '{command}' (type: {type(command).__name__}, length: {len(command) if command else 0})")
+                        print(f"   Debug: Command repr: {repr(command)}")
                 else:
                     print(f">> AI Response: {result}")
             else:

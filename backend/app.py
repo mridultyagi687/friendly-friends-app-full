@@ -3933,10 +3933,19 @@ def process_robot_command(robot_name: str):
             return jsonify({"error": "Robot is not active"}), 403
 
         data = ensure_json_request()
-        command = data.get("command", "").strip()
+        command = data.get("command", "")
+        
+        # Handle None or non-string commands
+        if command is None:
+            logger.warning(f"Command is None for robot {robot_name}")
+            return jsonify({"error": "Command is required"}), 400
+        
+        # Convert to string and strip
+        command = str(command).strip()
         image_base64 = data.get("image", None)  # Optional: current camera view
 
         if not command:
+            logger.warning(f"Command is empty after stripping for robot {robot_name}, data: {data}")
             return jsonify({"error": "Command is required"}), 400
 
         # Build AI prompt for robot control
