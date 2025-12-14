@@ -24,7 +24,16 @@ def send_command(command, image_path=None):
     Returns:
         dict: AI response with action, parameters, and speak text
     """
-    payload = {"command": command}
+    # Ensure command is not empty
+    if not command or not command.strip():
+        print("❌ Error: Command cannot be empty")
+        return None
+    
+    # Strip and ensure we have a valid command
+    command = command.strip()
+    
+    # Build payload - ensure command is a string
+    payload = {"command": str(command)}
     
     # Optionally include image as base64
     if image_path:
@@ -36,18 +45,51 @@ def send_command(command, image_path=None):
             print(f"Warning: Could not load image: {e}")
     
     try:
+        # Debug: verify payload before sending
+        if not payload.get("command"):
+            print(f"❌ Error: Command is empty in payload: {payload}")
+            return None
+        
         response = requests.post(
             COMMAND_URL,
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=30
         )
+        
+        # Check for errors in response
+        if response.status_code != 200:
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('error', f'HTTP {response.status_code}')
+                print(f"❌ API Error: {error_msg}")
+                return error_data
+            except:
+                print(f"❌ API Error: HTTP {response.status_code} - {response.text[:200]}")
+                return {"error": f"HTTP {response.status_code}"}
+        
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        
+        # Check if response contains an error
+        if "error" in result:
+            print(f"❌ Error in response: {result.get('error')}")
+        
+        return result
     except requests.exceptions.RequestException as e:
-        print(f"Error connecting to robot API: {e}")
+        print(f"❌ Error connecting to robot API: {e}")
         if hasattr(e, 'response') and e.response is not None:
-            print(f"Response: {e.response.text}")
+            try:
+                error_data = e.response.json()
+                print(f"   Error details: {error_data}")
+                return error_data
+            except:
+                print(f"   Response: {e.response.text[:200]}")
+        return None
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def execute_action(action_data):
@@ -110,21 +152,29 @@ def main():
         
         while True:
             try:
-                command = input("Enter command: ").strip()
+                command = input("What should Quarky do? ").strip()
                 if not command:
+                    print("⚠️  Please enter a command")
                     continue
                 
                 if command.lower() in ['quit', 'exit', 'q']:
                     print("👋 Goodbye!")
                     break
                 
-                print(f"\n📤 Sending: {command}")
                 result = send_command(command)
                 
                 if result:
-                    execute_action(result)
+                    if "error" in result:
+                        error_msg = result.get('error', 'Unknown error')
+                        print(f">> Error: {error_msg}")
+                        # If it's "Command is required", the command might have been lost
+                        if "Command is required" in error_msg:
+                            print(f"   Debug: Command sent was: '{command}' (length: {len(command)})")
+                    else:
+                        print(">> AI Response:", result)
+                        execute_action(result)
                 else:
-                    print("❌ Failed to get response from AI")
+                    print(">> Failed to get response from AI")
                 
                 print()  # Empty line for readability
                 
