@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import List, Optional
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse, unquote
 
 import requests
 from flask import (
@@ -552,6 +552,7 @@ class BugReport(TimestampMixin, db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=False)
+    console_errors = db.Column(db.Text, nullable=True)  # Store console errors as text
     status = db.Column(db.String(20), default="open", nullable=False)
     resolved_at = db.Column(db.DateTime, nullable=True)
     resolved_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
@@ -564,6 +565,7 @@ class BugReport(TimestampMixin, db.Model):
             "owner_id": self.owner_id,
             "title": self.title,
             "description": self.description,
+            "console_errors": self.console_errors,
             "status": self.status,
             "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
             "resolved_by": self.resolved_by,
@@ -1367,12 +1369,15 @@ def login():
                 }
             
             # Return session token to frontend (store in localStorage)
-            response = make_response(jsonify({
+            response_data = {
                 "ok": True, 
                 "message": "Login successful", 
                 "user": user_dict,
                 "session_token": session_token
-            }))
+            }
+            
+            response = make_response(jsonify(response_data))
+            response.headers['Content-Type'] = 'application/json'
             
             return response
         except Exception as session_error:
@@ -2684,6 +2689,7 @@ def create_bug_report():
     data = ensure_json_request()
     title = data.get("title", "").strip()
     description = data.get("description", "").strip()
+    console_errors = data.get("console_errors", "").strip() or None
 
     if not description:
         return jsonify({"error": "Please describe the bug you found."}), 400
@@ -2695,6 +2701,7 @@ def create_bug_report():
         owner_id=user.id,
         title=title[:255],
         description=description,
+        console_errors=console_errors,
         status="open",
     )
     try:
@@ -2839,6 +2846,101 @@ def clear_all_bug_reports():
         logger.exception(f"Error clearing all bug reports: {e}")
         db.session.rollback()
         return jsonify({"error": "Failed to clear bug reports"}), 500
+
+
+@app.route("/report-bug/<path:bug_info>", methods=["GET", "POST"])
+def report_bug_via_url(bug_info: str):
+    """
+    URL-based bug reporting endpoint.
+    Format: /report-bug/<bugname>-<consoleerror>-<location>
+    Examples:
+    - /report-bug/LoginFailed-Error404-/login-page
+    - /report-bug/LoginFailed--/login-page  (no console error)
+    - /report-bug/LoginFailed-Error404-  (no location)
+    - /report-bug/LoginFailed  (only bug name)
+    """
+    try:
+        # Decode URL-encoded characters first
+        bug_info = unquote(bug_info)
+        
+        # Parse the bug info from URL
+        # Format: bugname-consoleerror-location
+        # Split by '-' but handle cases where parts might contain dashes
+        parts = bug_info.split('-', 2)  # Split into max 3 parts
+        
+        bugname = parts[0].strip() if len(parts) > 0 and parts[0].strip() else "Unknown Bug"
+        consoleerror = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+        location = parts[2].strip() if len(parts) > 2 and parts[2].strip() else None
+        
+        # Try to get current user (if logged in)
+        user_id = None
+        try:
+            session_token = None
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                session_token = auth_header[7:]
+            if not session_token:
+                session_token = request.args.get("session_token")
+            
+            if session_token:
+                user_session = db.session.query(UserSession).filter_by(session_token=session_token).first()
+                if user_session and not user_session.is_expired():
+                    user_id = user_session.user_id
+        except Exception:
+            # If auth fails, continue as anonymous
+            pass
+        
+        # Build description
+        description_parts = []
+        if location:
+            description_parts.append(f"Location: {location}")
+        if consoleerror:
+            description_parts.append(f"Console Error: {consoleerror}")
+        if not description_parts:
+            description_parts.append("Bug reported via URL")
+        
+        description = "\n".join(description_parts)
+        
+        # Create bug report
+        # If no user, we'll need to handle anonymous reports
+        # For now, we'll require authentication or create a system user
+        if not user_id:
+            # Try to find or create a system user for anonymous reports
+            system_user = db.session.query(User).filter_by(username="system").first()
+            if not system_user:
+                # Create a system user if it doesn't exist
+                system_user = User(
+                    username="system",
+                    email="system@friendlyfriends.app",
+                    password_hash=generate_password_hash(str(uuid.uuid4())),  # Random password
+                    is_admin=False
+                )
+                db.session.add(system_user)
+                db.session.commit()
+                db.session.refresh(system_user)
+            user_id = system_user.id
+        
+        bug = BugReport(
+            owner_id=user_id,
+            title=bugname[:255],
+            description=description,
+            console_errors=consoleerror,
+            status="open",
+        )
+        
+        db.session.add(bug)
+        db.session.commit()
+        
+        return jsonify({
+            "ok": True,
+            "message": "Bug reported successfully",
+            "bug": bug.to_dict()
+        }), 201
+        
+    except Exception as e:
+        logger.exception(f"Error in URL-based bug reporting: {e}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to report bug"}), 500
 
 
 ###############################################################################

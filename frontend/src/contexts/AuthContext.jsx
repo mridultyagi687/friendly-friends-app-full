@@ -110,32 +110,49 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const res = await api.post('/api/login', { username, password });
-      if (res.data && res.data.ok && res.data.user) {
-        // Store session token in localStorage FIRST before setting user
-        if (res.data.session_token) {
+      
+      // Check if response has the expected structure
+      if (res.data) {
+        if (res.data.ok && res.data.user && res.data.session_token) {
+          // Store session token in localStorage FIRST before setting user
           localStorage.setItem('session_token', res.data.session_token);
-        }
-        
-        // Set user immediately
-        setUser(res.data.user);
-        setError(null); // Clear any previous errors
-        
-        // Verify session is working by calling checkAuth
-        setTimeout(async () => {
-          try {
-            await checkAuth();
-          } catch (e) {
-            // If checkAuth fails, the session might not be valid
-            console.warn('Session verification failed after login:', e);
+          
+          // Set user immediately
+          setUser(res.data.user);
+          setError(null); // Clear any previous errors
+          
+          // Verify session is working by calling checkAuth after a short delay
+          setTimeout(async () => {
+            try {
+              await checkAuth();
+            } catch (e) {
+              // If checkAuth fails, log but don't block - user is already logged in
+              if (import.meta.env.DEV) {
+                console.warn('Session verification failed after login:', e);
+              }
+            }
+          }, 300);
+          
+          return true;
+        } else if (res.data.error) {
+          // Server returned an error
+          setError(new Error(res.data.error));
+          // Clear any existing session token on login failure
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('session_token');
           }
-        }, 300);
-        
-        return true;
+          return false;
+        }
       }
-      setError(new Error(res.data?.error || 'Invalid credentials'));
+      
+      // Unexpected response format
+      setError(new Error('Invalid response from server'));
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('session_token');
+      }
       return false;
     } catch (err) {
-      const errorMessage = err.response?.data?.error || err.message || 'Request Failed';
+      const errorMessage = err.response?.data?.error || err.message || 'Login failed. Please try again.';
       setError(new Error(errorMessage));
       // Clear any existing session token on login failure
       if (typeof window !== 'undefined') {
@@ -175,17 +192,22 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    try {
-      await api.post('/api/logout');
-    } catch (err) {
-      // ignore
-    }
-    // Remove session token from localStorage
+    // Always clear local state first, regardless of API call result
     if (typeof window !== 'undefined') {
       localStorage.removeItem('session_token');
     }
     setUser(null);
     setError(null);
+    
+    // Try to call logout API, but don't block on errors
+    try {
+      await api.post('/api/logout');
+    } catch (err) {
+      // Log error but don't block logout - local state is already cleared
+      if (import.meta.env.DEV) {
+        console.warn('Logout API call failed, but user is logged out locally:', err);
+      }
+    }
   };
 
   const clearError = () => {

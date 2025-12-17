@@ -288,6 +288,12 @@ function BugReporter() {
                         {renderStatusBadge(bug.status)}
                       </div>
                       <p style={styles.bugCardDescription}>{bug.description}</p>
+                      {bug.console_errors && (
+                        <div style={styles.consoleErrorsSection}>
+                          <h5 style={styles.consoleErrorsTitle}>🔴 Console Errors:</h5>
+                          <pre style={styles.consoleErrorsContent}>{bug.console_errors}</pre>
+                        </div>
+                      )}
                       <textarea
                         style={styles.adminTextarea}
                         rows={3}
@@ -555,6 +561,39 @@ const getStyles = (theme) => ({
     borderRadius: '10px',
     fontWeight: 600,
     cursor: 'pointer',
+  },
+  consoleErrorsSection: {
+    marginTop: '1rem',
+    marginBottom: '1rem',
+    padding: '1rem',
+    borderRadius: '12px',
+    background: theme.isDarkMode 
+      ? 'rgba(220, 38, 38, 0.15)'
+      : 'rgba(220, 38, 38, 0.1)',
+    border: `1px solid ${theme.isDarkMode ? 'rgba(220, 38, 38, 0.3)' : 'rgba(220, 38, 38, 0.2)'}`,
+  },
+  consoleErrorsTitle: {
+    margin: '0 0 0.5rem 0',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    color: theme.isDarkMode ? '#fca5a5' : '#dc2626',
+  },
+  consoleErrorsContent: {
+    margin: 0,
+    padding: '0.75rem',
+    borderRadius: '8px',
+    background: theme.isDarkMode 
+      ? 'rgba(0, 0, 0, 0.3)'
+      : 'rgba(0, 0, 0, 0.05)',
+    color: theme.isDarkMode ? '#fca5a5' : '#991b1b',
+    fontSize: '0.85rem',
+    fontFamily: 'monospace',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    overflowX: 'auto',
+    maxHeight: '300px',
+    overflowY: 'auto',
+    border: `1px solid ${theme.isDarkMode ? 'rgba(220, 38, 38, 0.2)' : 'rgba(220, 38, 38, 0.15)'}`,
   },
 });
 
