@@ -29,9 +29,10 @@ function MobileNavBar() {
     try {
       await logout();
       navigate('/');
-      window.location.reload();
     } catch (error) {
       console.error('Logout failed:', error);
+      // Even if logout API fails, navigate to home
+      navigate('/');
     }
   };
 

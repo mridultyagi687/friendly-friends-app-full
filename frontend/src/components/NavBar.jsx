@@ -31,9 +31,10 @@ function NavBar() {
     try {
       await logout();
       navigate('/');
-      window.location.reload(); // Force reload to clear state
     } catch (error) {
       console.error('Logout failed:', error);
+      // Even if logout API fails, navigate to home
+      navigate('/');
     }
   };
 
