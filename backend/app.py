@@ -1406,7 +1406,7 @@ def login():
             return make_response(json.dumps({"error": "Login failed. Please try again."}), 500, {"Content-Type": "application/json"})
 
 
-@app.post("/api/logout")
+@app.route("/api/logout", methods=["POST", "GET"])
 def logout():
     """Logout endpoint that deletes session from database."""
     try:
@@ -1423,6 +1423,10 @@ def logout():
             data = request.get_json(silent=True)
             if data and isinstance(data, dict):
                 session_token = data.get("session_token")
+        
+        # Also try query parameter for GET requests
+        if not session_token:
+            session_token = request.args.get("session_token")
         
         if not session_token:
             # If no token provided, still return success (idempotent)
@@ -1983,8 +1987,12 @@ def get_blog_image(filename: str):
 @login_required
 def update_presence():
     try:
-        # Get user_id from session (already checked by login_required)
-        user_id = session.get("user_id")
+        # Get user_id from request context (set by login_required decorator)
+        user_id = getattr(request, 'user_id', None)
+        if not user_id:
+            # Fallback to session for backward compatibility
+            user_id = session.get("user_id")
+        
         if not user_id:
             return jsonify({"error": "Authentication required"}), 401
         

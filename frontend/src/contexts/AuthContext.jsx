@@ -18,9 +18,17 @@ export function AuthProvider({ children }) {
         console.log('Checking auth with token:', sessionToken ? 'present' : 'missing');
       }
       
+      // If no session token, user is not logged in
+      if (!sessionToken) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
       const res = await api.get('/api/me');
-      if (res.data && res.data.ok) {
+      if (res.data && res.data.ok && res.data.user) {
         setUser(res.data.user);
+        setError(null);
       } else {
         setUser(null);
         // Clear invalid session token
@@ -102,23 +110,25 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const res = await api.post('/api/login', { username, password });
-      if (res.data && res.data.ok) {
-        setUser(res.data.user);
-        setError(null); // Clear any previous errors
-        
-        // Store session token in localStorage for persistent login
+      if (res.data && res.data.ok && res.data.user) {
+        // Store session token in localStorage FIRST before setting user
         if (res.data.session_token) {
           localStorage.setItem('session_token', res.data.session_token);
         }
         
-        // Single retry after login to ensure session is established
+        // Set user immediately
+        setUser(res.data.user);
+        setError(null); // Clear any previous errors
+        
+        // Verify session is working by calling checkAuth
         setTimeout(async () => {
           try {
             await checkAuth();
           } catch (e) {
-            // Ignore errors - just trying to establish session
+            // If checkAuth fails, the session might not be valid
+            console.warn('Session verification failed after login:', e);
           }
-        }, 500);
+        }, 300);
         
         return true;
       }
@@ -127,6 +137,10 @@ export function AuthProvider({ children }) {
     } catch (err) {
       const errorMessage = err.response?.data?.error || err.message || 'Request Failed';
       setError(new Error(errorMessage));
+      // Clear any existing session token on login failure
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('session_token');
+      }
       return false;
     } finally {
       setLoading(false);
