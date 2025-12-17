@@ -4,6 +4,7 @@ import uuid
 import json
 import logging
 import re
+import time
 from datetime import datetime, timedelta
 from functools import wraps
 from typing import List, Optional
@@ -238,6 +239,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("friendly-friends-backend")
 
 db = SQLAlchemy(app)
+
+# Flag to track if we've attempted to wake Neon database
+_neon_wakeup_attempted = False
+
+# Wake up Neon database on first request (for production deployments)
+@app.before_request
+def wake_neon_on_startup():
+    """Wake up Neon database on first request."""
+    global _neon_wakeup_attempted
+    if not _neon_wakeup_attempted:
+        _neon_wakeup_attempted = True
+        try:
+            wake_neon_database()
+        except Exception as e:
+            logger.warning(f"Error waking Neon database on startup: {e}")
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
@@ -5917,10 +5933,63 @@ def init_db_command():
         raise
 
 
+def wake_neon_database():
+    """
+    Wake up Neon database if it's suspended.
+    Neon databases auto-wake on connection attempts, but we retry with backoff.
+    """
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    if not DATABASE_URL:
+        return  # Not using Neon/PostgreSQL
+    
+    # Check if this is a Neon database (contains 'neon' in host or is a Neon connection string)
+    is_neon = 'neon' in DATABASE_URL.lower() or '.neon.tech' in DATABASE_URL.lower()
+    if not is_neon:
+        return  # Not a Neon database
+    
+    logger.info("Detected Neon database - attempting to wake up if suspended...")
+    
+    max_retries = 3
+    retry_delay = 2  # Start with 2 seconds
+    
+    for attempt in range(max_retries):
+        try:
+            # Attempt a simple connection to wake up the database
+            db.session.execute(text("SELECT 1"))
+            db.session.commit()
+            logger.info("Neon database is active and ready")
+            return True
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check if it's a connection/suspension error
+            is_suspension_error = any(keyword in error_str for keyword in [
+                'suspended', 'connection', 'timeout', 'refused', 'closed',
+                'server closed', 'connection reset', 'could not connect'
+            ])
+            
+            if is_suspension_error and attempt < max_retries - 1:
+                wait_time = retry_delay * (2 ** attempt)  # Exponential backoff: 2s, 4s, 8s
+                logger.info(f"Database appears suspended. Retrying in {wait_time} seconds... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                if attempt == max_retries - 1:
+                    logger.warning(f"Failed to wake Neon database after {max_retries} attempts: {e}")
+                    logger.warning("Database may still be waking up. Requests will retry automatically.")
+                else:
+                    logger.warning(f"Database connection error (may not be suspended): {e}")
+                return False
+    
+    return False
+
+
 if __name__ == "__main__":
     with app.app_context():
         try:
             logger.info(f"Initializing database at: {DATABASE_PATH}")
+            
+            # Wake up Neon database if suspended (before creating tables)
+            wake_neon_database()
+            
             db.create_all()
             logger.info("Database tables created/verified")
             
